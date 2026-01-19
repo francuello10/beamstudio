@@ -825,57 +825,95 @@ function AmbilightPage({ fixtures, setChannelValues, channelValues, liveColors, 
         setChannelValues({ red: 0, green: 0, blue: 0, func: 0, spd: 0, flash: 0, dim: 0 })
     }
 
+    // PRECOMPUTED GAMMA 2.2 TABLE (Linearizes LED output)
+    const GAMMA_TABLE = Array.from({ length: 256 }, (_, i) => Math.round(Math.pow(i / 255, 2.2) * 255))
+
     const extract = () => {
         if (!videoRef.current || !canvasRef.current) return
         const canvas = canvasRef.current
-        const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true }) // Fast path
+        const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true })
         canvas.width = 160; canvas.height = 90
         ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height)
 
-        // SINGLE data pull from GPU (Critical Optimization)
         const frameData = ctx.getImageData(0, 0, canvas.width, canvas.height).data
 
+        // 1. AUTO BLACK-BAR DETECTION (Philips Logic)
+        let top = 0, bottom = canvas.height - 1
+        const threshold = 15 // Noise threshold
+
+        // Find top bar
+        for (let y = 0; y < 30; y++) {
+            const i = (y * canvas.width + 80) * 4
+            if (frameData[i] > threshold || frameData[i + 1] > threshold || frameData[i + 2] > threshold) {
+                top = y; break
+            }
+        }
+        // Find bottom bar
+        for (let y = canvas.height - 1; y > canvas.height - 30; y--) {
+            const i = (y * canvas.width + 80) * 4
+            if (frameData[i] > threshold || frameData[i + 1] > threshold || frameData[i + 2] > threshold) {
+                bottom = y; break
+            }
+        }
+
+        const activeHeight = bottom - top
+
+        // 2. EDGE-WEIGHTED SAMPLING
         const sampleZone = (startX, width) => {
-            let r = 0, g = 0, b = 0, count = 0
+            let r = 0, g = 0, b = 0, totalWeight = 0
             const rowStride = canvas.width * 4
 
-            // Sample the zone with skipping for performance
-            for (let y = 0; y < canvas.height; y += 4) {
+            for (let y = top; y <= bottom; y += 3) {
                 const rowOffset = y * rowStride
-                for (let x = startX; x < startX + width; x += 4) {
+                // Philips focuses on the outer edges for depth
+                for (let x = startX; x < startX + width; x += 3) {
                     const i = rowOffset + (x * 4)
-                    r += frameData[i]
-                    g += frameData[i + 1]
-                    b += frameData[i + 2]
-                    count++
+
+                    // Spatial Weight: Pixels closer to the top/bottom edge get more weight for vertical bars
+                    const distToEdge = Math.min(y - top, bottom - y)
+                    const weight = 1.0 + (10 / (distToEdge + 1))
+
+                    r += frameData[i] * weight
+                    g += frameData[i + 1] * weight
+                    b += frameData[i + 2] * weight
+                    totalWeight += weight
                 }
             }
 
-            r /= count; g /= count; b /= count;
+            r /= totalWeight; g /= totalWeight; b /= totalWeight;
 
-            // SUPERLATIVE VIBRANCY (GPU-like logic in JS)
+            // 3. PHILIPS VIVID COLOR ENGINE
             const max = Math.max(r, g, b, 1)
             const saturation = (max - Math.min(r, g, b)) / max
 
-            // Boost saturation and brightness for immersion
-            let factor = 1.0 + (saturation * 1.5) // Saturated colors get more punch
-            if (max < 40) factor *= 1.5 // Dark scenes get boosted
+            // Saturation Boost (Philips is known for punchy colors)
+            let boost = 1.0 + (saturation * 2.0)
+            if (max < 30) boost *= 2.0 // Boost dark scenes perceptually
 
-            r = Math.min(255, r * factor)
-            g = Math.min(255, g * factor)
-            b = Math.min(255, b * factor)
+            // Apply Gamma Correction (Linearize)
+            const corr = (val) => GAMMA_TABLE[Math.min(255, Math.round(val * boost))]
 
-            return { r: Math.round(r), g: Math.round(g), b: Math.round(b) }
+            return { r: corr(r), g: corr(g), b: corr(b) }
         }
 
-        const cLeft = sampleZone(0, 40)
-        const cCenter = sampleZone(60, 40)
-        const cRight = sampleZone(120, 40)
+        const cLeft = sampleZone(0, 50)
+        const cCenter = sampleZone(55, 50)
+        const cRight = sampleZone(110, 50)
 
-        const newColors = [cLeft, cCenter, cRight]
-        setPreviewColors(newColors)
-        // Send to Main for DMX Loop (Async + adaptive smoothing done in main)
-        executeDmx(() => window.ambilight?.setColorsAsync({ left: cLeft, center: cCenter, right: cRight }), true)
+        // 4. ATMOSPHERIC BLEED (Smooth transitions between bars)
+        const bleed = (c1, c2, factor = 0.2) => ({
+            r: Math.round(c1.r * (1 - factor) + c2.r * factor),
+            g: Math.round(c1.g * (1 - factor) + c2.g * factor),
+            b: Math.round(c1.b * (1 - factor) + c2.b * factor)
+        })
+
+        const finalLeft = bleed(cLeft, cCenter)
+        const finalCenter = bleed(bleed(cCenter, cLeft, 0.15), cRight, 0.15)
+        const finalRight = bleed(cRight, cCenter)
+
+        const finalColors = [finalLeft, finalCenter, finalRight]
+        setPreviewColors(finalColors)
+        executeDmx(() => window.ambilight?.setColorsAsync({ left: finalLeft, center: finalCenter, right: finalRight }), true)
     }
 
     return (
