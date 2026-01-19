@@ -50,7 +50,8 @@ const ambilightAPI = {
     getSources: () => ipcRenderer.invoke('ambilight:getSources'),
     start: (sourceId) => ipcRenderer.invoke('ambilight:start', sourceId),
     stop: () => ipcRenderer.invoke('ambilight:stop'),
-    setColors: (colors) => ipcRenderer.invoke('ambilight:setColors', colors)
+    setColors: (colors) => ipcRenderer.invoke('ambilight:setColors', colors),
+    setColorsAsync: (colors) => ipcRenderer.send('ambilight:setColorsAsync', colors)
 }
 
 // Audio API

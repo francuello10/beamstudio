@@ -550,6 +550,18 @@ function setupIPC() {
         return { success: true, colors: dmxState.fixtureColors }
     })
 
+    // Async High-Frequency Ambilight update (One-way)
+    ipcMain.on('ambilight:setColorsAsync', (_, { left, center, right }) => {
+        if (!dmxState.ambilightActive) return
+        const smooth = (c, t, f = 0.3) => ({ r: Math.round(c.r + (t.r - c.r) * f), g: Math.round(c.g + (t.g - c.g) * f), b: Math.round(c.b + (t.b - c.b) * f) })
+        const colors = [left, center, right].map((t, i) => smooth(lastAmbiColors[i], t))
+        lastAmbiColors = colors
+        setFixtureColor(0, colors[0].r, colors[0].g, colors[0].b, 255)
+        setFixtureColor(1, colors[1].r, colors[1].g, colors[1].b, 255)
+        setFixtureColor(2, colors[2].r, colors[2].g, colors[2].b, 255)
+        broadcastColors()
+    })
+
     ipcMain.handle('audio:start', () => { stopDynamicScene(); dmxState.activeProgram = null; dmxState.audioReactiveActive = true; return { success: true } })
     ipcMain.handle('audio:stop', () => { dmxState.audioReactiveActive = false; resetAll(); return { success: true } })
     ipcMain.handle('audio:setLevel', (_, { bass, mid, high, volume }) => {
@@ -631,6 +643,12 @@ function createWindow() {
 // ============================================================================
 // App Lifecycle
 // ============================================================================
+
+// Enable Wayland Screen Capture support
+if (process.platform === 'linux') {
+    app.commandLine.appendSwitch('enable-features', 'WebRTCPipeWireCapturer')
+    app.commandLine.appendSwitch('enable-webrtc-pipewire-capturer') // Fallback legacy
+}
 
 app.whenReady().then(() => {
     electronApp.setAppUserModelId('com.beamstudio.dmx')

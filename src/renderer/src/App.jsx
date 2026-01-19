@@ -879,7 +879,7 @@ function AmbilightPage({ fixtures, setChannelValues, channelValues, liveColors, 
 
         const newColors = [cLeft, cCenter, cRight]
         setPreviewColors(newColors)
-        executeDmx(() => window.ambilight?.setColors({ left: cLeft, center: cCenter, right: cRight }))
+        executeDmx(() => window.ambilight?.setColorsAsync({ left: cLeft, center: cCenter, right: cRight }), true)
     }
 
     return (
