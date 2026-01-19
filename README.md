@@ -68,6 +68,11 @@ BeamStudio está diseñado para trabajar "de la mano" con **QLC+**.
 * **Drivers:** Drivers FTDI instalados para la interfaz KMTronic.
 * **Red:** Art-Net configurado en el puerto `6454` (por defecto).
 
+### Modos de Instalación
+*   **Windows:** Installer nativo `.exe`.
+*   **Linux:** Paquete `.deb` o `.AppImage`.
+*   **Dashboard "Always On":** [Ver guía de Kiosk para Linux](docs/LINUX_KIOSK.md).
+
 ---
 
 ## 🔗 Recursos útiles

@@ -130,18 +130,6 @@ function LivePreviewContainer({ fixtures, masterDimmer, activeProgram, overrideC
                                 <button
                                     className={`fixture-toggle-btn ${isBlackout ? 'off' : 'on'}`}
                                     onClick={(e) => { e.stopPropagation(); onToggleFixture(fixture.id); }}
-                                    style={{
-                                        background: isBlackout ? 'var(--glass)' : '#00ff88',
-                                        border: '1px solid var(--glass-border)',
-                                        borderRadius: '50%',
-                                        width: '28px',
-                                        height: '28px',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        cursor: 'pointer',
-                                        boxShadow: isBlackout ? 'none' : '0 0 10px #00ff88aa',
-                                        transition: 'all 0.2s',
-                                        color: isBlackout ? 'var(--text-secondary)' : '#000'
-                                    }}
                                     title={isBlackout ? "Turn On" : "Blackout"}
                                 >
                                     <PowerOff size={14} />
@@ -305,7 +293,7 @@ function VerticalFader({ channel, value, onChange, config }) {
             <div className="fader-info">
                 <span className="fader-value">{value}</span>
                 <span className="fader-label" style={{ color: channel.color }}>{channel.label}</span>
-                {funcName && <span className="fader-mode">{funcName}</span>}
+                <span className="fader-mode">{funcName || ''}</span>
 
                 {/* Reset to 0 Button */}
                 <button
@@ -383,7 +371,7 @@ function ColorWheel({ onChange, size = 180 }) {
 function MixerPage({ channelValues, setChannelValues, fixtures, setFixtures, config, onReset, liveColors, onToggleFixture, executeDmx }) {
     const handleChannelChange = useCallback((id, value) => {
         setChannelValues(prev => ({ ...prev, [id]: value }))
-        executeDmx(() => window.dmx?.setChannel(id, value))
+        executeDmx(() => window.dmx?.setChannelAsync(id, value), true)
     }, [setChannelValues, executeDmx])
 
     const applyColor = async (color) => {
@@ -423,10 +411,13 @@ function MixerPage({ channelValues, setChannelValues, fixtures, setFixtures, con
                                 size={160}
                                 onChange={(color) => {
                                     setChannelValues(prev => ({ ...prev, red: color.r, green: color.g, blue: color.b, dim: 255 }))
-                                    window.dmx?.setChannel('red', color.r)
-                                    window.dmx?.setChannel('green', color.g)
-                                    window.dmx?.setChannel('blue', color.b)
-                                    window.dmx?.setChannel('dim', 255)
+                                    // Use optimized bulk update for Color Wheel to prevent 4x IPC calls per frame
+                                    executeDmx(() => window.dmx?.setChannelsAsync([], {
+                                        red: color.r,
+                                        green: color.g,
+                                        blue: color.b,
+                                        dim: 255
+                                    }), true)
                                 }}
                             />
                         </div>
@@ -494,7 +485,7 @@ function ProgramsPage({ config, activeProgram, onSelectProgram, channelValues, s
 
     const handleSpeed = async (speed) => {
         setChannelValues(prev => ({ ...prev, spd: speed }))
-        executeDmx(() => window.dmx?.setChannel('spd', speed))
+        executeDmx(() => window.dmx?.setChannelAsync('spd', speed), true)
     }
 
     // Group by type
@@ -783,10 +774,12 @@ function AudioPage({ fixtures, setChannelValues, channelValues, liveColors, onTo
     )
 }
 
-function AmbilightPage({ fixtures, setChannelValues, channelValues, liveColors, onToggleFixture, executeDmx }) {
+function AmbilightPage({ fixtures, setChannelValues, channelValues, liveColors, onToggleFixture, executeDmx, config }) {
+    const fps = config?.performance?.ambiFps || 30
     const [capturing, setCapturing] = useState(false)
     const [sources, setSources] = useState([])
     const [selectedSource, setSelectedSource] = useState(null)
+    const [isBGR, setIsBGR] = useState(false)
     const [previewColors, setPreviewColors] = useState(null)
     const videoRef = useRef(null)
     const canvasRef = useRef(null)
@@ -812,7 +805,8 @@ function AmbilightPage({ fixtures, setChannelValues, channelValues, liveColors, 
             setCapturing(true)
             setChannelValues(prev => ({ ...prev, dim: 255 }))
             await window.ambilight?.start(sourceId)
-            captureInterval.current = setInterval(() => extract(), 16) // ~60fps - Cinematic fluidity
+            const ms = Math.round(1000 / fps)
+            captureInterval.current = setInterval(() => extract(), ms)
         } catch (err) { console.error('Capture error:', err) }
     }
 
@@ -837,62 +831,63 @@ function AmbilightPage({ fixtures, setChannelValues, channelValues, liveColors, 
 
         const frameData = ctx.getImageData(0, 0, canvas.width, canvas.height).data
 
-        // 1. DOMINANT COLOR EXTRACTION (Max Impact Logic)
-        const getDominantInZone = (startX, width) => {
-            let maxR = 0, maxG = 0, maxB = 0, maxVibrance = -1
-            const rowStride = canvas.width * 4
+        // 1. GLOBAL DOMINANT EXTRACTION (Full Screen Sync)
+        let maxR = 0, maxG = 0, maxB = 0, maxVibrance = -1
+        const rowStride = canvas.width * 4
 
-            // We sample looking for the "Most Saturated" color, not the average
-            for (let y = 10; y < 80; y += 4) {
-                const rowOffset = y * rowStride
-                for (let x = startX; x < startX + width; x += 4) {
-                    const i = rowOffset + (x * 4)
-                    const r = frameData[i], g = frameData[i + 1], b = frameData[i + 2]
+        // Sample ENTIRE screen to find the strongest color (Philips "Natural" sync)
+        for (let y = 5; y < 85; y += 4) {
+            const rowOffset = y * rowStride
+            for (let x = 5; x < 155; x += 4) {
+                const i = rowOffset + (x * 4)
+                const r = frameData[i], g = frameData[i + 1], b = frameData[i + 2]
 
-                    // Vibrance score: purely based on how "not grey" the color is
-                    const vibrance = Math.max(r, g, b) - Math.min(r, g, b)
-                    const brightness = (r + g + b) / 3
+                // Vibrance score: purely based on how "not grey" the color is
+                const vibrance = Math.max(r, g, b) - Math.min(r, g, b)
+                const brightness = (r + g + b) / 3
 
-                    if (vibrance + (brightness * 0.5) > maxVibrance) {
-                        maxVibrance = vibrance + (brightness * 0.5)
-                        maxR = r; maxG = g; maxB = b
-                    }
+                if (vibrance + (brightness * 0.5) > maxVibrance) {
+                    maxVibrance = vibrance + (brightness * 0.5)
+                    maxR = r; maxG = g; maxB = b
                 }
             }
-
-            // 2. MASSIVE EXAGGERATION (The "Burdo pero Lindo" factor)
-            let r = maxR, g = maxG, b = maxB
-            const max = Math.max(r, g, b, 1)
-
-            // Hyper-Saturate: push the dominant channel even further
-            if (max > 10) {
-                const boost = 255 / max
-                r *= boost; g *= boost; b *= boost
-
-                // Color specific "Vivid" enhancement
-                if (g > r * 1.2 && g > b * 1.2) { g = 255; r *= 0.2; b *= 0.2 } // Deep Wimbledon Green
-                else if (r > g * 1.2 && r > b * 1.2) { r = 255; g *= 0.2; b *= 0.2 } // Deep Ferrari Red
-                else if (b > r * 1.2 && b > g * 1.2) { b = 255; r *= 0.2; g *= 0.2 } // Deep Ocean Blue
-            } else {
-                r = 0; g = 0; b = 0 // Cinematic Blackout for dark scenes
-            }
-
-            // Apply Gamma to keep it from looking "neon-plastic"
-            const corr = (val) => GAMMA_TABLE[Math.min(255, Math.round(val))]
-            return { r: corr(r), g: corr(g), b: corr(b) }
         }
 
-        const cLeft = getDominantInZone(0, 50)
-        const cCenter = getDominantInZone(55, 50)
-        const cRight = getDominantInZone(110, 50)
+        // 2. MASSIVE EXAGGERATION (For Global Impact)
+        let r = maxR, g = maxG, b = maxB
 
-        // Give the center more weight to "fill" the room
-        const finalColors = [cLeft, cCenter, cRight]
+        // Manual Channel Swap Fix (Linux Wayland/PipeWire BGR Buffer)
+        if (isBGR) {
+            const temp = r
+            r = b
+            b = temp
+        }
+
+        const max = Math.max(r, g, b, 1)
+
+        if (max > 10) {
+            const boost = 255 / max
+            r *= boost; g *= boost; b *= boost
+
+            // Color specific "Vivid" enhancement (Wimbledon/Action/Ocean)
+            if (g > r * 1.1 && g > b * 1.1) { g = 255; r *= 0.1; b *= 0.1 }
+            else if (r > g * 1.1 && r > b * 1.1) { r = 255; g *= 0.1; b *= 0.1 }
+            else if (b > r * 1.1 && b > g * 1.1) { b = 255; r *= 0.1; g *= 0.1 }
+        } else {
+            r = 0; g = 0; b = 0
+        }
+
+        const corr = (val) => GAMMA_TABLE[Math.min(255, Math.round(val))]
+        const syncColor = { r: corr(r), g: corr(g), b: corr(b) }
+
+        // All 3 bars get the same color for Basic Sync Mode
+        const finalColors = [syncColor, syncColor, syncColor]
         setPreviewColors(finalColors)
+
         executeDmx(() => window.ambilight?.setColorsAsync({
-            left: cLeft,
-            center: cCenter,
-            right: cRight
+            left: syncColor,
+            center: syncColor,
+            right: syncColor
         }), true)
     }
 
@@ -900,40 +895,70 @@ function AmbilightPage({ fixtures, setChannelValues, channelValues, liveColors, 
         <div className="page ambilight-page">
             <div className="ambilight-main">
                 <div className="glass-card ambilight-card">
-                    <Monitor size={48} strokeWidth={1} />
+                    <Monitor size={48} strokeWidth={1} style={{ color: capturing ? 'var(--accent)' : 'inherit', filter: capturing ? 'drop-shadow(0 0 10px var(--accent))' : 'none' }} />
                     <h2>Ambilight Extreme</h2>
-                    <p className="subtitle">Screen Mirroring with Vivid Color Boost</p>
+                    <p className="subtitle">Real-time Dominant Color Extraction Engine</p>
 
-                    <select className="source-select" onChange={(e) => setSelectedSource(e.target.value)} disabled={capturing}>
-                        {sources.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
+                    <div className="ambilight-setup-row">
+                        <select className="source-select" onChange={(e) => setSelectedSource(e.target.value)} disabled={capturing}>
+                            {sources.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+
+                        <div className={`bgr-toggle ${isBGR ? 'active' : ''}`} onClick={() => setIsBGR(!isBGR)} title="Swap Red/Blue channels (Fix for some Linux drivers)">
+                            <div className="toggle-slider"></div>
+                            <span>BGR FIX</span>
+                        </div>
+
+                        <motion.button
+                            className={`action-button ${capturing ? 'stop' : 'active'}`}
+                            onClick={capturing ? stop : start}
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                        >
+                            {capturing ? <><Square size={16} /> Stop Engine</> : <><Play size={16} /> Ignite Ambilight</>}
+                        </motion.button>
+                    </div>
 
                     <video ref={videoRef} style={{ display: 'none' }} />
-                    <canvas ref={canvasRef} style={{ display: 'none' }} />
 
-                    {/* Visual Preview for debugging */}
+                    {/* Real-time Extraction TV */}
+                    <div className="extraction-monitor">
+                        <div className="monitor-header">
+                            <span className="live-indicator"><div className="dot"></div> EXTRACTION TV</span>
+                            <span className="resolution-label">160x90 Downsampled Pipeline</span>
+                        </div>
+                        <div className="canvas-wrapper">
+                            <canvas ref={canvasRef} className="extraction-canvas" />
+                            {!capturing && <div className="canvas-placeholder">Select source and ignite engine...</div>}
+                        </div>
+                    </div>
+
+                    {/* Dominant Color Analyzer */}
                     {capturing && previewColors && (
-                        <div className="visualizer" style={{ height: '40px', marginTop: '20px', gap: '4px', display: 'flex' }}>
-                            {previewColors.map((c, i) => (
-                                <div key={i} style={{ flex: 1, background: `rgb(${c.r}, ${c.g}, ${c.b})`, borderRadius: '4px', boxShadow: `0 0 10px rgb(${c.r}, ${c.g}, ${c.b})` }} />
-                            ))}
+                        <div className="color-analyzer">
+                            <div className="analyzer-label">DMX BUS MONITOR (VIVID OUTPUT)</div>
+                            <div className="visualizer">
+                                {previewColors.map((c, i) => (
+                                    <div key={i} className="analyzer-bar" style={{
+                                        background: `rgb(${c.r}, ${c.g}, ${c.b})`,
+                                        boxShadow: `0 10px 30px rgba(${c.r}, ${c.g}, ${c.b}, 0.4)`
+                                    }}>
+                                        <div className="analyzer-codes">
+                                            <span className="code-value">R:{c.r}</span>
+                                            <span className="code-value">G:{c.g}</span>
+                                            <span className="code-value">B:{c.b}</span>
+                                        </div>
+                                        <div className="hex-label">
+                                            {fixtures[i]?.name.split(' ')[1]}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     )}
-
-                    <div style={{ height: '20px' }} />
-
-                    <motion.button
-                        className={`action-button ${capturing ? 'stop' : 'active'}`}
-                        onClick={capturing ? stop : start}
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                    >
-                        {capturing ? <><Square size={16} /> Stop Capture</> : <><Play size={16} /> Start Capture</>}
-                    </motion.button>
                 </div>
             </div>
             <div className="ambilight-sidebar">
-                {/* Override colors for instant feedback */}
                 <LivePreviewContainer
                     fixtures={fixtures}
                     masterDimmer={channelValues?.dim || 255}
@@ -946,8 +971,13 @@ function AmbilightPage({ fixtures, setChannelValues, channelValues, liveColors, 
     )
 }
 
-function SystemPage({ config, fixtures, setFixtures }) {
+function SystemPage({ config, fixtures, setFixtures, onUpdatePerformance }) {
     const funcRanges = config?.funcRanges || []
+    const perf = config?.performance || { dmxHz: 40, uiHz: 20, ambiFps: 30 }
+
+    const handleUpdate = (key, val) => {
+        onUpdatePerformance({ [key]: parseInt(val) })
+    }
 
     const handleRename = (id, newName) => {
         setFixtures(fixtures.map(f => f.id === id ? { ...f, name: newName } : f))
@@ -961,6 +991,43 @@ function SystemPage({ config, fixtures, setFixtures }) {
                     <h1>BeamStudio</h1>
                     <p>DMX Lighting Controller</p>
                     <span className="version">v1.0.0</span>
+                </div>
+
+                <div className="glass-card performance-card">
+                    <div className="card-header-icon">
+                        <Zap size={20} className="accent-text" />
+                        <h3>Hardware Performance</h3>
+                    </div>
+                    <p className="subtitle">Tune the engine for your DMX controller stability.</p>
+
+                    <div className="perf-slider-group">
+                        <div className="perf-control">
+                            <div className="label-row">
+                                <span>DMX Refresh Rate</span>
+                                <span className="value-badge">{perf.dmxHz} Hz</span>
+                            </div>
+                            <input type="range" min="10" max="44" value={perf.dmxHz} onChange={(e) => handleUpdate('dmxHz', e.target.value)} />
+                            <span className="hint">Lower this if lights flicker or lag (USB congestion).</span>
+                        </div>
+
+                        <div className="perf-control">
+                            <div className="label-row">
+                                <span>UI Sync Frequency</span>
+                                <span className="value-badge">{perf.uiHz} Hz</span>
+                            </div>
+                            <input type="range" min="5" max="30" value={perf.uiHz} onChange={(e) => handleUpdate('uiHz', e.target.value)} />
+                            <span className="hint">Frecuency of UI color updates. Lower = smoother UI.</span>
+                        </div>
+
+                        <div className="perf-control">
+                            <div className="label-row">
+                                <span>Ambilight Capture</span>
+                                <span className="value-badge">{perf.ambiFps} FPS</span>
+                            </div>
+                            <input type="range" min="10" max="60" value={perf.ambiFps} onChange={(e) => handleUpdate('ambiFps', e.target.value)} />
+                            <span className="hint">Frame rate of screen extraction engine.</span>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="glass-card hardware-card">
@@ -1037,19 +1104,16 @@ function App() {
 
     // Helper to track DMX calls
     const executeDmx = useCallback(async (fn, isAsync = false) => {
-        setPendingRequests(p => p + 1)
         if (isAsync) {
-            // For one-way calls, we don't wait for a promise
             fn()
-            setTimeout(() => setPendingRequests(p => Math.max(0, p - 1)), 40)
             return
         }
+        setPendingRequests(p => p + 1)
         try {
             return await fn()
         } finally {
-            // Delay slightly so the "syncing" state is visible for fast requests
-            // Reduced to 40ms to match the 44Hz (22ms) DMX loop for faster response
-            setTimeout(() => setPendingRequests(p => Math.max(0, p - 1)), 40)
+            // Delay for visibility of the sync process
+            setTimeout(() => setPendingRequests(p => Math.max(0, p - 1)), 50)
         }
     }, [])
 
@@ -1089,6 +1153,13 @@ function App() {
             await window.dmx?.reset()
         })
     }, [executeDmx])
+
+    const handleUpdatePerformance = useCallback(async (settings) => {
+        const res = await window.dmx?.updatePerformance(settings)
+        if (res?.success) {
+            setConfig(prev => ({ ...prev, performance: res.performance }))
+        }
+    }, [])
 
     const handleToggleFixture = async (fixtureId) => {
         executeDmx(async () => {
@@ -1137,7 +1208,7 @@ function App() {
             case 'dynamic': return <DynamicScenesPage config={config} activeDynamicScene={activeDynamicScene} onSelectScene={setActiveDynamicScene} {...commonProps} />
             case 'audio': return <AudioPage {...commonProps} />
             case 'ambilight': return <AmbilightPage {...commonProps} />
-            case 'system': return <SystemPage config={config} fixtures={fixtures} setFixtures={setFixtures} />
+            case 'system': return <SystemPage {...commonProps} onUpdatePerformance={handleUpdatePerformance} />
             default: return null
         }
     }

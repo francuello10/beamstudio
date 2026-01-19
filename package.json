@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "ELECTRON_DISABLE_SANDBOX=1 electron-vite dev",
     "build": "electron-vite build",
+    "dist": "npm run build && electron-builder",
     "preview": "electron-vite preview",
     "postinstall": "electron-builder install-app-deps"
   },
@@ -32,11 +33,32 @@
   "build": {
     "appId": "com.antigravity.dmx",
     "productName": "BeamStudio",
-    "files": [
-      "out/**/*"
-    ],
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "resources"
+    },
+    "files": [
+      "out/**/*",
+      "README.md"
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "AudioVideo",
+      "maintainer": "Antigravity Team",
+      "icon": "src/renderer/src/assets/logo.png"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "src/renderer/src/assets/logo.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "BeamStudio"
     }
   }
 }

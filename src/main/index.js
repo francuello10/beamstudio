@@ -147,6 +147,11 @@ const dmxState = {
     programSpeed: 127,
     ambilightActive: false,
     audioReactiveActive: false,
+    performance: {
+        dmxHz: 40,
+        uiHz: 20,
+        ambiFps: 30
+    },
     fixtureColors: [
         { r: 0, g: 0, b: 0, blackout: false },
         { r: 0, g: 0, b: 0, blackout: false },
@@ -229,15 +234,18 @@ function broadcastColors() {
     })
 }
 
-// ============================================================================
 // DMX Loop - 44Hz (Standard DMX Refresh Rate)
-// ============================================================================
-
 let dmxInterval = null
+let uiInterval = null // Throttled UI update
+let lastInternalColors = JSON.stringify(dmxState.fixtureColors)
 
 function startDMXLoop() {
     if (dmxInterval) clearInterval(dmxInterval)
-    // Increased to 44Hz (approx 22.7ms) to match standard DMX hardware frequency
+    if (uiInterval) clearInterval(uiInterval)
+
+    // Hardware Loop - Configurable (10Hz to 44Hz)
+    // Lower Hz is safer for "lazy" USB-DMX dongles
+    const dmxMs = Math.round(1000 / dmxState.performance.dmxHz)
     dmxInterval = setInterval(() => {
         if (dmxState.blackout) {
             for (let i = 0; i < 512; i++) sender.setChannel(i, 0)
@@ -245,11 +253,22 @@ function startDMXLoop() {
             for (let i = 0; i < 512; i++) sender.setChannel(i, dmxState.channels[i])
         }
         sender.transmit()
-    }, 1000 / 44)
+    }, dmxMs)
+
+    // UI Broadcast Loop - Configurable (10Hz to 30Hz)
+    const uiMs = Math.round(1000 / dmxState.performance.uiHz)
+    uiInterval = setInterval(() => {
+        const currentColors = JSON.stringify(dmxState.fixtureColors)
+        if (currentColors !== lastInternalColors) {
+            lastInternalColors = currentColors
+            broadcastColors()
+        }
+    }, uiMs)
 }
 
 function stopDMXLoop() {
     if (dmxInterval) { clearInterval(dmxInterval); dmxInterval = null }
+    if (uiInterval) { clearInterval(uiInterval); uiInterval = null }
 }
 
 // ============================================================================
@@ -266,7 +285,7 @@ function startDynamicScene(sceneId) {
         const color = scene.handler(dmxState.dynamicSceneFrame)
         setAllFixturesColor(color.r, color.g, color.b, 255)
         dmxState.dynamicSceneFrame++
-        broadcastColors()
+        // broadcastColors() -> UI interval will handle this at 20Hz
     }, 1000 / 44) // Match DMX loop frequency
     return true
 }
@@ -288,8 +307,15 @@ function setupIPC() {
         flashSpeeds: FLASH_SPEEDS,
         programSpeeds: PROGRAM_SPEEDS,
         colorMacros: COLOR_MACROS,
-        dynamicScenes: Object.entries(DYNAMIC_SCENES).map(([id, s]) => ({ id, name: s.name, desc: s.desc }))
+        dynamicScenes: Object.entries(DYNAMIC_SCENES).map(([id, s]) => ({ id, name: s.name, desc: s.desc })),
+        performance: dmxState.performance
     }))
+
+    ipcMain.handle('dmx:updatePerformance', (_, settings) => {
+        dmxState.performance = { ...dmxState.performance, ...settings }
+        startDMXLoop() // Restart loops with new timing
+        return { success: true, performance: dmxState.performance }
+    })
 
     ipcMain.handle('dmx:reset', () => {
         resetAll()
@@ -302,7 +328,7 @@ function setupIPC() {
         if (['red', 'green', 'blue'].includes(channel.toLowerCase())) {
             fixtures.forEach((_, i) => { dmxState.fixtureColors[i][channel.toLowerCase()[0]] = value })
         }
-        broadcastColors()
+        // broadcastColors() -> Removed to prevent IPC flood
     })
 
     ipcMain.on('dmx:setChannelsAsync', (_, { fixtureIds, channels }) => {
@@ -317,7 +343,7 @@ function setupIPC() {
                 }
             })
         })
-        broadcastColors()
+        // broadcastColors() -> UI interval will handle this
     })
 
     ipcMain.handle('dmx:toggleBlackout', (_, fixtureId) => {
@@ -546,7 +572,7 @@ function setupIPC() {
         setFixtureColor(0, colors[0].r, colors[0].g, colors[0].b, 255)
         setFixtureColor(1, colors[1].r, colors[1].g, colors[1].b, 255)
         setFixtureColor(2, colors[2].r, colors[2].g, colors[2].b, 255)
-        broadcastColors()
+        // broadcastColors() -> UI interval will handle this
         return { success: true, colors: dmxState.fixtureColors }
     })
 
@@ -571,7 +597,7 @@ function setupIPC() {
         setFixtureColor(0, colors[0].r, colors[0].g, colors[0].b, 255)
         setFixtureColor(1, colors[1].r, colors[1].g, colors[1].b, 255)
         setFixtureColor(2, colors[2].r, colors[2].g, colors[2].b, 255)
-        broadcastColors()
+        // broadcastColors() -> Removed to prevent IPC flood
     })
 
     ipcMain.handle('audio:start', () => { stopDynamicScene(); dmxState.activeProgram = null; dmxState.audioReactiveActive = true; return { success: true } })
@@ -583,7 +609,7 @@ function setupIPC() {
         const b = Math.min(255, Math.round(Math.pow(high, 1.3) * 255 + Math.pow(bass, 1.5) * 50))
         const dim = Math.min(255, Math.round(128 + (volume || 0.5) * 127))
         setAllFixturesColor(r, g, b, dim)
-        broadcastColors()
+        // broadcastColors() -> Removed to prevent IPC flood
         return { success: true, colors: dmxState.fixtureColors }
     })
 

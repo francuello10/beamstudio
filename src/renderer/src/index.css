@@ -656,6 +656,9 @@ body {
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 100%;
+    min-height: 12px;
+    /* Reserve space for alignment */
+    line-height: 12px;
 }
 
 /* Bottom Section: Colors & Fixtures */
@@ -1395,17 +1398,310 @@ body {
     letter-spacing: 1px;
 }
 
-/* Fader Info Alignment Fix */
-.fader-info {
+/* Ambilight Dashboard Styles */
+.extraction-monitor {
+    background: #000;
+    border-radius: 12px;
+    padding: 16px;
+    margin-top: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.8);
+}
+
+.monitor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    font-family: 'Inter', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+.live-indicator {
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.live-indicator .dot {
+    width: 6px;
+    height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: pulse 1.5s infinite;
+}
+
+.resolution-label {
+    color: #666;
+}
+
+.canvas-wrapper {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #111;
+    border-radius: 6px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.extraction-canvas {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    image-rendering: pixelated;
+    /* Crucial for that "monitoring" look */
+}
+
+.canvas-placeholder {
+    color: #444;
+    font-style: italic;
+    font-size: 13px;
+}
+
+.color-analyzer {
+    margin-top: 32px;
+}
+
+.analyzer-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    letter-spacing: 2px;
+    margin-bottom: 16px;
+    text-align: center;
+}
+
+.color-analyzer .visualizer {
+    display: flex;
+    height: 120px;
+    /* Taller bars */
+    gap: 20px;
+    width: 100%;
+}
+
+.analyzer-bar {
+    flex: 1;
+    border-radius: 12px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
+    justify-content: flex-end;
+    /* Label at bottom */
+    padding-bottom: 15px;
+    position: relative;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    transition: all 0.1s ease;
+}
+
+.analyzer-codes {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    margin-bottom: auto;
+    padding-top: 15px;
+}
+
+.code-value {
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    color: white;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+    background: rgba(0, 0, 0, 0.3);
+    padding: 1px 6px;
+    border-radius: 3px;
+}
+
+.performance-card h3 {
+    margin-bottom: 5px;
+}
+
+.performance-card .subtitle {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+}
+
+.card-header-icon {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 5px;
+}
+
+.perf-slider-group {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.perf-control {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.perf-control .label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.perf-control .label-row span {
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.perf-control .value-badge {
+    background: rgba(var(--accent-rgb), 0.1);
+    color: var(--accent);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px !important;
+}
+
+.perf-control input[type="range"] {
+    -webkit-appearance: none;
     width: 100%;
-    padding-top: 10px;
-    /* Reserve fixed vertical space for the content so layout doesn't shift */
-    height: 80px;
-    justify-content: flex-start;
+    height: 4px;
+    background: #333;
+    border-radius: 2px;
+    outline: none;
+}
+
+.perf-control input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    background: var(--accent);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.4);
+}
+
+.perf-control .hint {
+    font-size: 9px;
+    color: var(--text-secondary);
+    font-style: italic;
+    opacity: 0.7;
+}
+
+.ambilight-setup-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    align-items: center;
+}
+
+.bgr-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    padding: 6px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    transition: all 0.3s ease;
+    user-select: none;
+}
+
+.bgr-toggle.active {
+    background: rgba(var(--accent-rgb), 0.1);
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 0 15px rgba(var(--accent-rgb), 0.2);
+}
+
+.bgr-toggle .toggle-slider {
+    width: 32px;
+    height: 16px;
+    background: #333;
+    border-radius: 10px;
+    position: relative;
+    transition: 0.3s;
+}
+
+.bgr-toggle.active .toggle-slider {
+    background: var(--accent);
+}
+
+.bgr-toggle .toggle-slider::after {
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: white;
+    border-radius: 50%;
+    top: 2px;
+    left: 2px;
+    transition: 0.3s;
+}
+
+.bgr-toggle.active .toggle-slider::after {
+    left: 18px;
+}
+
+.fixture-toggle-btn {
+    border: 1px solid var(--glass-border);
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.fixture-toggle-btn.off {
+    background: var(--glass);
+    color: var(--text-secondary);
+}
+
+.fixture-toggle-btn.on {
+    background: var(--accent);
+    color: #000;
+    box-shadow: 0 0 15px rgba(var(--accent-rgb), 0.5);
+    border-color: transparent;
+}
+
+.ambilight-setup-row .source-select {
+    flex: 1;
+    margin-top: 0;
+}
+
+.ambilight-setup-row .action-button {
+    width: auto;
+    padding: 0 24px;
+    height: 48px;
+}
+
+@keyframes pulse {
+    0% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.5;
+        transform: scale(0.9);
+    }
+
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
 }
 
 .fader-mode {

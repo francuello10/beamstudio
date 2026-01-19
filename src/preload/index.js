@@ -37,6 +37,7 @@ const dmxAPI = {
 
     // Dynamic scenes (software)
     dynamicScene: (sceneId, active) => ipcRenderer.invoke('dmx:dynamicScene', { sceneId, active }),
+    updatePerformance: (settings) => ipcRenderer.invoke('dmx:updatePerformance', settings),
 
     getState: () => ipcRenderer.invoke('dmx:getState'),
     onColorsUpdated: (callback) => {

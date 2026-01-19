@@ -63,7 +63,8 @@ The application runs a 30fps DMX transmission loop in `src/main/index.js`. It ma
 
 ## 🛠️ Development Scripts
 *   `npm run dev`: Starts the Vite dev server and Electron in development mode.
-*   `npm run build`: Bundles the application for production using `electron-builder`.
+*   `npm run build`: Bundles the application for production using `electron-builder` (creates unpacked directories).
+*   `npm run dist`: **Production Build.** Generates installers (`.exe`, `.deb`, `.AppImage`) in the `dist/` folder.
 
 ---
 
