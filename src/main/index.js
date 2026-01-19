@@ -525,8 +525,13 @@ function setupIPC() {
 
     // Ambilight
     ipcMain.handle('ambilight:getSources', async () => {
-        const sources = await desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 320, height: 180 } })
-        return sources.map(s => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL() }))
+        try {
+            const sources = await desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 320, height: 180 } })
+            return sources.map(s => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL() }))
+        } catch (error) {
+            console.error('Ambilight: Failed to get sources (Check Wayland/PipeWire permissions):', error)
+            return []
+        }
     })
 
     ipcMain.handle('ambilight:start', (_, sourceId) => { stopDynamicScene(); dmxState.activeProgram = null; dmxState.ambilightActive = true; return { success: true, sourceId } })

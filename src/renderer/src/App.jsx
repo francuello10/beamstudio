@@ -792,7 +792,14 @@ function AmbilightPage({ fixtures, setChannelValues, channelValues, liveColors, 
     const canvasRef = useRef(null)
     const captureInterval = useRef(null)
 
-    useEffect(() => { window.ambilight?.getSources().then(setSources) }, [])
+    useEffect(() => {
+        window.ambilight?.getSources()
+            .then(setSources)
+            .catch(err => {
+                console.warn('Ambilight not available:', err)
+                setSources([])
+            })
+    }, [])
 
     const start = async () => {
         const sourceId = selectedSource || sources[0]?.id
