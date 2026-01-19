@@ -20,7 +20,7 @@ const sender = dmxnetInstance.newSender({
     universe: 0,
     net: 0,
     port: 6454,
-    base_refresh_interval: 1000
+    base_refresh_interval: 25  // Optimized: 40Hz sync with QLC+
 })
 
 // ============================================================================
@@ -148,8 +148,8 @@ const dmxState = {
     ambilightActive: false,
     audioReactiveActive: false,
     performance: {
-        dmxHz: 40,
-        uiHz: 20,
+        dmxHz: 44,   // DMX512 standard
+        uiHz: 30,    // Smoother UI sync
         ambiFps: 30
     },
     fixtureColors: [
@@ -237,14 +237,25 @@ function broadcastColors() {
 // DMX Loop - 44Hz (Standard DMX Refresh Rate)
 let dmxInterval = null
 let uiInterval = null // Throttled UI update
-let lastInternalColors = JSON.stringify(dmxState.fixtureColors)
+let lastInternalColors = [{ r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }]
+
+// Optimized color comparison (no JSON.stringify overhead)
+function colorsChanged() {
+    for (let i = 0; i < 3; i++) {
+        const curr = dmxState.fixtureColors[i]
+        const last = lastInternalColors[i]
+        if (!last || curr.r !== last.r || curr.g !== last.g || curr.b !== last.b) {
+            return true
+        }
+    }
+    return false
+}
 
 function startDMXLoop() {
     if (dmxInterval) clearInterval(dmxInterval)
     if (uiInterval) clearInterval(uiInterval)
 
-    // Hardware Loop - Configurable (10Hz to 44Hz)
-    // Lower Hz is safer for "lazy" USB-DMX dongles
+    // Hardware Loop - 44Hz continuous transmission
     const dmxMs = Math.round(1000 / dmxState.performance.dmxHz)
     dmxInterval = setInterval(() => {
         if (dmxState.blackout) {
@@ -255,12 +266,11 @@ function startDMXLoop() {
         sender.transmit()
     }, dmxMs)
 
-    // UI Broadcast Loop - Configurable (10Hz to 30Hz)
+    // UI Broadcast Loop - Optimized (no JSON.stringify)
     const uiMs = Math.round(1000 / dmxState.performance.uiHz)
     uiInterval = setInterval(() => {
-        const currentColors = JSON.stringify(dmxState.fixtureColors)
-        if (currentColors !== lastInternalColors) {
-            lastInternalColors = currentColors
+        if (colorsChanged()) {
+            lastInternalColors = dmxState.fixtureColors.map(c => ({ ...c }))
             broadcastColors()
         }
     }, uiMs)
