@@ -43,31 +43,87 @@ function createArtNetDriver() {
 
 async function createNativeDriver(devicePath) {
     try {
-        // Dynamic import to avoid issues if serialport isn't available
-        const DMX = (await import('dmx')).default
+        const { SerialPort } = await import('serialport')
 
+        // Close existing connection if any
         if (nativeDmx) {
-            // Close existing universe if switching
             try { nativeDmx.close && nativeDmx.close() } catch (e) { /* ignore */ }
         }
 
-        nativeDmx = new DMX()
-        nativeUniverse = nativeDmx.addUniverse('main', 'enttec-open-usb-dmx', devicePath)
+        // KMtronic Open DMX uses 250000 baud rate (DMX512 standard)
+        const port = new SerialPort({
+            path: devicePath,
+            baudRate: 250000,
+            dataBits: 8,
+            stopBits: 2,
+            parity: 'none',
+            autoOpen: false
+        })
 
-        // Internal buffer for native mode
-        const channelBuffer = {}
+        // DMX512 frame buffer (513 bytes: 1 start code + 512 channels)
+        const dmxBuffer = Buffer.alloc(513, 0)
+        let isOpen = false
+        let errorCount = 0
+        const MAX_ERRORS = 5
+
+        // Open port
+        await new Promise((resolve, reject) => {
+            port.open((err) => {
+                if (err) reject(err)
+                else {
+                    isOpen = true
+                    resolve()
+                }
+            })
+        })
+
+        console.log(`KMtronic DMX connected on ${devicePath} at 250000 baud`)
 
         return {
             mode: 'native',
             devicePath,
-            setChannel: (ch, val) => { channelBuffer[ch] = val },
+            setChannel: (ch, val) => {
+                if (ch >= 0 && ch < 512) {
+                    dmxBuffer[ch + 1] = val  // +1 because byte 0 is start code
+                }
+            },
             transmit: () => {
-                if (Object.keys(channelBuffer).length > 0) {
-                    nativeDmx.update('main', channelBuffer)
+                if (!isOpen) return
+                try {
+                    // Send break signal (required for DMX512)
+                    port.set({ brk: true }, () => {
+                        setTimeout(() => {
+                            port.set({ brk: false }, () => {
+                                // Send DMX data after break
+                                port.write(dmxBuffer, (err) => {
+                                    if (err) {
+                                        errorCount++
+                                        if (errorCount <= 3) {
+                                            console.error('DMX write error:', err.message)
+                                        }
+                                    } else {
+                                        errorCount = 0
+                                    }
+                                })
+                            })
+                        }, 0.1)  // Very short MAB (Mark After Break)
+                    })
+                } catch (err) {
+                    errorCount++
+                    if (errorCount >= MAX_ERRORS) {
+                        console.error('Too many DMX errors, connection may be lost')
+                        BrowserWindow.getAllWindows().forEach(win => {
+                            win.webContents.send('dmx:error', {
+                                message: 'Native USB connection lost',
+                                devicePath
+                            })
+                        })
+                    }
                 }
             },
             close: () => {
-                try { nativeDmx.close && nativeDmx.close() } catch (e) { /* ignore */ }
+                isOpen = false
+                try { port.close() } catch (e) { /* ignore */ }
             }
         }
     } catch (error) {
@@ -826,4 +882,4 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => { stopDMXLoop(); stopDynamicScene(); if (process.platform !== 'darwin') app.quit() })
-app.on('before-quit', () => { stopDMXLoop(); stopDynamicScene(); for (let i = 0; i < 512; i++) sender.setChannel(i, 0); sender.transmit() })
+app.on('before-quit', () => { stopDMXLoop(); stopDynamicScene(); for (let i = 0; i < 512; i++) dmxDriver.setChannel(i, 0); dmxDriver.transmit() })
