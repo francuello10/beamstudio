@@ -812,7 +812,7 @@ function AmbilightPage({ fixtures, setChannelValues, channelValues, liveColors, 
             setCapturing(true)
             setChannelValues(prev => ({ ...prev, dim: 255 }))
             await window.ambilight?.start(sourceId)
-            captureInterval.current = setInterval(() => extract(), 40) // ~25fps optimal
+            captureInterval.current = setInterval(() => extract(), 25) // ~40fps responsive
         } catch (err) { console.error('Capture error:', err) }
     }
 

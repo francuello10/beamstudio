@@ -540,7 +540,7 @@ function setupIPC() {
     let lastAmbiColors = [{ r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }]
     ipcMain.handle('ambilight:setColors', (_, { left, center, right }) => {
         if (!dmxState.ambilightActive) return { success: false }
-        const smooth = (c, t, f = 0.3) => ({ r: Math.round(c.r + (t.r - c.r) * f), g: Math.round(c.g + (t.g - c.g) * f), b: Math.round(c.b + (t.b - c.b) * f) })
+        const smooth = (c, t, f = 0.8) => ({ r: Math.round(c.r + (t.r - c.r) * f), g: Math.round(c.g + (t.g - c.g) * f), b: Math.round(c.b + (t.b - c.b) * f) })
         const colors = [left, center, right].map((t, i) => smooth(lastAmbiColors[i], t))
         lastAmbiColors = colors
         setFixtureColor(0, colors[0].r, colors[0].g, colors[0].b, 255)
@@ -553,7 +553,7 @@ function setupIPC() {
     // Async High-Frequency Ambilight update (One-way)
     ipcMain.on('ambilight:setColorsAsync', (_, { left, center, right }) => {
         if (!dmxState.ambilightActive) return
-        const smooth = (c, t, f = 0.3) => ({ r: Math.round(c.r + (t.r - c.r) * f), g: Math.round(c.g + (t.g - c.g) * f), b: Math.round(c.b + (t.b - c.b) * f) })
+        const smooth = (c, t, f = 0.8) => ({ r: Math.round(c.r + (t.r - c.r) * f), g: Math.round(c.g + (t.g - c.g) * f), b: Math.round(c.b + (t.b - c.b) * f) })
         const colors = [left, center, right].map((t, i) => smooth(lastAmbiColors[i], t))
         lastAmbiColors = colors
         setFixtureColor(0, colors[0].r, colors[0].g, colors[0].b, 255)
