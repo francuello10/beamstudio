@@ -812,7 +812,7 @@ function AmbilightPage({ fixtures, setChannelValues, channelValues, liveColors, 
             setCapturing(true)
             setChannelValues(prev => ({ ...prev, dim: 255 }))
             await window.ambilight?.start(sourceId)
-            captureInterval.current = setInterval(() => extract(), 25) // ~40fps responsive
+            captureInterval.current = setInterval(() => extract(), 16) // ~60fps - Cinematic fluidity
         } catch (err) { console.error('Capture error:', err) }
     }
 
@@ -828,57 +828,53 @@ function AmbilightPage({ fixtures, setChannelValues, channelValues, liveColors, 
     const extract = () => {
         if (!videoRef.current || !canvasRef.current) return
         const canvas = canvasRef.current
-        const ctx = canvas.getContext('2d')
+        const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true }) // Fast path
         canvas.width = 160; canvas.height = 90
         ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height)
 
-        const sample = (x, w) => {
-            const data = ctx.getImageData(x, 0, w, canvas.height).data
-            let r = 0, g = 0, b = 0, c = 0
+        // SINGLE data pull from GPU (Critical Optimization)
+        const frameData = ctx.getImageData(0, 0, canvas.width, canvas.height).data
 
-            for (let i = 0; i < data.length; i += 16) {
-                r += data[i]; g += data[i + 1]; b += data[i + 2]; c++
-            }
+        const sampleZone = (startX, width) => {
+            let r = 0, g = 0, b = 0, count = 0
+            const rowStride = canvas.width * 4
 
-            r = r / c; g = g / c; b = b / c;
-
-            // EXTREME VIVID LOGIC
-            const max = Math.max(r, g, b, 1)
-            // 1. Massive Boost Factor (up to 4x)
-            const boost = Math.min(4.0, 255 / Math.max(max, 20))
-
-            // Apply Boost
-            r *= boost; g *= boost; b *= boost;
-
-            // 2. Saturation Hyper-Expansion
-            if (max > 25) {
-                // If one color is dominant, crush the others
-                const threshold = max * 0.7
-                if (r < threshold) r *= 0.3
-                if (g < threshold) g *= 0.3
-                if (b < threshold) b *= 0.3
-
-                // 3. Green Special Boost (Nature Mode)
-                if (g >= r * 1.1 && g >= b * 1.1) {
-                    g = Math.min(255, g * 1.3)
-                    r *= 0.4
-                    b *= 0.4
+            // Sample the zone with skipping for performance
+            for (let y = 0; y < canvas.height; y += 4) {
+                const rowOffset = y * rowStride
+                for (let x = startX; x < startX + width; x += 4) {
+                    const i = rowOffset + (x * 4)
+                    r += frameData[i]
+                    g += frameData[i + 1]
+                    b += frameData[i + 2]
+                    count++
                 }
             }
 
-            return {
-                r: Math.min(255, Math.round(r)),
-                g: Math.min(255, Math.round(g)),
-                b: Math.min(255, Math.round(b))
-            }
+            r /= count; g /= count; b /= count;
+
+            // SUPERLATIVE VIBRANCY (GPU-like logic in JS)
+            const max = Math.max(r, g, b, 1)
+            const saturation = (max - Math.min(r, g, b)) / max
+
+            // Boost saturation and brightness for immersion
+            let factor = 1.0 + (saturation * 1.5) // Saturated colors get more punch
+            if (max < 40) factor *= 1.5 // Dark scenes get boosted
+
+            r = Math.min(255, r * factor)
+            g = Math.min(255, g * factor)
+            b = Math.min(255, b * factor)
+
+            return { r: Math.round(r), g: Math.round(g), b: Math.round(b) }
         }
 
-        const cLeft = sample(0, 30)
-        const cCenter = sample(60, 40)
-        const cRight = sample(130, 30)
+        const cLeft = sampleZone(0, 40)
+        const cCenter = sampleZone(60, 40)
+        const cRight = sampleZone(120, 40)
 
         const newColors = [cLeft, cCenter, cRight]
         setPreviewColors(newColors)
+        // Send to Main for DMX Loop (Async + adaptive smoothing done in main)
         executeDmx(() => window.ambilight?.setColorsAsync({ left: cLeft, center: cCenter, right: cRight }), true)
     }
 

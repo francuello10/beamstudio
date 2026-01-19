@@ -553,9 +553,21 @@ function setupIPC() {
     // Async High-Frequency Ambilight update (One-way)
     ipcMain.on('ambilight:setColorsAsync', (_, { left, center, right }) => {
         if (!dmxState.ambilightActive) return
-        const smooth = (c, t, f = 0.8) => ({ r: Math.round(c.r + (t.r - c.r) * f), g: Math.round(c.g + (t.g - c.g) * f), b: Math.round(c.b + (t.b - c.b) * f) })
-        const colors = [left, center, right].map((t, i) => smooth(lastAmbiColors[i], t))
+
+        const adaptiveSmooth = (cur, target) => {
+            const diff = (Math.abs(cur.r - target.r) + Math.abs(cur.g - target.g) + Math.abs(cur.b - target.b)) / 3
+            // If big change (flash/cut), go fast (0.9). If small change, go buttery smooth (0.1)
+            const f = diff > 30 ? 0.8 : 0.2
+            return {
+                r: Math.round(cur.r + (target.r - cur.r) * f),
+                g: Math.round(cur.g + (target.g - cur.g) * f),
+                b: Math.round(cur.b + (target.b - cur.b) * f)
+            }
+        }
+
+        const colors = [left, center, right].map((t, i) => adaptiveSmooth(lastAmbiColors[i], t))
         lastAmbiColors = colors
+
         setFixtureColor(0, colors[0].r, colors[0].g, colors[0].b, 255)
         setFixtureColor(1, colors[1].r, colors[1].g, colors[1].b, 255)
         setFixtureColor(2, colors[2].r, colors[2].g, colors[2].b, 255)
