@@ -837,83 +837,63 @@ function AmbilightPage({ fixtures, setChannelValues, channelValues, liveColors, 
 
         const frameData = ctx.getImageData(0, 0, canvas.width, canvas.height).data
 
-        // 1. AUTO BLACK-BAR DETECTION (Philips Logic)
-        let top = 0, bottom = canvas.height - 1
-        const threshold = 15 // Noise threshold
-
-        // Find top bar
-        for (let y = 0; y < 30; y++) {
-            const i = (y * canvas.width + 80) * 4
-            if (frameData[i] > threshold || frameData[i + 1] > threshold || frameData[i + 2] > threshold) {
-                top = y; break
-            }
-        }
-        // Find bottom bar
-        for (let y = canvas.height - 1; y > canvas.height - 30; y--) {
-            const i = (y * canvas.width + 80) * 4
-            if (frameData[i] > threshold || frameData[i + 1] > threshold || frameData[i + 2] > threshold) {
-                bottom = y; break
-            }
-        }
-
-        const activeHeight = bottom - top
-
-        // 2. EDGE-WEIGHTED SAMPLING
-        const sampleZone = (startX, width) => {
-            let r = 0, g = 0, b = 0, totalWeight = 0
+        // 1. DOMINANT COLOR EXTRACTION (Max Impact Logic)
+        const getDominantInZone = (startX, width) => {
+            let maxR = 0, maxG = 0, maxB = 0, maxVibrance = -1
             const rowStride = canvas.width * 4
 
-            for (let y = top; y <= bottom; y += 3) {
+            // We sample looking for the "Most Saturated" color, not the average
+            for (let y = 10; y < 80; y += 4) {
                 const rowOffset = y * rowStride
-                // Philips focuses on the outer edges for depth
-                for (let x = startX; x < startX + width; x += 3) {
+                for (let x = startX; x < startX + width; x += 4) {
                     const i = rowOffset + (x * 4)
+                    const r = frameData[i], g = frameData[i + 1], b = frameData[i + 2]
 
-                    // Spatial Weight: Pixels closer to the top/bottom edge get more weight for vertical bars
-                    const distToEdge = Math.min(y - top, bottom - y)
-                    const weight = 1.0 + (10 / (distToEdge + 1))
+                    // Vibrance score: purely based on how "not grey" the color is
+                    const vibrance = Math.max(r, g, b) - Math.min(r, g, b)
+                    const brightness = (r + g + b) / 3
 
-                    r += frameData[i] * weight
-                    g += frameData[i + 1] * weight
-                    b += frameData[i + 2] * weight
-                    totalWeight += weight
+                    if (vibrance + (brightness * 0.5) > maxVibrance) {
+                        maxVibrance = vibrance + (brightness * 0.5)
+                        maxR = r; maxG = g; maxB = b
+                    }
                 }
             }
 
-            r /= totalWeight; g /= totalWeight; b /= totalWeight;
-
-            // 3. PHILIPS VIVID COLOR ENGINE
+            // 2. MASSIVE EXAGGERATION (The "Burdo pero Lindo" factor)
+            let r = maxR, g = maxG, b = maxB
             const max = Math.max(r, g, b, 1)
-            const saturation = (max - Math.min(r, g, b)) / max
 
-            // Saturation Boost (Philips is known for punchy colors)
-            let boost = 1.0 + (saturation * 2.0)
-            if (max < 30) boost *= 2.0 // Boost dark scenes perceptually
+            // Hyper-Saturate: push the dominant channel even further
+            if (max > 10) {
+                const boost = 255 / max
+                r *= boost; g *= boost; b *= boost
 
-            // Apply Gamma Correction (Linearize)
-            const corr = (val) => GAMMA_TABLE[Math.min(255, Math.round(val * boost))]
+                // Color specific "Vivid" enhancement
+                if (g > r * 1.2 && g > b * 1.2) { g = 255; r *= 0.2; b *= 0.2 } // Deep Wimbledon Green
+                else if (r > g * 1.2 && r > b * 1.2) { r = 255; g *= 0.2; b *= 0.2 } // Deep Ferrari Red
+                else if (b > r * 1.2 && b > g * 1.2) { b = 255; r *= 0.2; g *= 0.2 } // Deep Ocean Blue
+            } else {
+                r = 0; g = 0; b = 0 // Cinematic Blackout for dark scenes
+            }
 
+            // Apply Gamma to keep it from looking "neon-plastic"
+            const corr = (val) => GAMMA_TABLE[Math.min(255, Math.round(val))]
             return { r: corr(r), g: corr(g), b: corr(b) }
         }
 
-        const cLeft = sampleZone(0, 50)
-        const cCenter = sampleZone(55, 50)
-        const cRight = sampleZone(110, 50)
+        const cLeft = getDominantInZone(0, 50)
+        const cCenter = getDominantInZone(55, 50)
+        const cRight = getDominantInZone(110, 50)
 
-        // 4. ATMOSPHERIC BLEED (Smooth transitions between bars)
-        const bleed = (c1, c2, factor = 0.2) => ({
-            r: Math.round(c1.r * (1 - factor) + c2.r * factor),
-            g: Math.round(c1.g * (1 - factor) + c2.g * factor),
-            b: Math.round(c1.b * (1 - factor) + c2.b * factor)
-        })
-
-        const finalLeft = bleed(cLeft, cCenter)
-        const finalCenter = bleed(bleed(cCenter, cLeft, 0.15), cRight, 0.15)
-        const finalRight = bleed(cRight, cCenter)
-
-        const finalColors = [finalLeft, finalCenter, finalRight]
+        // Give the center more weight to "fill" the room
+        const finalColors = [cLeft, cCenter, cRight]
         setPreviewColors(finalColors)
-        executeDmx(() => window.ambilight?.setColorsAsync({ left: finalLeft, center: finalCenter, right: finalRight }), true)
+        executeDmx(() => window.ambilight?.setColorsAsync({
+            left: cLeft,
+            center: cCenter,
+            right: cRight
+        }), true)
     }
 
     return (
