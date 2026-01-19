@@ -4,9 +4,17 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import dmxnet from 'dmxnet'
 
 // ============================================================================
-// DMX / Art-Net Setup
+// DMX Driver Abstraction (Dual Mode: Art-Net or Native USB)
 // ============================================================================
 
+// Driver state
+let dmxMode = 'artnet'  // 'artnet' | 'native'
+let nativeDevicePath = '/dev/ttyUSB0'
+let dmxDriver = null
+let nativeDmx = null
+let nativeUniverse = null
+
+// Art-Net setup (always available as fallback)
 const dmxnetInstance = new dmxnet.dmxnet({
     log: { level: 'error' },
     oem: 0,
@@ -14,14 +22,102 @@ const dmxnetInstance = new dmxnet.dmxnet({
     lName: 'BeamStudio DMX Controller'
 })
 
-const sender = dmxnetInstance.newSender({
+const artnetSender = dmxnetInstance.newSender({
     ip: '255.255.255.255',
     subnet: 0,
     universe: 0,
     net: 0,
     port: 6454,
-    base_refresh_interval: 25  // Optimized: 40Hz sync with QLC+
+    base_refresh_interval: 25
 })
+
+// Unified DMX Driver Interface
+function createArtNetDriver() {
+    return {
+        mode: 'artnet',
+        setChannel: (ch, val) => artnetSender.setChannel(ch, val),
+        transmit: () => artnetSender.transmit(),
+        close: () => { }  // Art-Net doesn't need cleanup
+    }
+}
+
+async function createNativeDriver(devicePath) {
+    try {
+        // Dynamic import to avoid issues if serialport isn't available
+        const DMX = (await import('dmx')).default
+
+        if (nativeDmx) {
+            // Close existing universe if switching
+            try { nativeDmx.close && nativeDmx.close() } catch (e) { /* ignore */ }
+        }
+
+        nativeDmx = new DMX()
+        nativeUniverse = nativeDmx.addUniverse('main', 'enttec-open-usb-dmx', devicePath)
+
+        // Internal buffer for native mode
+        const channelBuffer = {}
+
+        return {
+            mode: 'native',
+            devicePath,
+            setChannel: (ch, val) => { channelBuffer[ch] = val },
+            transmit: () => {
+                if (Object.keys(channelBuffer).length > 0) {
+                    nativeDmx.update('main', channelBuffer)
+                }
+            },
+            close: () => {
+                try { nativeDmx.close && nativeDmx.close() } catch (e) { /* ignore */ }
+            }
+        }
+    } catch (error) {
+        console.error('Failed to create native DMX driver:', error)
+        return null
+    }
+}
+
+// Initialize with Art-Net by default
+dmxDriver = createArtNetDriver()
+
+// List available serial ports (for UI)
+async function listSerialPorts() {
+    try {
+        const { SerialPort } = await import('serialport')
+        const ports = await SerialPort.list()
+        return ports.map(p => ({
+            path: p.path,
+            manufacturer: p.manufacturer || 'Unknown',
+            vendorId: p.vendorId,
+            productId: p.productId,
+            isKMtronic: p.vendorId === '0403' || p.manufacturer?.toLowerCase().includes('kmtronic')
+        }))
+    } catch (error) {
+        console.error('Failed to list serial ports:', error)
+        return []
+    }
+}
+
+// Switch DMX mode
+async function switchDmxMode(mode, devicePath = null) {
+    if (mode === 'native') {
+        const path = devicePath || nativeDevicePath
+        const newDriver = await createNativeDriver(path)
+        if (newDriver) {
+            dmxDriver.close()
+            dmxDriver = newDriver
+            dmxMode = 'native'
+            nativeDevicePath = path
+            return { success: true, mode: 'native', devicePath: path }
+        } else {
+            return { success: false, error: 'Failed to connect to device', mode: dmxMode }
+        }
+    } else {
+        dmxDriver.close()
+        dmxDriver = createArtNetDriver()
+        dmxMode = 'artnet'
+        return { success: true, mode: 'artnet' }
+    }
+}
 
 // ============================================================================
 // StickTec 1019 - P6 Mode (7 Channels)
@@ -255,15 +351,15 @@ function startDMXLoop() {
     if (dmxInterval) clearInterval(dmxInterval)
     if (uiInterval) clearInterval(uiInterval)
 
-    // Hardware Loop - 44Hz continuous transmission
+    // Hardware Loop - 44Hz continuous transmission (uses abstracted driver)
     const dmxMs = Math.round(1000 / dmxState.performance.dmxHz)
     dmxInterval = setInterval(() => {
         if (dmxState.blackout) {
-            for (let i = 0; i < 512; i++) sender.setChannel(i, 0)
+            for (let i = 0; i < 512; i++) dmxDriver.setChannel(i, 0)
         } else {
-            for (let i = 0; i < 512; i++) sender.setChannel(i, dmxState.channels[i])
+            for (let i = 0; i < 512; i++) dmxDriver.setChannel(i, dmxState.channels[i])
         }
-        sender.transmit()
+        dmxDriver.transmit()
     }, dmxMs)
 
     // UI Broadcast Loop - Optimized (no JSON.stringify)
@@ -318,8 +414,30 @@ function setupIPC() {
         programSpeeds: PROGRAM_SPEEDS,
         colorMacros: COLOR_MACROS,
         dynamicScenes: Object.entries(DYNAMIC_SCENES).map(([id, s]) => ({ id, name: s.name, desc: s.desc })),
-        performance: dmxState.performance
+        performance: dmxState.performance,
+        dmxMode: dmxMode,
+        nativeDevicePath: nativeDevicePath
     }))
+
+    // DMX Mode Control
+    ipcMain.handle('dmx:getMode', () => ({
+        mode: dmxMode,
+        devicePath: nativeDevicePath,
+        driverMode: dmxDriver?.mode || 'artnet'
+    }))
+
+    ipcMain.handle('dmx:listPorts', async () => {
+        return await listSerialPorts()
+    })
+
+    ipcMain.handle('dmx:setMode', async (_, { mode, devicePath }) => {
+        const result = await switchDmxMode(mode, devicePath)
+        if (result.success) {
+            // Restart DMX loop with new driver
+            startDMXLoop()
+        }
+        return result
+    })
 
     ipcMain.handle('dmx:updatePerformance', (_, settings) => {
         dmxState.performance = { ...dmxState.performance, ...settings }

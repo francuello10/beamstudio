@@ -39,6 +39,11 @@ const dmxAPI = {
     dynamicScene: (sceneId, active) => ipcRenderer.invoke('dmx:dynamicScene', { sceneId, active }),
     updatePerformance: (settings) => ipcRenderer.invoke('dmx:updatePerformance', settings),
 
+    // DMX Mode Control (Art-Net vs Native USB)
+    getMode: () => ipcRenderer.invoke('dmx:getMode'),
+    listPorts: () => ipcRenderer.invoke('dmx:listPorts'),
+    setMode: (mode, devicePath) => ipcRenderer.invoke('dmx:setMode', { mode, devicePath }),
+
     getState: () => ipcRenderer.invoke('dmx:getState'),
     onColorsUpdated: (callback) => {
         ipcRenderer.on('dmx:colorsUpdated', (_, colors) => callback(colors))

@@ -975,12 +975,56 @@ function SystemPage({ config, fixtures, setFixtures, onUpdatePerformance }) {
     const funcRanges = config?.funcRanges || []
     const perf = config?.performance || { dmxHz: 40, uiHz: 20, ambiFps: 30 }
 
+    // DMX Mode state
+    const [dmxMode, setDmxMode] = useState(config?.dmxMode || 'artnet')
+    const [serialPorts, setSerialPorts] = useState([])
+    const [selectedPort, setSelectedPort] = useState(config?.nativeDevicePath || '/dev/ttyUSB0')
+    const [isConnecting, setIsConnecting] = useState(false)
+    const [connectionStatus, setConnectionStatus] = useState(null)
+
+    // Load serial ports on mount
+    useEffect(() => {
+        window.dmx?.listPorts().then(ports => {
+            setSerialPorts(ports)
+            // Auto-select KMtronic if found
+            const kmtronic = ports.find(p => p.isKMtronic)
+            if (kmtronic) setSelectedPort(kmtronic.path)
+        })
+        // Get current mode
+        window.dmx?.getMode().then(mode => {
+            setDmxMode(mode.mode)
+            if (mode.devicePath) setSelectedPort(mode.devicePath)
+        })
+    }, [])
+
     const handleUpdate = (key, val) => {
         onUpdatePerformance({ [key]: parseInt(val) })
     }
 
     const handleRename = (id, newName) => {
         setFixtures(fixtures.map(f => f.id === id ? { ...f, name: newName } : f))
+    }
+
+    const handleModeChange = async (newMode) => {
+        setIsConnecting(true)
+        setConnectionStatus(null)
+        try {
+            const result = await window.dmx?.setMode(newMode, selectedPort)
+            if (result.success) {
+                setDmxMode(result.mode)
+                setConnectionStatus({ type: 'success', message: newMode === 'native' ? `Connected to ${result.devicePath}` : 'Using Art-Net (QLC+)' })
+            } else {
+                setConnectionStatus({ type: 'error', message: result.error || 'Failed to switch mode' })
+            }
+        } catch (err) {
+            setConnectionStatus({ type: 'error', message: err.message })
+        }
+        setIsConnecting(false)
+    }
+
+    const refreshPorts = async () => {
+        const ports = await window.dmx?.listPorts()
+        setSerialPorts(ports || [])
     }
 
     return (
@@ -1030,6 +1074,70 @@ function SystemPage({ config, fixtures, setFixtures, onUpdatePerformance }) {
                     </div>
                 </div>
 
+                {/* DMX Connection Mode - NEW */}
+                <div className="glass-card dmx-mode-card">
+                    <div className="card-header-icon">
+                        <Radio size={20} className="accent-text" />
+                        <h3>DMX Connection Mode</h3>
+                    </div>
+                    <p className="subtitle">Choose how BeamStudio connects to your lights.</p>
+
+                    <div className="dmx-mode-toggle">
+                        <button
+                            className={`mode-btn ${dmxMode === 'artnet' ? 'active' : ''}`}
+                            onClick={() => handleModeChange('artnet')}
+                            disabled={isConnecting}
+                        >
+                            <span className="mode-icon">📡</span>
+                            <span className="mode-label">Art-Net</span>
+                            <span className="mode-desc">Via QLC+ (~70-120ms)</span>
+                        </button>
+                        <button
+                            className={`mode-btn ${dmxMode === 'native' ? 'active' : ''}`}
+                            onClick={() => handleModeChange('native')}
+                            disabled={isConnecting}
+                        >
+                            <span className="mode-icon">🔌</span>
+                            <span className="mode-label">Native USB</span>
+                            <span className="mode-desc">Direct (~10-25ms)</span>
+                        </button>
+                    </div>
+
+                    {dmxMode === 'native' && (
+                        <div className="native-config">
+                            <div className="port-selector">
+                                <label>Serial Port:</label>
+                                <select
+                                    value={selectedPort}
+                                    onChange={(e) => setSelectedPort(e.target.value)}
+                                    disabled={isConnecting}
+                                >
+                                    {serialPorts.length === 0 && <option value="">No ports found</option>}
+                                    {serialPorts.map(p => (
+                                        <option key={p.path} value={p.path}>
+                                            {p.path} {p.isKMtronic ? '(KMtronic)' : `(${p.manufacturer})`}
+                                        </option>
+                                    ))}
+                                </select>
+                                <button className="refresh-btn" onClick={refreshPorts} title="Refresh ports">🔄</button>
+                            </div>
+                            <button
+                                className="reconnect-btn"
+                                onClick={() => handleModeChange('native')}
+                                disabled={isConnecting}
+                            >
+                                {isConnecting ? 'Connecting...' : 'Reconnect'}
+                            </button>
+                        </div>
+                    )}
+
+                    {connectionStatus && (
+                        <div className={`connection-status ${connectionStatus.type}`}>
+                            {connectionStatus.type === 'success' ? '✓' : '✗'} {connectionStatus.message}
+                        </div>
+                    )}
+                </div>
+
                 <div className="glass-card hardware-card">
                     <h3>Fixtures Config</h3>
                     <div className="fixtures-config-list">
@@ -1050,20 +1158,12 @@ function SystemPage({ config, fixtures, setFixtures, onUpdatePerformance }) {
                     </div>
                 </div>
 
-                <div className="glass-card config-card">
-                    <h3>Art-Net Configuration</h3>
-                    <div className="config-row"><span>IP Address</span><input type="text" defaultValue="255.255.255.255" /></div>
-                    <div className="config-row"><span>Universe</span><input type="text" defaultValue="0" /></div>
-                    <div className="config-row"><span>Subnet</span><input type="text" defaultValue="0" /></div>
-                </div>
-
                 <div className="glass-card reference-card">
                     <h3>FUNC Channel Reference</h3>
                     <div className="func-list">
                         {funcRanges.map((r, i) => (
                             <div key={i} className="func-row">
                                 <span className="func-range">{r.min}-{r.max}</span>
-                                {/* Hide PrXX name, just show Desc */}
                                 <span className="func-desc" style={{ fontWeight: 600, color: 'var(--text)' }}>{r.desc}</span>
                             </div>
                         ))}
