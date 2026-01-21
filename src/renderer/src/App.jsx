@@ -61,9 +61,8 @@ const quickColors = [
 // Live Preview Container (Optimized)
 // ============================================================================
 
-function LivePreviewContainer({ fixtures, masterDimmer, activeProgram, overrideColors, liveColors, onToggleFixture }) {
+const LivePreviewContainer = React.memo(({ fixtures, masterDimmer, activeProgram, overrideColors, liveColors, onToggleFixture }) => {
     const [simFrame, setSimFrame] = useState(0)
-    // Use lifted state
     const colors = liveColors || (fixtures || []).map(() => ({ r: 0, g: 0, b: 0 }))
 
     useEffect(() => {
@@ -87,26 +86,22 @@ function LivePreviewContainer({ fixtures, masterDimmer, activeProgram, overrideC
             <div className="preview-bars">
                 {fixtures?.map((fixture, i) => {
                     const isSelected = fixture.selected !== false
-                    // Priority: Override > Backend Colors > Default
                     let c = overrideColors && overrideColors[i]
                         ? overrideColors[i]
                         : (isSelected && colors && colors[i] ? colors[i] : { r: 0, g: 0, b: 0 })
 
-                    // Simulation Override
                     if (!overrideColors && activeProgram && c.r === 0 && c.g === 0 && c.b === 0) {
                         const hue = (simFrame * 2 + i * 30) % 360
                         const s = 100, l = 50;
                         const a = s * Math.min(l, 100 - l) / 100;
                         const f = n => {
                             const k = (n + hue / 30) % 12;
-                            const color = l / 100 - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
-                            return Math.round(255 * color);
+                            return l / 100 - a / 100 * Math.max(Math.min(k - 3, 9 - k, 1), -1);
                         };
-                        c = { r: f(0), g: f(8), b: f(4) }
+                        c = { r: Math.round(f(0) * 255), g: Math.round(f(8) * 255), b: Math.round(f(4) * 255) }
                     }
 
                     const dimFactor = (masterDimmer !== undefined ? masterDimmer : 255) / 255
-
                     const isBlackout = liveColors && liveColors[i]?.blackout
                     const finalC = isBlackout ? { r: 0, g: 0, b: 0 } : c
 
@@ -145,9 +140,9 @@ function LivePreviewContainer({ fixtures, masterDimmer, activeProgram, overrideC
             </div>
         </div>
     )
-}
+})
 
-function Sidebar({ activePage, setActivePage, darkMode, onToggleTheme }) {
+const Sidebar = React.memo(({ activePage, setActivePage, darkMode, onToggleTheme }) => {
     return (
         <div className="sidebar">
             <div style={{ height: '20px' }} /> {/* Spacer */}
@@ -178,7 +173,7 @@ function Sidebar({ activePage, setActivePage, darkMode, onToggleTheme }) {
             </div>
         </div>
     )
-}
+})
 
 function Header({ onReset, onMeet, onFlash, windowOps, isSyncing }) {
     const [isFlashing, setIsFlashing] = useState(false)
@@ -248,7 +243,7 @@ function Header({ onReset, onMeet, onFlash, windowOps, isSyncing }) {
 // Aesthetic Vertical Slider (Apple/Modern Style)
 // ============================================================================
 
-function VerticalFader({ channel, value, onChange, config }) {
+const VerticalFader = React.memo(({ channel, value, onChange, config }) => {
     const sliderRef = useRef(null)
     const isDragging = useRef(false)
 
@@ -271,7 +266,7 @@ function VerticalFader({ channel, value, onChange, config }) {
     }, [updateValue])
 
     const funcName = channel.id === 'func' && config?.funcRanges
-        ? config.funcRanges.find(r => value >= r.min && r.max && value <= r.max)?.name
+        ? config.funcRanges.find(r => value >= r.min && value <= (r.max || 255))?.name
         : null
 
     const percent = (value / 255) * 100
@@ -295,7 +290,6 @@ function VerticalFader({ channel, value, onChange, config }) {
                 <span className="fader-label" style={{ color: channel.color }}>{channel.label}</span>
                 <span className="fader-mode">{funcName || ''}</span>
 
-                {/* Reset to 0 Button */}
                 <button
                     className={`fader-reset-btn ${value === 0 ? 'at-zero' : ''}`}
                     onClick={(e) => { e.stopPropagation(); onChange(channel.id, 0); }}
@@ -306,7 +300,7 @@ function VerticalFader({ channel, value, onChange, config }) {
             </div>
         </div>
     )
-}
+})
 
 // ============================================================================
 // Pages
@@ -368,17 +362,15 @@ function ColorWheel({ onChange, size = 180 }) {
     )
 }
 
-function MixerPage({ channelValues, setChannelValues, fixtures, setFixtures, config, onReset, liveColors, onToggleFixture, executeDmx }) {
-    const handleChannelChange = useCallback((id, value) => {
-        setChannelValues(prev => ({ ...prev, [id]: value }))
-        executeDmx(() => window.dmx?.setChannelAsync(id, value), true)
-    }, [setChannelValues, executeDmx])
-
+function MixerPage({
+    channelValues, handleChannelChange, handleSelectedChannelsChange, setChannelValues,
+    fixtures, setFixtures, config, onReset, liveColors, onToggleFixture, executeDmx
+}) {
     const applyColor = async (color) => {
         if (color.r === 0 && color.g === 0 && color.b === 0) {
             onReset() // Use reset for Off
         } else {
-            setChannelValues(prev => ({ ...prev, red: color.r, green: color.g, blue: color.b, dim: 255 }))
+            handleSelectedChannelsChange({ red: color.r, green: color.g, blue: color.b, dim: 255 })
             executeDmx(() => window.dmx?.colorMacro(color.name.toUpperCase()))
         }
     }
@@ -408,16 +400,14 @@ function MixerPage({ channelValues, setChannelValues, fixtures, setFixtures, con
                         <div style={{ flex: '0 0 auto' }}>
                             <h3 style={{ marginBottom: '10px', textAlign: 'center' }}>Color Wheel</h3>
                             <ColorWheel
-                                size={160}
+                                size={110}
                                 onChange={(color) => {
-                                    setChannelValues(prev => ({ ...prev, red: color.r, green: color.g, blue: color.b, dim: 255 }))
-                                    // Use optimized bulk update for Color Wheel to prevent 4x IPC calls per frame
-                                    executeDmx(() => window.dmx?.setChannelsAsync([], {
+                                    handleSelectedChannelsChange({
                                         red: color.r,
                                         green: color.g,
                                         blue: color.b,
                                         dim: 255
-                                    }), true)
+                                    })
                                 }}
                             />
                         </div>
@@ -452,7 +442,6 @@ function MixerPage({ channelValues, setChannelValues, fixtures, setFixtures, con
                                     className={`fixture-pill ${f.selected ? 'selected' : ''}`}
                                     onClick={() => setFixtures(fixtures.map(fx => fx.id === f.id ? { ...fx, selected: !fx.selected } : fx))}
                                 >
-                                    <img src={sticktecImg} alt="bar" className="fixture-icon-img" />
                                     <div className={`fixture-led ${f.selected ? 'on' : ''}`} />
                                     <span>{f.name}</span>
                                 </div>
@@ -469,23 +458,22 @@ function MixerPage({ channelValues, setChannelValues, fixtures, setFixtures, con
         </div>
     )
 }
-function ProgramsPage({ config, activeProgram, onSelectProgram, channelValues, setChannelValues, fixtures, liveColors, onToggleFixture, executeDmx }) {
+function ProgramsPage({
+    config, activeProgram, onSelectProgram, channelValues, setChannelValues,
+    fixtures, liveColors, onToggleFixture, executeDmx, handleChannelChange
+}) {
     const funcRanges = config?.funcRanges || []
 
     const handleProgramChange = async (value) => {
         onSelectProgram(value)
-        executeDmx(async () => {
-            await window.dmx?.setChannel('func', value)
-            // Ensure dimmer is on when using programs
-            if ((channelValues?.dim || 0) < 255) {
-                await window.dmx?.setChannel('dim', 255)
-            }
-        })
+        handleChannelChange('func', value)
+        if ((channelValues?.dim || 0) < 255) {
+            handleChannelChange('dim', 255)
+        }
     }
 
     const handleSpeed = async (speed) => {
-        setChannelValues(prev => ({ ...prev, spd: speed }))
-        executeDmx(() => window.dmx?.setChannelAsync('spd', speed), true)
+        handleChannelChange('spd', speed)
     }
 
     // Group by type
@@ -880,14 +868,13 @@ function AmbilightPage({ fixtures, setChannelValues, channelValues, liveColors, 
         const corr = (val) => GAMMA_TABLE[Math.min(255, Math.round(val))]
         const syncColor = { r: corr(r), g: corr(g), b: corr(b) }
 
-        // All 3 bars get the same color for Basic Sync Mode
-        const finalColors = [syncColor, syncColor, syncColor]
+        // Multi-bar support: All bars get the same color in Basic Sync Mode
+        // (In the future we can split the screen areas here)
+        const finalColors = fixtures.map(() => syncColor)
         setPreviewColors(finalColors)
 
         executeDmx(() => window.ambilight?.setColorsAsync({
-            left: syncColor,
-            center: syncColor,
-            right: syncColor
+            colors: finalColors
         }), true)
     }
 
@@ -1248,14 +1235,33 @@ function App() {
         }
     }, [])
 
+    const pendingDmxUpdates = useRef({})
+
+    // Phase 2: IPC Throttling Scheduler (Flush at 40Hz)
+    useEffect(() => {
+        const flush = () => {
+            if (Object.keys(pendingDmxUpdates.current).length === 0) return
+            const updates = { ...pendingDmxUpdates.current }
+            pendingDmxUpdates.current = {}
+
+            const selectedIds = fixtures.filter(f => f.selected).map(f => f.id)
+            window.dmx?.setChannelsAsync(selectedIds, updates)
+        }
+        const timer = setInterval(flush, 25)
+        return () => clearInterval(timer)
+    }, [fixtures])
+
     const handleChannelChange = useCallback((channel, value) => {
-        executeDmx(() => window.dmx?.setChannelAsync(channel, value), true)
-    }, [executeDmx])
+        setChannelValues(prev => ({ ...prev, [channel]: value }))
+        pendingDmxUpdates.current[channel] = value
+    }, [])
 
     const handleSelectedChannelsChange = useCallback((channels) => {
-        const fixtureIds = fixtures.filter(f => f.selected).map(f => f.id)
-        executeDmx(() => window.dmx?.setChannelsAsync(fixtureIds, channels), true)
-    }, [fixtures, executeDmx])
+        setChannelValues(prev => ({ ...prev, ...channels }))
+        Object.entries(channels).forEach(([ch, val]) => {
+            pendingDmxUpdates.current[ch] = val
+        })
+    }, [])
 
     useEffect(() => {
         const handleColors = (newColors) => setLiveColors(newColors)
@@ -1329,7 +1335,9 @@ function App() {
         setFixtures, liveColors, onToggleFixture: handleToggleFixture,
         executeDmx,
         darkMode,
-        onToggleTheme
+        onToggleTheme,
+        handleChannelChange,
+        handleSelectedChannelsChange
     }
 
     const renderPage = () => {

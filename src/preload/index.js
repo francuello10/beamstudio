@@ -9,8 +9,17 @@ const dmxAPI = {
     setChannel: (channel, value) => ipcRenderer.invoke('dmx:setChannel', { channel, value }),
 
     // High Performance - Async one-way calls
-    setChannelAsync: (channel, value) => ipcRenderer.send('dmx:setChannelAsync', { channel, value }),
-    setChannelsAsync: (fixtureIds, channels) => ipcRenderer.send('dmx:setChannelsAsync', { fixtureIds, channels }),
+    setChannelAsync: (channel, value) => {
+        const val = Math.max(0, Math.min(255, value))
+        ipcRenderer.send('dmx:setChannelAsync', { channel, value: val })
+    },
+    setChannelsAsync: (fixtureIds, channels) => {
+        const validated = {}
+        Object.entries(channels).forEach(([ch, val]) => {
+            validated[ch] = Math.max(0, Math.min(255, val))
+        })
+        ipcRenderer.send('dmx:setChannelsAsync', { fixtureIds, channels: validated })
+    },
 
     // RESET ALL - Back to 0 0 0 0 0 0 0
     reset: () => ipcRenderer.invoke('dmx:reset'),

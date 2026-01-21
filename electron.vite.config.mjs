@@ -5,8 +5,11 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
     main: {
         build: {
-            lib: {
-                entry: 'src/main/index.js'
+            rollupOptions: {
+                input: {
+                    index: resolve(__dirname, 'src/main/index.js'),
+                    dmxWorker: resolve(__dirname, 'src/main/dmxWorker.js')
+                }
             }
         },
         plugins: [externalizeDepsPlugin()]

@@ -3,11 +3,34 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import dmxnet from 'dmxnet'
 import { performance } from 'perf_hooks'
+import { readFileSync, writeFileSync } from 'fs'
 
-const DMX_UNIVERSE_SIZE = 32
-const universe = Buffer.alloc(DMX_UNIVERSE_SIZE + 1, 0) // Global Zero-Allocation Buffer for D2XX
+import { Worker } from 'worker_threads'
 
-// ============================================================================
+// Load dynamic fixtures
+const FIXTURES_PATH = join(app.getPath('userData'), 'fixtures.json')
+let fixtures = []
+
+try {
+    // Try to load from userData first (user changes), fallback to internal default
+    fixtures = JSON.parse(readFileSync(FIXTURES_PATH, 'utf8'))
+} catch (e) {
+    fixtures = [
+        { id: 1, name: 'Barra Izquierda', startChannel: 1, channels: 7 },
+        { id: 2, name: 'Barra Centro', startChannel: 8, channels: 7 },
+        { id: 3, name: 'Barra Derecha', startChannel: 15, channels: 7 }
+    ]
+}
+
+const DMX_UNIVERSE_SIZE = 512
+const dmxSharedBuffer = new SharedArrayBuffer(DMX_UNIVERSE_SIZE + 1)
+const dmxArray = new Uint8Array(dmxSharedBuffer)
+dmxArray[0] = 0 // Start Code byte
+
+// Proxy to channels (1-indexed in DMX, 0-indexed in our subarray)
+const dmxChannels = dmxArray.subarray(1)
+
+// =============================================================
 // DMX Driver Abstraction (Dual Mode: Art-Net or USB Direct)
 // Cross-Platform: Ubuntu 24.04 / Windows 11
 // ============================================================================
@@ -109,89 +132,83 @@ async function listSerialPorts() {
 // Diagnostic scan (Removed as requested, using listSerialPorts for all)
 
 // ============================================================================
-// FTDI D2XX Direct Driver (High Precision - Cross Platform)
+// FTDI D2XX Direct Driver (Worker Thread High Precision)
 // ============================================================================
 async function createD2XXDriver(devicePath) {
     if (connectionPromise) { try { await connectionPromise } catch (e) { } if (dmxDriver && dmxDriver.mode === 'd2xx') return dmxDriver }
 
     connectionPromise = (async () => {
         try {
+            // 1. Obtener dispositivos antes de lanzar el worker para asegurar un serial_number válido
             const rawFTDI = await import('ftdi-d2xx')
             const FTDI = rawFTDI.default || rawFTDI
-
             const devices = await FTDI.getDeviceInfoList()
-            if (devices.length === 0) { console.error('[DMX] No FTDI D2XX devices'); return null }
 
-            // Find specific or first device
-            const targetDevice = devices.find(d => d.serial_number === devicePath) || devices[0]
-            console.log(`[DMX] Opening D2XX: ${targetDevice.description}`)
-            const device = await FTDI.openDevice(targetDevice.serial_number)
+            if (devices.length === 0) {
+                console.warn('[DMX] No FTDI devices found during init')
+                return null
+            }
 
-            // SETUP OPTIMIZADO
-            await device.setBaudRate(250000)
-            await device.setDataCharacteristics(8, 2, 0)
-            await device.setFlowControl(0, 0, 0)
-            await device.setLatencyTimer(2)
-            await device.purge(1 | 2)
+            const targetSerial = devicePath || devices[0].serial_number
+            console.log(`[DMX] Selected device serial: ${targetSerial}`)
 
-            let intervalHandle = null
-            let isSending = false
+            // 2. Path al worker
+            const workerPath = join(__dirname, 'dmxWorker.js')
+            console.log(`[DMX] Spawning worker at ${workerPath}`)
+
+            const worker = new Worker(workerPath, {
+                workerData: {
+                    sharedBuffer: dmxSharedBuffer,
+                    serialNumber: targetSerial,
+                    settings: {
+                        dmxHz: dmxState.performance.dmxHz,
+                        transmitLength: 33
+                    }
+                }
+            })
+
             let isClosed = false
 
-            // LOOP DMX DE ALTA PRECISIÓN (Sin basura en RAM)
-            async function dmxLoop() {
-                if (isClosed || !device) return
-                if (isSending) return // Drop frame
+            return new Promise((resolve, reject) => {
+                worker.on('message', (msg) => {
+                    if (msg.type === 'status' && msg.status === 'connected') {
+                        console.log('[DMX] Worker connected and transmitting')
+                        resolve({
+                            mode: 'd2xx',
+                            driverName: 'FTDI D2XX (Worker Thread)',
+                            devicePath: targetSerial,
+                            worker: worker,
+                            setChannel: (ch, val) => {
+                                if (ch >= 0 && ch < DMX_UNIVERSE_SIZE) {
+                                    dmxChannels[ch] = val
+                                }
+                            },
+                            transmit: () => { },
+                            close: async () => {
+                                isClosed = true
+                                worker.postMessage({ type: 'stop' })
+                                worker.terminate()
+                            }
+                        })
+                    }
+                    if (msg.type === 'error') {
+                        console.error('[DMX Worker] Error:', msg.error)
+                        if (!isClosed) reject(new Error(msg.error))
+                    }
+                })
 
-                isSending = true
-                try {
-                    // 1. Limpieza rápida
-                    await device.purge(1 | 2)
+                worker.on('error', (err) => {
+                    console.error('[DMX Worker] Critical Error:', err)
+                    if (!isClosed) reject(err)
+                })
 
-                    // 2. Hardware Break (2ms es seguro)
-                    await device.setBreakOn()
-                    await new Promise(r => setTimeout(r, 2))
+                worker.on('exit', (code) => {
+                    if (code !== 0 && !isClosed) console.error(`[DMX Worker] Stopped with exit code ${code}`)
+                })
+            })
 
-                    // 3. Precision MAB (Spin Wait 200us)
-                    await device.setBreakOff()
-                    const start = performance.now()
-                    while (performance.now() - start < 0.2);
-
-                    // 4. ESCRITURA DIRECTA (El arreglo mágico) 
-                    // Enviamos el buffer global 'universe' tal cual está.
-                    // Ya tiene 33 bytes y el byte[0] es 0.
-                    // Cero copias, cero latencia.
-                    await device.write(universe)
-
-                } catch (e) {
-                    if (!isClosed) console.error('[D2XX] TX Error:', e.message)
-                } finally {
-                    isSending = false
-                    // Pacing: Leemos la UI (default 30Hz)
-                    const targetHz = (dmxState?.performance?.dmxHz) || 30
-                    const delay = Math.max(20, Math.round(1000 / targetHz))
-                    if (!isClosed) intervalHandle = setTimeout(dmxLoop, delay)
-                }
-            }
-
-            dmxLoop()
-
-            return {
-                mode: 'd2xx',
-                driverName: 'FTDI D2XX (Ultra-Low Latency)',
-                devicePath: targetDevice.serial_number,
-                device,
-                // SetChannel solo actualiza el array en memoria, el loop lo lee solo
-                setChannel: (ch, val) => { if (ch >= 0 && ch < DMX_UNIVERSE_SIZE) universe[ch + 1] = val },
-                transmit: () => { },
-                close: async () => {
-                    isClosed = true
-                    if (intervalHandle) clearTimeout(intervalHandle)
-                    try { await device.close() } catch (e) { }
-                }
-            }
         } catch (error) {
-            console.error('[DMX] D2XX Init Failed:', error.message)
+            console.error('[DMX] D2XX Worker Init Failed:', error.message)
             return null
         } finally { connectionPromise = null }
     })()
@@ -286,11 +303,7 @@ const COLOR_MACROS = {
     COOL: { r: 200, g: 220, b: 255, name: 'Frío' }
 }
 
-const fixtures = [
-    { id: 1, name: 'Barra Izquierda', startChannel: 1, channels: 7 },
-    { id: 2, name: 'Barra Centro', startChannel: 8, channels: 7 },
-    { id: 3, name: 'Barra Derecha', startChannel: 15, channels: 7 }
-]
+// Fixtures moved to dynamic loading (above)
 
 // ============================================================================
 // Dynamic Scenes (Software-based)
@@ -345,7 +358,7 @@ const DYNAMIC_SCENES = {
 // ============================================================================
 
 const dmxState = {
-    channels: new Array(512).fill(0),
+    channels: dmxChannels,
     blackout: false,
     savedState: null,
     flashActive: false,
@@ -361,11 +374,7 @@ const dmxState = {
         uiHz: 30,    // Smoother UI sync
         ambiFps: 30
     },
-    fixtureColors: [
-        { r: 0, g: 0, b: 0, blackout: false },
-        { r: 0, g: 0, b: 0, blackout: false },
-        { r: 0, g: 0, b: 0, blackout: false }
-    ]
+    fixtureColors: fixtures.map(() => ({ r: 0, g: 0, b: 0, blackout: false }))
 }
 
 let dynamicSceneInterval = null
@@ -389,10 +398,10 @@ function setFixtureColor(idx, r, g, b, dim = 255) {
 
     if (!isBlackout) {
         const base = f.startChannel - 1
-        dmxState.channels[base + CHANNEL_MAP.RED] = r
-        dmxState.channels[base + CHANNEL_MAP.GREEN] = g
-        dmxState.channels[base + CHANNEL_MAP.BLUE] = b
-        dmxState.channels[base + CHANNEL_MAP.DIM] = dim
+        dmxState.channels[base + CHANNEL_MAP.RED] = Math.max(0, Math.min(255, r))
+        dmxState.channels[base + CHANNEL_MAP.GREEN] = Math.max(0, Math.min(255, g))
+        dmxState.channels[base + CHANNEL_MAP.BLUE] = Math.max(0, Math.min(255, b))
+        dmxState.channels[base + CHANNEL_MAP.DIM] = Math.max(0, Math.min(255, dim))
     }
     // We update color state anyway so UI reflects what it "would" be? 
     // Or we keep it black in UI?
@@ -433,7 +442,7 @@ function resetAll() {
             dmxState.channels[base + ch] = 0
         }
     })
-    dmxState.fixtureColors = [{ r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }]
+    dmxState.fixtureColors = fixtures.map(() => ({ r: 0, g: 0, b: 0, blackout: false }))
     transmitNow()  // Immediate send!
     broadcastColors()
 }
@@ -457,11 +466,11 @@ function broadcastColors() {
 // DMX Loop - 44Hz (Standard DMX Refresh Rate)
 let dmxInterval = null
 let uiInterval = null // Throttled UI update
-let lastInternalColors = [{ r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }]
+let lastInternalColors = fixtures.map(() => ({ r: 0, g: 0, b: 0 }))
 
 // Optimized color comparison (no JSON.stringify overhead)
 function colorsChanged() {
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < fixtures.length; i++) {
         const curr = dmxState.fixtureColors[i]
         const last = lastInternalColors[i]
         if (!last || curr.r !== last.r || curr.g !== last.g || curr.b !== last.b) {
@@ -475,16 +484,19 @@ function startDMXLoop() {
     if (dmxInterval) clearInterval(dmxInterval)
     if (uiInterval) clearInterval(uiInterval)
 
-    // Hardware Loop - 44Hz continuous transmission (uses abstracted driver)
-    const dmxMs = Math.round(1000 / dmxState.performance.dmxHz)
-    dmxInterval = setInterval(() => {
-        if (dmxState.blackout) {
-            for (let i = 0; i < 512; i++) dmxDriver.setChannel(i, 0)
-        } else {
-            for (let i = 0; i < 512; i++) dmxDriver.setChannel(i, dmxState.channels[i])
-        }
-        dmxDriver.transmit()
-    }, dmxMs)
+    // Hardware Loop - Only for drivers that don't have their own loop (like Art-Net)
+    // The D2XX Worker handles its own high-precision timing.
+    if (dmxDriver.mode === 'artnet') {
+        const dmxMs = Math.round(1000 / dmxState.performance.dmxHz)
+        dmxInterval = setInterval(() => {
+            if (dmxState.blackout) {
+                for (let i = 0; i < 512; i++) dmxDriver.setChannel(i, 0)
+            } else {
+                for (let i = 0; i < 512; i++) dmxDriver.setChannel(i, dmxState.channels[i])
+            }
+            dmxDriver.transmit()
+        }, dmxMs)
+    }
 
     // UI Broadcast Loop - Optimized (no JSON.stringify)
     const uiMs = Math.round(1000 / dmxState.performance.uiHz)
@@ -573,7 +585,16 @@ function setupIPC() {
 
     ipcMain.handle('dmx:updatePerformance', (_, settings) => {
         dmxState.performance = { ...dmxState.performance, ...settings }
-        startDMXLoop() // Restart loops with new timing
+
+        // Update Worker if active
+        if (dmxDriver && dmxDriver.mode === 'd2xx' && dmxDriver.worker) {
+            dmxDriver.worker.postMessage({
+                type: 'updateSettings',
+                dmxHz: dmxState.performance.dmxHz
+            })
+        }
+
+        startDMXLoop() // Restart main loops
         return { success: true, performance: dmxState.performance }
     })
 
@@ -582,13 +603,12 @@ function setupIPC() {
         return { success: true, colors: dmxState.fixtureColors }
     })
 
-    // ASYNC ONE-WAY IPC (High performance, used for Faders)
     ipcMain.on('dmx:setChannelAsync', (_, { channel, value }) => {
-        setAllFixturesChannel(channel, value)
+        const validatedValue = Math.max(0, Math.min(255, value))
+        setAllFixturesChannel(channel, validatedValue)
         if (['red', 'green', 'blue'].includes(channel.toLowerCase())) {
-            fixtures.forEach((_, i) => { dmxState.fixtureColors[i][channel.toLowerCase()[0]] = value })
+            fixtures.forEach((_, i) => { dmxState.fixtureColors[i][channel.toLowerCase()[0]] = validatedValue })
         }
-        // broadcastColors() -> Removed to prevent IPC flood
     })
 
     ipcMain.on('dmx:setChannelsAsync', (_, { fixtureIds, channels }) => {
@@ -714,7 +734,7 @@ function setupIPC() {
         } else {
             dmxState.flashWhiteActive = false
             if (flashWhiteInterval) { clearInterval(flashWhiteInterval); flashWhiteInterval = null }
-            if (dmxState.savedState) dmxState.channels = [...dmxState.savedState]
+            if (dmxState.savedState) dmxState.channels.set(dmxState.savedState)
         }
         return { success: true, active: dmxState.flashWhiteActive }
     })
@@ -724,7 +744,7 @@ function setupIPC() {
             dmxState.savedState = [...dmxState.channels]
             stopDynamicScene()
         } else if (!active && dmxState.blackout && dmxState.savedState) {
-            dmxState.channels = [...dmxState.savedState]
+            dmxState.channels.set(dmxState.savedState)
         }
         dmxState.blackout = active
         return { success: true, blackout: dmxState.blackout }
@@ -737,7 +757,7 @@ function setupIPC() {
         setAllFixturesColor(255, 255, 255, 255)
         setAllFixturesChannel('flash', 255)
         await new Promise(r => setTimeout(r, 100))
-        dmxState.channels = saved
+        dmxState.channels.set(saved)
         dmxState.flashActive = false
         return { success: true }
     })
@@ -791,7 +811,7 @@ function setupIPC() {
         }
 
         // Restore original state (transmit multiple times for reliability)
-        dmxState.channels = [...savedChannels]
+        dmxState.channels.set(savedChannels)
         dmxState.fixtureColors = [...savedColors]
         dmxState.flashActive = false
         dmxState.flashCancelled = false
@@ -864,41 +884,46 @@ function setupIPC() {
     ipcMain.handle('ambilight:start', (_, sourceId) => { stopDynamicScene(); dmxState.activeProgram = null; dmxState.ambilightActive = true; return { success: true, sourceId } })
     ipcMain.handle('ambilight:stop', () => { dmxState.ambilightActive = false; resetAll(); return { success: true } })
 
-    let lastAmbiColors = [{ r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }]
-    ipcMain.handle('ambilight:setColors', (_, { left, center, right }) => {
+    let lastAmbiColors = fixtures.map(() => ({ r: 0, g: 0, b: 0 }))
+    ipcMain.handle('ambilight:setColors', (_, { left, center, right, colors: incomingColors }) => {
         if (!dmxState.ambilightActive) return { success: false }
+
+        const targetColors = incomingColors || [left, center, right]
         const smooth = (c, t, f = 0.8) => ({ r: Math.round(c.r + (t.r - c.r) * f), g: Math.round(c.g + (t.g - c.g) * f), b: Math.round(c.b + (t.b - c.b) * f) })
-        const colors = [left, center, right].map((t, i) => smooth(lastAmbiColors[i], t))
+
+        const colors = fixtures.map((_, i) => {
+            const target = targetColors[i] || targetColors[targetColors.length - 1] || { r: 0, g: 0, b: 0 }
+            return smooth(lastAmbiColors[i] || { r: 0, g: 0, b: 0 }, target)
+        })
+
         lastAmbiColors = colors
-        setFixtureColor(0, colors[0].r, colors[0].g, colors[0].b, 255)
-        setFixtureColor(1, colors[1].r, colors[1].g, colors[1].b, 255)
-        setFixtureColor(2, colors[2].r, colors[2].g, colors[2].b, 255)
-        // broadcastColors() -> UI interval will handle this
+        colors.forEach((c, i) => setFixtureColor(i, c.r, c.g, c.b, 255))
         return { success: true, colors: dmxState.fixtureColors }
     })
 
     // Async High-Frequency Ambilight update (One-way)
-    ipcMain.on('ambilight:setColorsAsync', (_, { left, center, right }) => {
+    ipcMain.on('ambilight:setColorsAsync', (_, { left, center, right, colors: incomingColors }) => {
         if (!dmxState.ambilightActive) return
 
+        const targetColors = incomingColors || [left, center, right]
+
         const adaptiveSmooth = (cur, target) => {
-            const diff = (Math.abs(cur.r - target.r) + Math.abs(cur.g - target.g) + Math.abs(cur.b - target.b)) / 3
-            // If big change (flash/cut), go fast (0.9). If small change, go buttery smooth (0.1)
+            const diff = (Math.abs(cur.r - (target?.r || 0)) + Math.abs(cur.g - (target?.g || 0)) + Math.abs(cur.b - (target?.b || 0))) / 3
             const f = diff > 30 ? 0.8 : 0.2
             return {
-                r: Math.round(cur.r + (target.r - cur.r) * f),
-                g: Math.round(cur.g + (target.g - cur.g) * f),
-                b: Math.round(cur.b + (target.b - cur.b) * f)
+                r: Math.round(cur.r + ((target?.r || 0) - cur.r) * f),
+                g: Math.round(cur.g + ((target?.g || 0) - cur.g) * f),
+                b: Math.round(cur.b + ((target?.b || 0) - cur.b) * f)
             }
         }
 
-        const colors = [left, center, right].map((t, i) => adaptiveSmooth(lastAmbiColors[i], t))
-        lastAmbiColors = colors
+        const colors = fixtures.map((_, i) => {
+            const target = targetColors[i] || targetColors[targetColors.length - 1] || { r: 0, g: 0, b: 0 }
+            return adaptiveSmooth(lastAmbiColors[i] || { r: 0, g: 0, b: 0 }, target)
+        })
 
-        setFixtureColor(0, colors[0].r, colors[0].g, colors[0].b, 255)
-        setFixtureColor(1, colors[1].r, colors[1].g, colors[1].b, 255)
-        setFixtureColor(2, colors[2].r, colors[2].g, colors[2].b, 255)
-        // broadcastColors() -> Removed to prevent IPC flood
+        lastAmbiColors = colors
+        colors.forEach((c, i) => setFixtureColor(i, c.r, c.g, c.b, 255))
     })
 
     ipcMain.handle('audio:start', () => { stopDynamicScene(); dmxState.activeProgram = null; dmxState.audioReactiveActive = true; return { success: true } })
