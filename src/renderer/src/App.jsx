@@ -977,8 +977,8 @@ function SystemPage({ config, fixtures, setFixtures, onUpdatePerformance }) {
 
     // DMX Mode state
     const [dmxMode, setDmxMode] = useState(config?.dmxMode || 'artnet')
-    const [selectedPort, setSelectedPort] = useState(config?.nativeDevicePath || (window.api?.platform === 'win32' ? 'COM3' : '/dev/ttyUSB0'))
-    const [selectedDriver, setSelectedDriver] = useState('enttec-open')
+    const [selectedPort, setSelectedPort] = useState(config?.nativeDevicePath || '')
+    const [selectedDriver, setSelectedDriver] = useState('d2xx')
     const [usbDrivers, setUsbDrivers] = useState([])
     const [serialPorts, setSerialPorts] = useState([])
     const [isConnecting, setIsConnecting] = useState(false)
@@ -989,17 +989,6 @@ function SystemPage({ config, fixtures, setFixtures, onUpdatePerformance }) {
         window.dmx?.getUsbDrivers().then(setUsbDrivers)
         window.dmx?.listPorts().then(async ports => {
             setSerialPorts(ports || [])
-
-            // Diagnostic: Check for D2XX if no COM ports found
-            if (!ports || ports.length === 0) {
-                const d2xx = await window.dmx?.scanD2XX()
-                if (d2xx && d2xx.length > 0) {
-                    setConnectionStatus({
-                        type: 'error',
-                        message: `⚠️ Direct Mode Detected: "${d2xx[0].name}". Please enable VCP in Device Manager.`
-                    })
-                }
-            }
 
             // Auto-select recommended port
             const recommended = ports?.find(p => p.isRecommended)
@@ -1115,16 +1104,16 @@ function SystemPage({ config, fixtures, setFixtures, onUpdatePerformance }) {
                         >
                             <span className="mode-icon">📡</span>
                             <span className="mode-label">Art-Net</span>
-                            <span className="mode-desc">Via QLC+ (~70-120ms)</span>
+                            <span className="mode-desc">Via QLC+ (~80ms)</span>
                         </button>
                         <button
-                            className={`mode-btn ${dmxMode === 'native' ? 'active' : ''}`}
-                            onClick={() => handleModeChange('native')}
+                            className={`mode-btn ${dmxMode === 'usb' || dmxMode === 'native' ? 'active' : ''}`}
+                            onClick={() => handleModeChange('usb')}
                             disabled={isConnecting}
                         >
-                            <span className="mode-icon">🔌</span>
-                            <span className="mode-label">Native USB</span>
-                            <span className="mode-desc">Direct (~10ms) - FTDI/Enttec</span>
+                            <span className="mode-icon">⚡</span>
+                            <span className="mode-label">Direct USB</span>
+                            <span className="mode-desc">FTDI D2XX (&lt; 2ms)</span>
                         </button>
                     </div>
 
@@ -1133,19 +1122,14 @@ function SystemPage({ config, fixtures, setFixtures, onUpdatePerformance }) {
                             <div className="port-selector-group" style={{ display: 'flex', gap: '10px', flexDirection: 'column' }}>
                                 {/* Port Selector */}
                                 <div className="config-row" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                                    <label style={{ minWidth: '80px' }}>Device:</label>
+                                    <label style={{ minWidth: '80px' }}>FTDI Device:</label>
                                     <select
                                         value={selectedPort}
-                                        onChange={(e) => {
-                                            setSelectedPort(e.target.value)
-                                            // Auto-update recommended driver if available
-                                            const p = serialPorts.find(port => port.path === e.target.value)
-                                            if (p && p.recommendedDriver) setSelectedDriver(p.recommendedDriver)
-                                        }}
+                                        onChange={(e) => setSelectedPort(e.target.value)}
                                         disabled={isConnecting}
                                         style={{ flex: 1 }}
                                     >
-                                        {serialPorts.length === 0 && <option value="">No ports found</option>}
+                                        {serialPorts.length === 0 && <option value="">No FTDI devices found</option>}
                                         {serialPorts.map(p => (
                                             <option key={p.path} value={p.path}>
                                                 {p.displayName || p.path} {p.isRecommended ? '⭐' : ''}
@@ -1154,32 +1138,15 @@ function SystemPage({ config, fixtures, setFixtures, onUpdatePerformance }) {
                                     </select>
                                     <button className="refresh-btn" onClick={refreshPorts} title="Refresh ports">🔄</button>
                                 </div>
-
-                                {/* Driver Selector */}
-                                <div className="config-row" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                                    <label style={{ minWidth: '80px' }}>Driver:</label>
-                                    <select
-                                        value={selectedDriver}
-                                        onChange={(e) => setSelectedDriver(e.target.value)}
-                                        disabled={isConnecting}
-                                        style={{ flex: 1 }}
-                                    >
-                                        {usbDrivers.map(d => (
-                                            <option key={d.id} value={d.id}>
-                                                {d.name} {d.desc ? `(${d.desc})` : ''}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
                             </div>
 
                             <button
                                 className="reconnect-btn"
                                 onClick={() => handleModeChange('usb')}
                                 disabled={isConnecting}
-                                style={{ marginTop: '15px', padding: '8px', background: 'var(--accent)', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                                style={{ marginTop: '15px', padding: '12px', background: 'var(--accent)', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
                             >
-                                {isConnecting ? 'Connecting...' : 'Connect USB Device'}
+                                {isConnecting ? 'Connecting...' : 'ACTIVATE HIGH PRECISION DMX'}
                             </button>
                         </div>
                     )}
