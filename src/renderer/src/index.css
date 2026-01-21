@@ -798,6 +798,7 @@ body {
 .header {
     height: 70px;
     padding: 0 40px;
+
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -2386,4 +2387,50 @@ body {
     background: rgba(255, 68, 68, 0.15);
     color: #ff4444;
     border: 1px solid rgba(255, 68, 68, 0.3);
+}
+
+/* Dark Theme Selects */
+select {
+    appearance: none;
+    -webkit-appearance: none;
+    background-color: rgba(30, 30, 35, 0.8);
+    color: #e0e0e0;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 0.95rem;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.2s ease;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 16px;
+    padding-right: 36px;
+    min-width: 200px;
+}
+
+select:hover:not(:disabled) {
+    background-color: rgba(50, 50, 55, 0.9);
+    border-color: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+}
+
+select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(255, 51, 102, 0.2);
+    background-color: rgba(40, 40, 45, 0.95);
+}
+
+select option {
+    background-color: #1a1a1a;
+    color: white;
+    padding: 12px;
+}
+
+select:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: rgba(20, 20, 20, 0.5);
 }

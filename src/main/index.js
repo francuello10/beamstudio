@@ -4,15 +4,38 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import dmxnet from 'dmxnet'
 
 // ============================================================================
-// DMX Driver Abstraction (Dual Mode: Art-Net or Native USB)
+// DMX Driver Abstraction (Dual Mode: Art-Net or USB Direct)
+// Cross-Platform: Ubuntu 24.04 / Windows 11
 // ============================================================================
 
-// Driver state
-let dmxMode = 'artnet'  // 'artnet' | 'native'
-let nativeDevicePath = '/dev/ttyUSB0'
+// Cross-platform default device path
+function getDefaultDevicePath() {
+    if (process.platform === 'win32') return 'COM3'
+    if (process.platform === 'darwin') return '/dev/tty.usbserial-A'
+    return '/dev/ttyUSB0'
+}
+
+// Known DMX USB device vendor IDs (for auto-detection)
+const KNOWN_DMX_VENDORS = {
+    '0403': 'FTDI (KMtronic, Enttec, DMXKing)',
+    '10C4': 'Silicon Labs',
+    '1A86': 'CH340 Clone',
+}
+
+// Available USB DMX drivers (order = priority for fallback)
+const USB_DRIVERS = [
+    { id: 'enttec-open', name: 'Enttec Open DMX', desc: 'FTDI con BREAK signal (KMtronic, Freestyler-compatible)' },
+    { id: 'enttec-pro', name: 'Enttec USB DMX Pro', desc: 'Para interfaces DMX Pro oficiales' },
+    { id: 'native', name: 'Native Serial', desc: 'Serial directo 250kbaud (sin BREAK)' },
+]
+
+// Driver state - Singleton pattern with connection promise
+let dmxMode = 'artnet'  // 'artnet' | 'usb'
+let currentUsbDriver = 'enttec-open'  // Default to Enttec Open (BREAK signal like Freestyler)
+let nativeDevicePath = getDefaultDevicePath()
 let dmxDriver = null
-let nativeDmx = null
-let nativeUniverse = null
+let nativePort = null  // Keep reference to the SerialPort instance
+let connectionPromise = null  // Tracks pending connection to prevent race conditions
 
 // Art-Net setup (always available as fallback)
 const dmxnetInstance = new dmxnet.dmxnet({
@@ -41,134 +64,470 @@ function createArtNetDriver() {
     }
 }
 
-async function createNativeDriver(devicePath) {
-    try {
-        const { SerialPort } = await import('serialport')
+// Helper to safely close existing port with proper waiting
+async function closeExistingPort() {
+    return new Promise((resolve) => {
+        if (nativePort) {
+            const portToClose = nativePort
+            nativePort = null  // Clear reference immediately to prevent reuse
 
-        // Close existing connection if any
-        if (nativeDmx) {
-            try { nativeDmx.close && nativeDmx.close() } catch (e) { /* ignore */ }
-        }
+            try {
+                portToClose.removeAllListeners()
 
-        // KMtronic Open DMX uses 250000 baud rate (DMX512 standard)
-        const port = new SerialPort({
-            path: devicePath,
-            baudRate: 250000,
-            dataBits: 8,
-            stopBits: 2,
-            parity: 'none',
-            autoOpen: false
-        })
-
-        // DMX512 frame buffer (513 bytes: 1 start code + 512 channels)
-        const dmxBuffer = Buffer.alloc(513, 0)
-        let isOpen = false
-        let errorCount = 0
-        const MAX_ERRORS = 5
-
-        // Open port
-        await new Promise((resolve, reject) => {
-            port.open((err) => {
-                if (err) reject(err)
-                else {
-                    isOpen = true
+                if (portToClose.isOpen) {
+                    portToClose.close((err) => {
+                        if (err && err.message !== 'Canceled') {
+                            console.log('Port close info:', err.message)
+                        }
+                        resolve()
+                    })
+                } else {
                     resolve()
                 }
+            } catch (e) {
+                resolve()
+            }
+        } else {
+            resolve()
+        }
+    })
+}
+
+// ============================================================================
+// USB DMX Drivers (Enttec Open, Enttec Pro, Native)
+// ============================================================================
+
+// ENTTEC OPEN DMX - Uses BREAK signal (like Freestyler, QLC+)
+// This is the protocol that works with KMtronic FTDI interfaces!
+async function createEnttecOpenDriver(devicePath) {
+    if (connectionPromise) {
+        console.log('Connection in progress, waiting...')
+        try { await connectionPromise } catch (e) { }
+        if (dmxDriver && dmxDriver.mode === 'enttec-open' && dmxDriver.devicePath === devicePath) {
+            return dmxDriver
+        }
+    }
+
+    connectionPromise = (async () => {
+        try {
+            const { SerialPort } = await import('serialport')
+            await closeExistingPort()
+
+            const port = new SerialPort({
+                path: devicePath,
+                baudRate: 250000,
+                dataBits: 8,
+                stopBits: 2,
+                parity: 'none',
+                autoOpen: false,
             })
-        })
 
-        console.log(`KMtronic DMX connected on ${devicePath} at 250000 baud`)
+            // IMPORTANT: Handle errors to avoid crashes
+            port.on('error', (err) => {
+                console.error('[DMX] SerialPort Error:', err.message)
+            })
 
-        return {
-            mode: 'native',
-            devicePath,
-            setChannel: (ch, val) => {
-                if (ch >= 0 && ch < 512) {
-                    dmxBuffer[ch + 1] = val  // +1 because byte 0 is start code
+            await new Promise((resolve, reject) => {
+                port.open(err => err ? reject(err) : resolve())
+            })
+
+            nativePort = port
+            const universe = Buffer.alloc(513, 0)
+            let timeouts = [] // Store timeout handles
+
+            // BREAK signal transmission (the key to FTDI compatibility!)
+            function sendUniverse() {
+                if (!port || !port.isOpen || !port.writable) return
+
+                // Toggle BREAK signal before transmission (like Freestyler does!)
+                port.set({ brk: true, rts: true }, () => {
+                    if (!port || !port.isOpen) return
+
+                    const t1 = setTimeout(() => {
+                        if (!port || !port.isOpen) return
+                        port.set({ brk: false, rts: true }, () => {
+                            if (!port || !port.isOpen) return
+
+                            const t2 = setTimeout(() => {
+                                if (!port || !port.isOpen) return
+                                try {
+                                    port.write(Buffer.concat([Buffer.from([0]), universe.slice(1)]), (err) => {
+                                        if (err && port.isOpen) console.error('[DMX] Write error:', err.message)
+                                    })
+                                    port.drain(() => { })
+                                } catch (e) { console.error('[DMX] Sync write error:', e.message) }
+                            }, 1)
+                            timeouts.push(t2)
+                        })
+                    }, 1)
+                    timeouts.push(t1)
+
+                    // Periodic cleanup of old timeouts
+                    if (timeouts.length > 50) timeouts = timeouts.slice(-10)
+                })
+            }
+
+            // Start automatic transmission at 44Hz (DMX512 standard)
+            intervalHandle = setInterval(sendUniverse, 23)
+
+            console.log(`[DMX] Enttec Open driver connected: ${devicePath} (BREAK signal enabled)`)
+
+            return {
+                mode: 'enttec-open',
+                devicePath,
+                driverName: 'Enttec Open DMX',
+                setChannel: (ch, val) => { if (ch >= 0 && ch < 512) universe[ch + 1] = val },
+                transmit: () => { /* Automatic via interval */ },
+                close: () => {
+                    if (intervalHandle) clearInterval(intervalHandle)
+                    // Clear all pending timeouts to stop the chain immediately
+                    timeouts.forEach(t => clearTimeout(t))
+                    timeouts = []
+                    // Do NOT close port here or nullify nativePort. 
+                    // Let closeExistingPort handle it sequentially.
                 }
-            },
-            transmit: () => {
-                if (!isOpen) return
+            }
+        } catch (error) {
+            console.error('[DMX] Enttec Open driver failed:', error.message)
+            return null
+        } finally {
+            connectionPromise = null
+        }
+    })()
+
+    return connectionPromise
+}
+
+// ENTTEC USB DMX PRO - Uses framing protocol (for official Pro interfaces)
+async function createEnttecProDriver(devicePath) {
+    if (connectionPromise) {
+        try { await connectionPromise } catch (e) { }
+        if (dmxDriver && dmxDriver.mode === 'enttec-pro' && dmxDriver.devicePath === devicePath) {
+            return dmxDriver
+        }
+    }
+
+    connectionPromise = (async () => {
+        try {
+            const { SerialPort } = await import('serialport')
+            await closeExistingPort()
+
+            const port = new SerialPort({
+                path: devicePath,
+                baudRate: 250000,
+                dataBits: 8,
+                stopBits: 2,
+                parity: 'none',
+                autoOpen: false,
+            })
+
+            await new Promise((resolve, reject) => {
+                port.open(err => err ? reject(err) : resolve())
+            })
+
+            nativePort = port
+            const universe = Buffer.alloc(513, 0)
+            let intervalHandle = null
+
+            // ENTTEC Pro framing constants
+            const START_OF_MSG = 0x7e
+            const END_OF_MSG = 0xe7
+            const SEND_DMX_RQ = 0x06
+            const DMX_STARTCODE = 0x00
+
+            function sendUniverse() {
+                if (!port || !port.isOpen || !port.writable) return
+
+                const hdr = Buffer.from([
+                    START_OF_MSG,
+                    SEND_DMX_RQ,
+                    (universe.length) & 0xff,
+                    ((universe.length) >> 8) & 0xff,
+                    DMX_STARTCODE,
+                ])
+                const msg = Buffer.concat([hdr, universe.slice(1), Buffer.from([END_OF_MSG])])
                 try {
-                    // Send break signal (required for DMX512)
-                    port.set({ brk: true }, () => {
-                        setTimeout(() => {
-                            port.set({ brk: false }, () => {
-                                // Send DMX data after break
-                                port.write(dmxBuffer, (err) => {
-                                    if (err) {
-                                        errorCount++
-                                        if (errorCount <= 3) {
-                                            console.error('DMX write error:', err.message)
-                                        }
-                                    } else {
-                                        errorCount = 0
-                                    }
-                                })
-                            })
-                        }, 0.1)  // Very short MAB (Mark After Break)
+                    port.write(msg, (err) => {
+                        if (err) console.error('[DMX] Pro Write error:', err.message)
                     })
-                } catch (err) {
-                    errorCount++
-                    if (errorCount >= MAX_ERRORS) {
-                        console.error('Too many DMX errors, connection may be lost')
-                        BrowserWindow.getAllWindows().forEach(win => {
-                            win.webContents.send('dmx:error', {
-                                message: 'Native USB connection lost',
-                                devicePath
+                    port.drain(() => { })
+                } catch (e) { console.error('[DMX] Pro Sync write error:', e.message) }
+            }
+
+            intervalHandle = setInterval(sendUniverse, 25)
+
+            console.log(`[DMX] Enttec Pro driver connected: ${devicePath}`)
+
+            return {
+                mode: 'enttec-pro',
+                devicePath,
+                driverName: 'Enttec USB DMX Pro',
+                setChannel: (ch, val) => { if (ch >= 0 && ch < 512) universe[ch + 1] = val },
+                transmit: () => { },
+                close: () => {
+                    if (intervalHandle) clearInterval(intervalHandle)
+                    // Do NOT close port here or nullify nativePort.
+                }
+            }
+        } catch (error) {
+            console.error('[DMX] Enttec Pro driver failed:', error.message)
+            return null
+        } finally {
+            connectionPromise = null
+        }
+    })()
+
+    return connectionPromise
+}
+
+// NATIVE SERIAL - Direct serial transmission (legacy, without BREAK signal)
+async function createNativeDriver(devicePath) {
+    // If a connection is already in progress, wait for it
+    if (connectionPromise) {
+        console.log('Connection in progress, waiting...')
+        try {
+            await connectionPromise
+        } catch (e) {
+            // Previous connection failed, we'll try again
+        }
+        // If we now have a working driver on the same path, return it
+        if (dmxDriver && dmxDriver.mode === 'native' && dmxDriver.devicePath === devicePath) {
+            return dmxDriver
+        }
+    }
+
+    // Create the connection promise
+    connectionPromise = (async () => {
+        try {
+            const { SerialPort } = await import('serialport')
+
+            // Close existing connection properly
+            await closeExistingPort()
+
+            // KMtronic Open DMX uses 250000 baud rate (DMX512 standard)
+            const port = new SerialPort({
+                path: devicePath,
+                baudRate: 250000,
+                dataBits: 8,
+                stopBits: 2,
+                parity: 'none',
+                autoOpen: false,
+                lock: true  // Explicitly request lock
+            })
+
+            // DMX512 frame buffer (513 bytes: 1 start code + 512 channels)
+            const dmxBuffer = Buffer.alloc(513, 0)
+            let isOpen = false
+            let errorCount = 0
+            const MAX_ERRORS = 5
+
+            // Open port (single attempt, no retries to avoid delays)
+            await new Promise((resolve, reject) => {
+                port.open((err) => {
+                    if (err) reject(err)
+                    else {
+                        isOpen = true
+                        resolve()
+                    }
+                })
+            })
+
+            // Store reference to port for cleanup
+            nativePort = port
+
+            console.log(`KMtronic DMX connected on ${devicePath} at 250000 baud`)
+
+            let isTransmitting = false
+            let needsUpdate = false
+
+            const driver = {
+                mode: 'native',
+                devicePath,
+                setChannel: (ch, val) => {
+                    if (ch >= 0 && ch < 512) {
+                        dmxBuffer[ch + 1] = val  // +1 because byte 0 is start code
+                    }
+                },
+                transmit: () => {
+                    if (!isOpen || !port || !port.isOpen) return
+
+                    // BLOCKING CONTROL: unexpected lag is usually caused by buffer bloat.
+                    // If we are already sending, DO NOT send again immediately.
+                    // Instead, mark that we need an update, and send only the LATEST state when free.
+                    if (isTransmitting) {
+                        needsUpdate = true
+                        return
+                    }
+
+                    isTransmitting = true
+                    needsUpdate = false
+
+                    try {
+                        port.write(dmxBuffer, (err) => {
+                            if (err) handleErr(err)
+
+                            // Important: Drain ensures the OS buffer handles the data
+                            // but we don't want to block nodejs event loop too long
+                            port.drain((drainErr) => {
+                                isTransmitting = false
+                                if (drainErr) handleErr(drainErr)
+                                else errorCount = 0
+
+                                // If a new frame came in while we were sending, send it now!
+                                if (needsUpdate && isOpen && port.isOpen) {
+                                    setImmediate(() => driver.transmit())
+                                }
                             })
                         })
+                    } catch (err) {
+                        isTransmitting = false
+                        handleErr(err)
                     }
+
+                    function handleErr(err) {
+                        // errorCount++ // reduced strictness
+                        console.error('DMX drop:', err.message)
+                    }
+                },
+                close: () => {
+                    isOpen = false
+                    // Do NOT close port here or nullify nativePort.
                 }
-            },
-            close: () => {
-                isOpen = false
-                try { port.close() } catch (e) { /* ignore */ }
             }
+
+            return driver
+        } catch (error) {
+            console.error('Failed to create native DMX driver:', error)
+            return null
+        } finally {
+            connectionPromise = null  // Clear promise when done
         }
-    } catch (error) {
-        console.error('Failed to create native DMX driver:', error)
-        return null
-    }
+    })()
+
+    return connectionPromise
 }
 
 // Initialize with Art-Net by default
 dmxDriver = createArtNetDriver()
 
 // List available serial ports (for UI)
+// List available serial ports (for UI)
 async function listSerialPorts() {
     try {
         const { SerialPort } = await import('serialport')
         const ports = await SerialPort.list()
-        return ports.map(p => ({
-            path: p.path,
-            manufacturer: p.manufacturer || 'Unknown',
-            vendorId: p.vendorId,
-            productId: p.productId,
-            isKMtronic: p.vendorId === '0403' || p.manufacturer?.toLowerCase().includes('kmtronic')
-        }))
+        return ports.map(p => {
+            const vendorId = p.vendorId?.toUpperCase()
+            const productId = p.productId?.toUpperCase()
+            const isFTDI = vendorId === '0403'
+            const isKMtronic = isFTDI || p.manufacturer?.toLowerCase().includes('kmtronic')
+
+            // Auto-detect recommended driver
+            let recommendedDriver = 'native'
+            if (isFTDI) recommendedDriver = 'enttec-open' // FTDI usually works best with Enttec Open protocol
+
+            return {
+                path: p.path,
+                manufacturer: p.manufacturer || 'Unknown',
+                vendorId,
+                productId,
+                isRecommended: isKMtronic,
+                recommendedDriver,
+                displayName: `${p.path} (${p.manufacturer || 'Unknown'})`
+            }
+        })
     } catch (error) {
         console.error('Failed to list serial ports:', error)
         return []
     }
 }
 
+// Diagnostic scan for non-VCP FTDI devices (D2XX mode)
+async function scanForNonVCPDevices() {
+    return new Promise((resolve) => {
+        try {
+            const { exec } = require('child_process')
+
+            if (process.platform === 'win32') {
+                // Windows: Check specifically for "USB Serial Converter" which is the D2XX name
+                // filtering for FTDI VID (0403)
+                const cmd = `powershell "Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -match 'VID_0403' } | Select-Object FriendlyName, InstanceId | ConvertTo-Json"`
+                exec(cmd, { timeout: 3000 }, (error, stdout) => {
+                    if (error) { resolve([]); return }
+                    try {
+                        const devices = JSON.parse(stdout)
+                        const list = Array.isArray(devices) ? devices : (devices ? [devices] : [])
+                        // Filter for things that look like FTDI bus devices but probably aren't showing as COM ports
+                        // (Usually 'USB Serial Converter' vs 'USB Serial Port')
+                        const d2xxDevices = list.filter(d =>
+                            d.FriendlyName && d.FriendlyName.includes('USB Serial Converter')
+                        )
+                        resolve(d2xxDevices.map(d => ({ name: d.FriendlyName, type: 'D2XX' })))
+                    } catch (e) { resolve([]) }
+                })
+            } else if (process.platform === 'linux') {
+                // Linux: Check lsusb for FTDI
+                exec('lsusb -d 0403:', { timeout: 3000 }, (error, stdout) => {
+                    if (error || !stdout) { resolve([]); return }
+                    const lines = stdout.split('\n').filter(l => l.trim().length > 0)
+                    resolve(lines.map(l => ({ name: l, type: 'USB' })))
+                })
+            } else {
+                resolve([])
+            }
+        } catch (error) {
+            console.error('Scan failed:', error)
+            resolve([])
+        }
+    })
+}
+
 // Switch DMX mode
-async function switchDmxMode(mode, devicePath = null) {
-    if (mode === 'native') {
+async function switchDmxMode(mode, devicePath = null, driverType = 'enttec-open') {
+    console.log(`[DMX] Switching to mode: ${mode}, path: ${devicePath}, driver: ${driverType}`)
+
+    // Safely close existing driver
+    const safeClose = () => {
+        try {
+            if (dmxDriver && typeof dmxDriver.close === 'function') {
+                console.log('[DMX] Closing existing driver:', dmxDriver.mode)
+                dmxDriver.close()
+            }
+        } catch (e) {
+            console.log('Driver close warning:', e.message)
+        }
+    }
+
+    if (mode === 'usb' || mode === 'native') { // Support both names
         const path = devicePath || nativeDevicePath
-        const newDriver = await createNativeDriver(path)
+
+        let newDriver = null
+
+        // Select driver implementation
+        if (driverType === 'enttec-open') {
+            newDriver = await createEnttecOpenDriver(path)
+        } else if (driverType === 'enttec-pro') {
+            newDriver = await createEnttecProDriver(path)
+        } else {
+            newDriver = await createNativeDriver(path)
+        }
+
+        console.log('[DMX] New driver created:', newDriver ? newDriver.driverName : 'null')
+
         if (newDriver) {
-            dmxDriver.close()
+            safeClose()
             dmxDriver = newDriver
-            dmxMode = 'native'
+            dmxMode = 'usb'
+            currentUsbDriver = driverType // Store current driver preference
             nativeDevicePath = path
-            return { success: true, mode: 'native', devicePath: path }
+            console.log(`[DMX] Driver assigned: ${dmxDriver.driverName} on ${path}`)
+            return { success: true, mode: 'usb', devicePath: path, driverType }
         } else {
             return { success: false, error: 'Failed to connect to device', mode: dmxMode }
         }
     } else {
-        dmxDriver.close()
+        safeClose()
+        await closeExistingPort() // Explicitly close generic port when switching to ArtNet
         dmxDriver = createArtNetDriver()
         dmxMode = 'artnet'
         return { success: true, mode: 'artnet' }
@@ -377,7 +736,18 @@ function resetAll() {
         }
     })
     dmxState.fixtureColors = [{ r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }]
+    transmitNow()  // Immediate send!
     broadcastColors()
+}
+
+// Immediate DMX transmission - bypasses the 44Hz loop for instant response
+function transmitNow() {
+    if (dmxState.blackout) {
+        for (let i = 0; i < 512; i++) dmxDriver.setChannel(i, 0)
+    } else {
+        for (let i = 0; i < 512; i++) dmxDriver.setChannel(i, dmxState.channels[i])
+    }
+    dmxDriver.transmit()
 }
 
 function broadcastColors() {
@@ -479,6 +849,8 @@ function setupIPC() {
     ipcMain.handle('dmx:getMode', () => ({
         mode: dmxMode,
         devicePath: nativeDevicePath,
+        driver: currentUsbDriver, // Expose current driver type
+        driverName: dmxDriver?.driverName || 'Unknown',
         driverMode: dmxDriver?.mode || 'artnet'
     }))
 
@@ -486,8 +858,14 @@ function setupIPC() {
         return await listSerialPorts()
     })
 
-    ipcMain.handle('dmx:setMode', async (_, { mode, devicePath }) => {
-        const result = await switchDmxMode(mode, devicePath)
+    ipcMain.handle('dmx:scanD2XX', async () => {
+        return await scanForNonVCPDevices()
+    })
+
+    ipcMain.handle('dmx:getUsbDrivers', () => USB_DRIVERS)
+
+    ipcMain.handle('dmx:setMode', async (_, { mode, devicePath, driver }) => {
+        const result = await switchDmxMode(mode, devicePath, driver)
         if (result.success) {
             // Restart DMX loop with new driver
             startDMXLoop()
@@ -588,6 +966,7 @@ function setupIPC() {
         setAllFixturesChannel('func', 0)
         setAllFixturesChannel('spd', 0)
         setAllFixturesChannel('flash', 0)
+        transmitNow()  // Instant response!
         broadcastColors()
         return { success: true, color, colors: dmxState.fixtureColors }
     })
@@ -669,31 +1048,71 @@ function setupIPC() {
         if (dmxState.flashActive || dmxState.flashWhiteActive) return { success: false }
 
         dmxState.flashActive = true
+        dmxState.flashCancelled = false  // Reset cancel flag
         const savedChannels = [...dmxState.channels]
         const savedColors = [...dmxState.fixtureColors]
 
-        // Set ALL to WHITE + MAX DIM + FLASH
-        fixtures.forEach((f, i) => {
-            const base = f.startChannel - 1
-            dmxState.channels[base + CHANNEL_MAP.RED] = 255
-            dmxState.channels[base + CHANNEL_MAP.GREEN] = 255
-            dmxState.channels[base + CHANNEL_MAP.BLUE] = 255
-            dmxState.channels[base + CHANNEL_MAP.DIM] = 255
-            dmxState.channels[base + CHANNEL_MAP.FLASH] = 255
-            dmxState.fixtureColors[i] = { r: 255, g: 255, b: 255 }
-        })
+        // Helper to flash white
+        const flashWhite = () => {
+            fixtures.forEach((f, i) => {
+                const base = f.startChannel - 1
+                dmxState.channels[base + CHANNEL_MAP.RED] = 255
+                dmxState.channels[base + CHANNEL_MAP.GREEN] = 255
+                dmxState.channels[base + CHANNEL_MAP.BLUE] = 255
+                dmxState.channels[base + CHANNEL_MAP.DIM] = 255
+                dmxState.channels[base + CHANNEL_MAP.FLASH] = 255
+                dmxState.fixtureColors[i] = { r: 255, g: 255, b: 255 }
+            })
+            transmitNow()
+            broadcastColors()
+        }
 
-        broadcastColors()
+        // Helper to turn off
+        const flashOff = () => {
+            fixtures.forEach((f, i) => {
+                const base = f.startChannel - 1
+                dmxState.channels[base + CHANNEL_MAP.RED] = 0
+                dmxState.channels[base + CHANNEL_MAP.GREEN] = 0
+                dmxState.channels[base + CHANNEL_MAP.BLUE] = 0
+                dmxState.channels[base + CHANNEL_MAP.DIM] = 0
+                dmxState.channels[base + CHANNEL_MAP.FLASH] = 0
+                dmxState.fixtureColors[i] = { r: 0, g: 0, b: 0 }
+            })
+            transmitNow()
+            broadcastColors()
+        }
 
-        // Wait 1.5s
-        await new Promise(r => setTimeout(r, 1500))
+        // 3 POPS in 4 seconds (pop every ~1.3s, each pop lasts 200ms)
+        for (let i = 0; i < 3; i++) {
+            if (dmxState.flashCancelled) break  // Early exit if cancelled
+            flashWhite()
+            await new Promise(r => setTimeout(r, 200))  // Pop duration
+            if (dmxState.flashCancelled) break
+            flashOff()
+            if (i < 2 && !dmxState.flashCancelled) await new Promise(r => setTimeout(r, 1100))
+        }
 
-        // Restore
-        dmxState.channels = savedChannels
-        dmxState.fixtureColors = savedColors
+        // Restore original state (transmit multiple times for reliability)
+        dmxState.channels = [...savedChannels]
+        dmxState.fixtureColors = [...savedColors]
         dmxState.flashActive = false
+        dmxState.flashCancelled = false
 
+        // Send restored state multiple times to ensure hardware receives it
+        transmitNow()
+        await new Promise(r => setTimeout(r, 50))
+        transmitNow()
         broadcastColors()
+
+        return { success: true }
+    })
+
+    // Cancel Flash - Stops flash sequence immediately
+    ipcMain.handle('dmx:cancelFlash', () => {
+        dmxState.flashCancelled = true
+        dmxState.flashActive = false
+        dmxState.flashWhiteActive = false
+        resetAll()  // Reset to black/saved state
         return { success: true }
     })
 
@@ -872,10 +1291,21 @@ if (process.platform === 'linux') {
     app.commandLine.appendSwitch('enable-webrtc-pipewire-capturer') // Fallback legacy
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
     electronApp.setAppUserModelId('com.beamstudio.dmx')
     app.on('browser-window-created', (_, window) => optimizer.watchWindowShortcuts(window))
     setupIPC()
+
+    // Auto-connect to Native USB by default (fall back to Art-Net if not available)
+    try {
+        const result = await switchDmxMode('native', '/dev/ttyUSB0')
+        if (!result.success) {
+            console.log('[DMX] Native USB not available, using Art-Net fallback')
+        }
+    } catch (e) {
+        console.log('[DMX] Native USB connection failed, using Art-Net:', e.message)
+    }
+
     startDMXLoop()
     createWindow()
     app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })

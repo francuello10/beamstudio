@@ -7,21 +7,18 @@
   "scripts": {
     "dev": "ELECTRON_DISABLE_SANDBOX=1 electron-vite dev",
     "build": "electron-vite build",
-    "dist": "npm run build && electron-builder",
-    "preview": "electron-vite preview",
-    "postinstall": "electron-builder install-app-deps"
+    "dist": "npm run build && electron-builder"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
-    "dmx": "^0.25.1",
     "dmxnet": "^0.9.0",
     "serialport": "^13.0.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.1.2",
     "autoprefixer": "^10.4.17",
-    "electron": "^40.0.0",
+    "electron": "^33.4.11",
     "electron-builder": "^26.4.0",
     "electron-vite": "^2.3.0",
     "framer-motion": "^12.27.0",

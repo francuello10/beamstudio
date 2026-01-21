@@ -34,6 +34,7 @@ const dmxAPI = {
     toggleBlackout: (fixtureId) => ipcRenderer.invoke('dmx:toggleBlackout', fixtureId),
     meet: () => ipcRenderer.invoke('dmx:meet'),
     intenseFlash: () => ipcRenderer.invoke('dmx:intenseFlash'),
+    cancelFlash: () => ipcRenderer.invoke('dmx:cancelFlash'),
 
     // Dynamic scenes (software)
     dynamicScene: (sceneId, active) => ipcRenderer.invoke('dmx:dynamicScene', { sceneId, active }),
@@ -42,7 +43,9 @@ const dmxAPI = {
     // DMX Mode Control (Art-Net vs Native USB)
     getMode: () => ipcRenderer.invoke('dmx:getMode'),
     listPorts: () => ipcRenderer.invoke('dmx:listPorts'),
-    setMode: (mode, devicePath) => ipcRenderer.invoke('dmx:setMode', { mode, devicePath }),
+    scanD2XX: () => ipcRenderer.invoke('dmx:scanD2XX'), // Diagnostic for non-VCP devices
+    getUsbDrivers: () => ipcRenderer.invoke('dmx:getUsbDrivers'),
+    setMode: (mode, devicePath, driver) => ipcRenderer.invoke('dmx:setMode', { mode, devicePath, driver }),
 
     getState: () => ipcRenderer.invoke('dmx:getState'),
     onColorsUpdated: (callback) => {
