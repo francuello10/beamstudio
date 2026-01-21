@@ -1,0 +1,15 @@
+
+> beamstudio@1.0.0 build
+> electron-vite build --logLevel info
+
+[36mvite v5.4.21 [32mbuilding SSR bundle for production...[36m[39m
+transforming...
+[32mΓ£ô[39m 1 modules transformed.
+x Build failed in 335ms
+error during build:
+Could not resolve "../../resources/icon.png?asset" from "src/main/index.js"
+file: C:/Users/Fran/Projects/beamstudio/src/main/index.js
+    at getRollupError (file:///C:/Users/Fran/Projects/beamstudio/node_modules/rollup/dist/es/shared/parseAst.js:401:41)
+    at error (file:///C:/Users/Fran/Projects/beamstudio/node_modules/rollup/dist/es/shared/parseAst.js:397:42)
+    at ModuleLoader.handleInvalidResolvedId (file:///C:/Users/Fran/Projects/beamstudio/node_modules/rollup/dist/es/shared/node-entry.js:21709:24)
+    at file:///C:/Users/Fran/Projects/beamstudio/node_modules/rollup/dist/es/shared/node-entry.js:21669:26

@@ -2,6 +2,10 @@ import { app, shell, BrowserWindow, ipcMain, desktopCapturer, nativeTheme } from
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import dmxnet from 'dmxnet'
+import { performance } from 'perf_hooks'
+
+const DMX_UNIVERSE_SIZE = 32
+const universe = Buffer.alloc(DMX_UNIVERSE_SIZE + 1, 0) // Global Zero-Allocation Buffer for D2XX
 
 // ============================================================================
 // DMX Driver Abstraction (Dual Mode: Art-Net or USB Direct)
@@ -412,34 +416,46 @@ dmxDriver = createArtNetDriver()
 
 // List available serial ports (for UI)
 // List available serial ports (for UI)
+// List available ports (Serial + D2XX)
 async function listSerialPorts() {
+    let ports = []
+
+    // 1. Get Serial Ports
     try {
         const { SerialPort } = await import('serialport')
-        const ports = await SerialPort.list()
-        return ports.map(p => {
-            const vendorId = p.vendorId?.toUpperCase()
-            const productId = p.productId?.toUpperCase()
-            const isFTDI = vendorId === '0403'
-            const isKMtronic = isFTDI || p.manufacturer?.toLowerCase().includes('kmtronic')
-
-            // Auto-detect recommended driver
-            let recommendedDriver = 'native'
-            if (isFTDI) recommendedDriver = 'enttec-open' // FTDI usually works best with Enttec Open protocol
-
-            return {
-                path: p.path,
-                manufacturer: p.manufacturer || 'Unknown',
-                vendorId,
-                productId,
-                isRecommended: isKMtronic,
-                recommendedDriver,
-                displayName: `${p.path} (${p.manufacturer || 'Unknown'})`
-            }
-        })
+        const serialPorts = await SerialPort.list()
+        ports = serialPorts.map(p => ({
+            path: p.path,
+            manufacturer: p.manufacturer || 'Unknown',
+            displayName: `${p.path} (${p.manufacturer || 'Unknown'})`,
+            type: 'serial'
+        }))
     } catch (error) {
         console.error('Failed to list serial ports:', error)
-        return []
     }
+
+    // 2. Get D2XX Devices (Windows)
+    if (process.platform === 'win32') {
+        try {
+            const rawFTDI = await import('ftdi-d2xx')
+            const FTDI = rawFTDI.default || rawFTDI
+            const devices = await FTDI.getDeviceInfoList()
+
+            const d2xxPorts = devices.map(d => ({
+                path: d.serial_number,
+                manufacturer: 'FTDI (Direct)',
+                displayName: `FTDI USB DMX (${d.description || 'D2XX'}) - ${d.serial_number}`,
+                type: 'd2xx'
+            }))
+
+            // Put D2XX first
+            ports = [...d2xxPorts, ...ports]
+        } catch (e) {
+            console.error('D2XX scan failed:', e)
+        }
+    }
+
+    return ports
 }
 
 // Diagnostic scan for non-VCP FTDI devices (D2XX mode)
@@ -482,8 +498,102 @@ async function scanForNonVCPDevices() {
     })
 }
 
+// ============================================================================
+// FTDI D2XX Direct Driver (GOLDEN MASTER - ZERO ALLOCATION)
+// ============================================================================
+async function createD2XXDriver(devicePath) {
+    if (process.platform !== 'win32') return null
+    if (connectionPromise) { try { await connectionPromise } catch (e) { } if (dmxDriver && dmxDriver.mode === 'd2xx') return dmxDriver }
+
+    connectionPromise = (async () => {
+        try {
+            const rawFTDI = await import('ftdi-d2xx')
+            const FTDI = rawFTDI.default || rawFTDI
+
+            const devices = await FTDI.getDeviceInfoList()
+            if (devices.length === 0) { console.error('[DMX] No FTDI D2XX devices'); return null }
+
+            // Find specific or first device
+            const targetDevice = devices.find(d => d.serial_number === devicePath) || devices[0]
+            console.log(`[DMX] Opening Golden D2XX: ${targetDevice.description}`)
+            const device = await FTDI.openDevice(targetDevice.serial_number)
+
+            // SETUP OPTIMIZADO
+            await device.setBaudRate(250000)
+            await device.setDataCharacteristics(8, 2, 0)
+            await device.setFlowControl(0, 0, 0)
+            await device.setLatencyTimer(2)
+            await device.purge(1 | 2)
+
+            let intervalHandle = null
+            let isSending = false
+            let isClosed = false
+
+            // LOOP DMX DE ALTA PRECISIÓN (Sin basura en RAM)
+            async function dmxLoop() {
+                if (isClosed || !device) return
+                if (isSending) return // Drop frame
+
+                isSending = true
+                try {
+                    // 1. Limpieza rápida
+                    await device.purge(1 | 2)
+
+                    // 2. Hardware Break (2ms es seguro)
+                    await device.setBreakOn()
+                    await new Promise(r => setTimeout(r, 2))
+
+                    // 3. Precision MAB (Spin Wait 200us)
+                    await device.setBreakOff()
+                    const start = performance.now()
+                    while (performance.now() - start < 0.2);
+
+                    // 4. ESCRITURA DIRECTA (El arreglo mágico) 
+                    // Enviamos el buffer global 'universe' tal cual está.
+                    // Ya tiene 33 bytes y el byte[0] es 0.
+                    // Cero copias, cero latencia.
+                    await device.write(universe)
+
+                } catch (e) {
+                    if (!isClosed) console.error('[D2XX] TX Error:', e.message)
+                } finally {
+                    isSending = false
+                    // Pacing: Leemos la UI (default 30Hz)
+                    const targetHz = (dmxState?.performance?.dmxHz) || 30
+                    const delay = Math.max(20, Math.round(1000 / targetHz))
+                    if (!isClosed) intervalHandle = setTimeout(dmxLoop, delay)
+                }
+            }
+
+            dmxLoop()
+
+            return {
+                mode: 'd2xx',
+                driverName: 'FTDI D2XX (Golden)',
+                devicePath: targetDevice.serial_number,
+                device,
+                // SetChannel solo actualiza el array en memoria, el loop lo lee solo
+                setChannel: (ch, val) => { if (ch >= 0 && ch < DMX_UNIVERSE_SIZE) universe[ch + 1] = val },
+                transmit: () => { },
+                close: async () => {
+                    isClosed = true
+                    if (intervalHandle) clearTimeout(intervalHandle)
+                    try { await device.close() } catch (e) { }
+                }
+            }
+        } catch (error) {
+            console.error('[DMX] D2XX Init Failed:', error.message)
+            return null
+        } finally { connectionPromise = null }
+    })()
+    return connectionPromise
+}
+
+
 // Switch DMX mode
 async function switchDmxMode(mode, devicePath = null, driverType = 'enttec-open') {
+    if (process.platform === 'win32') driverType = 'd2xx' // FORCE D2XX ON WINDOWS
+
     console.log(`[DMX] Switching to mode: ${mode}, path: ${devicePath}, driver: ${driverType}`)
 
     // Safely close existing driver
@@ -504,7 +614,9 @@ async function switchDmxMode(mode, devicePath = null, driverType = 'enttec-open'
         let newDriver = null
 
         // Select driver implementation
-        if (driverType === 'enttec-open') {
+        if (driverType === 'd2xx') {
+            newDriver = await createD2XXDriver(path)
+        } else if (driverType === 'enttec-open') {
             newDriver = await createEnttecOpenDriver(path)
         } else if (driverType === 'enttec-pro') {
             newDriver = await createEnttecProDriver(path)
