@@ -1049,6 +1049,17 @@ function SystemPage({ config, fixtures, setFixtures, onUpdatePerformance }) {
                     <h1>BeamStudio</h1>
                     <p>DMX Lighting Controller</p>
                     <span className="version">v1.0.0</span>
+                    <div className="author-info" style={{ marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '16px', textAlign: 'center' }}>
+                        <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Developed by</p>
+                        <a
+                            href="https://github.com/francuello10"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: 'var(--accent)', fontWeight: '700', textDecoration: 'none', fontSize: '14px' }}
+                        >
+                            Fran Cuello
+                        </a>
+                    </div>
                 </div>
 
                 <div className="glass-card performance-card">

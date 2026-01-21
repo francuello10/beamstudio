@@ -109,7 +109,7 @@ async function listSerialPorts() {
 // Diagnostic scan (Removed as requested, using listSerialPorts for all)
 
 // ============================================================================
-// FTDI D2XX Direct Driver (GOLDEN MASTER - Cross Platform)
+// FTDI D2XX Direct Driver (High Precision - Cross Platform)
 // ============================================================================
 async function createD2XXDriver(devicePath) {
     if (connectionPromise) { try { await connectionPromise } catch (e) { } if (dmxDriver && dmxDriver.mode === 'd2xx') return dmxDriver }
@@ -124,7 +124,7 @@ async function createD2XXDriver(devicePath) {
 
             // Find specific or first device
             const targetDevice = devices.find(d => d.serial_number === devicePath) || devices[0]
-            console.log(`[DMX] Opening Golden D2XX: ${targetDevice.description}`)
+            console.log(`[DMX] Opening D2XX: ${targetDevice.description}`)
             const device = await FTDI.openDevice(targetDevice.serial_number)
 
             // SETUP OPTIMIZADO
@@ -178,7 +178,7 @@ async function createD2XXDriver(devicePath) {
 
             return {
                 mode: 'd2xx',
-                driverName: 'FTDI D2XX (Golden)',
+                driverName: 'FTDI D2XX (Ultra-Low Latency)',
                 devicePath: targetDevice.serial_number,
                 device,
                 // SetChannel solo actualiza el array en memoria, el loop lo lee solo

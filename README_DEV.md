@@ -1,71 +1,63 @@
 # 🛠️ BeamStudio - Developer Documentation (AI/Dev Focus)
 
 **Repo:** [github.com/francuello10/beamstudio](https://github.com/francuello10/beamstudio)  
-**Backend Engine:** [QLC+](https://www.qlcplus.org/) (via Art-Net)
+**Main Engine:** FTDI D2XX Direct Driver (Ultra-Low Latency)
+**Author:** Fran Cuello (@francuello10)
 
-This document provides a technical overview of the BeamStudio architecture, intended for software developers and AI assistants.
-
----
-
-## 🏗️ Architecture Overview
-
-BeamStudio is an **Electron** application built with **React** and **Vite**, designed for high-performance DMX control.
-
-### 🔌 Tech Stack
-*   **Electron:** Multi-platform shell.
-*   **Vite:** Extremely fast build tool and dev server.
-*   **React:** UI components.
-*   **Tailwind CSS + Vanilla CSS:** Modern Glassmorphism aesthetic.
-*   **Framer Motion:** Smooth UI transitions and animations.
-*   **dmxnet:** Node.js implementation of the Art-Net protocol.
+Este documento proporciona una visión técnica de la arquitectura de BeamStudio, destinada a desarrolladores y asistentes de IA.
 
 ---
 
-## 📂 Project Structure
+## 🏗️ Arquitectura y Stack Tecnológico
 
-*   `src/main/index.js`: **Entry point.** Manages the Electron lifecycle, IPC handlers, and the core DMX/Art-Net logic.
-*   `src/preload/index.js`: **Bridge.** Exposes safe DMX and Window APIs to the renderer process.
-*   `src/renderer/src/App.jsx`: **Main UI.** Contains the routing, global state, and page components.
-*   `src/renderer/src/index.css`: **Styles.** Global theme variables and component styling.
+BeamStudio es una aplicación **Electron** de alto rendimiento construida con **React** y **Vite**, optimizada para el control DMX de baja latencia.
 
----
-
-## 📡 DMX & Art-Net Implementation
-
-### Main Process Loop
-The application runs a 30fps DMX transmission loop in `src/main/index.js`. It maintains a `dmxState` object with:
-*   `channels`: 512-channel DMX array.
-*   `fixtureColors`: Current RGB state for UI feedback.
-*   `blackout`: Global or per-fixture blackout flags.
-
-### Data Flow
-1.  **User Interaction:** Renderer (React) calls `window.dmx.setChannel()`.
-2.  **IPC:** Message sent to Main Process via `ipcRenderer.invoke`.
-3.  **State Update:** Main process updates `dmxState.channels`.
-4.  **Broadcast:** Main process sends `dmx:colorsUpdated` back to Renderer for UI sync.
-5.  **Transmit:** On the next tick (1/30s), the `dmxnet` sender broadcasts the 512-channel buffer via Art-Net.
+### Core Tecnológico
+*   **Electron:** Shell multiplataforma.
+*   **Vite:** Herramienta de construcción y servidor de desarrollo ultra-rápido.
+*   **React 19:** Biblioteca para la interfaz de usuario.
+*   **Vanilla CSS + Glassmorphism:** Estética moderna premium sin dependencias pesadas de CSS.
+*   **ftdi-d2xx:** Driver de comunicación directa por hardware con chips FTDI (el corazón de la app).
+*   **dmxnet:** Implementación de Art-Net para compatibilidad con puentes externos (como QLC+).
 
 ---
 
-## 🎨 Theme & Aesthetics
-*   **Dark/Light Mode:** Controlled via an `.app.dark` or `.app.light` class on the root container.
-*   **Glassmorphism:** Uses `backdrop-filter: blur()` and semi-transparent backgrounds (`var(--glass)`).
-*   **Color Wheel:** Custom implementation using a conic-gradient and `mask-image` for the donut style.
+## 📡 Implementación DMX y Flujo de Datos
+
+### Motor de Transmisión (Main Process)
+El archivo `src/main/index.js` gestiona el bucle de transmisión DMX. Hemos migrado de una comunicación serial estándar a **D2XX Direct Direct**, lo que nos permite:
+*   Bucle de alta precisión con un **MAB (Mark After Break)** calibrado por hardware.
+*   Latencia inferior a 2ms.
+*   Uso de un buffer de 512 canales con **Cero-Copia** de memoria durante la transmisión.
+
+### Flujo de Datos de Usuario
+1.  **Interacción:** El Renderer (React) llama a `window.dmx.setChannelAsync()` (unidireccional para máximo performance en faders).
+2.  **IPC Asíncrono:** Mensaje enviado al Main Process vía `ipcRenderer.send`.
+3.  **Estado Global:** El Main process actualiza el array `dmxState.channels`.
+4.  **Bucle de Sincronización:** Un intervalo de UI dedicado emite `dmx:colorsUpdated` solo cuando detecta cambios reales, optimizando el uso de la CPU.
 
 ---
 
-## 🖥️ Platform Compatibility
-*   **Windows:** Fully compatible. Recommended for usage with FTDI-based interfaces like KMTronic.
-*   **Linux:** Fully compatible. Requires appropriate USB permissions for serial/DMX interfaces if used directly.
-*   **macOS:** Compatible, though Art-Net is the preferred output method.
+## 🎨 Diseño y Estética
+*   **CSS Puro:** Hemos eliminado Tailwind para reducir el overhead y tener control total sobre las variables de diseño.
+*   **Dual Theme:** Sistema de variables CSS (`:root` y `.light`) para gestionar los modos Dark y Light de forma reactiva.
+*   **Precisión Visual:** El simulador de barras LED del frontend recibe el estado directo del driver DMX para una previsualización 1:1.
 
 ---
 
-## 🛠️ Development Scripts
-*   `npm run dev`: Starts the Vite dev server and Electron in development mode.
-*   `npm run build`: Bundles the application for production using `electron-builder` (creates unpacked directories).
-*   `npm run dist`: **Production Build.** Generates installers (`.exe`, `.deb`, `.AppImage`) in the `dist/` folder.
+## 📂 Estructura del Proyecto
+*   `src/main/index.js`: Lógica del driver D2XX, Art-Net y ciclo de vida de Electron.
+*   `src/preload/index.js`: Puente de seguridad que expone las APIs de DMX al frontend.
+*   `src/renderer/src/App.jsx`: UI principal, gestión de estado global y componentes de las páginas.
+*   `src/renderer/src/index.css`: Sistema de diseño basado en variables y componentes Vanilla CSS.
 
 ---
 
-*BeamStudio: Merging DMX stability with Modern Web aesthetics.*
+## 🛠️ Scripts de Desarrollo
+*   `npm run dev`: Inicia el servidor de desarrollo Vite y Electron.
+*   `npm run build`: Prepara la aplicación para producción.
+*   `npm run dist`: Genera los instaladores finales (`.exe`, `.deb`, `.AppImage`) en la carpeta `dist/`.
+
+---
+
+*BeamStudio: Fusionando la estabilidad del hardware industrial con la estética web moderna.*
