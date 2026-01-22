@@ -10,6 +10,9 @@ import logoImg from './assets/logo.png'
 import sticktecImg from './assets/sticktec.png'
 import dmxControllerImg from './assets/dmx-controller.png'
 
+import { useGpuAmbilight } from './hooks/useGpuAmbilight'
+import { useSystemAudio } from './hooks/useSystemAudio'
+
 // ============================================================================
 // Navigation
 // ============================================================================
@@ -642,64 +645,8 @@ function DynamicScenesPage({ config, activeDynamicScene, onSelectScene, fixtures
     )
 }
 
-function AudioPage({ fixtures, setChannelValues, channelValues, liveColors, onToggleFixture, executeDmx }) {
-    const [active, setActive] = useState(false)
-    const [levels, setLevels] = useState({ bass: 0, mid: 0, high: 0 })
-    const [gain, setGain] = useState(1.0)
-    const audioContext = useRef(null)
-    const analyser = useRef(null)
-    const animationFrame = useRef(null)
-    const gainRef = useRef(1.0) // Ref for access inside closure
-
-    // Update reg when state changes
-    useEffect(() => { gainRef.current = gain }, [gain])
-
-    const start = async () => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } })
-            audioContext.current = new (window.AudioContext || window.webkitAudioContext)()
-            const source = audioContext.current.createMediaStreamSource(stream)
-            analyser.current = audioContext.current.createAnalyser()
-            analyser.current.fftSize = 512
-            analyser.current.smoothingTimeConstant = 0.8
-            source.connect(analyser.current)
-
-            setActive(true)
-            setChannelValues(prev => ({ ...prev, dim: 255 }))
-            await window.audio?.start()
-
-            const dataArray = new Uint8Array(analyser.current.frequencyBinCount)
-            const analyze = () => {
-                if (!analyser.current) return
-                analyser.current.getByteFrequencyData(dataArray)
-
-                // Calculate bands with gain
-                const g = gainRef.current
-                const bassRaw = dataArray.slice(0, 8).reduce((a, b) => a + b, 0) / 8 / 255
-                const midRaw = dataArray.slice(8, 40).reduce((a, b) => a + b, 0) / 32 / 255
-                const highRaw = dataArray.slice(40, 100).reduce((a, b) => a + b, 0) / 60 / 255
-
-                const bass = Math.min(1, bassRaw * g)
-                const mid = Math.min(1, midRaw * g)
-                const high = Math.min(1, highRaw * g)
-
-                setLevels({ bass, mid, high })
-                executeDmx(() => window.audio?.setLevel({ bass, mid, high, volume: (bass + mid + high) / 3 }))
-
-                animationFrame.current = requestAnimationFrame(analyze)
-            }
-            analyze()
-        } catch (err) { console.error('Audio error:', err) }
-    }
-
-    const stop = () => {
-        if (animationFrame.current) cancelAnimationFrame(animationFrame.current)
-        if (audioContext.current) audioContext.current.close()
-        setActive(false)
-        setLevels({ bass: 0, mid: 0, high: 0 })
-        window.audio?.stop()
-        setChannelValues({ red: 0, green: 0, blue: 0, func: 0, spd: 0, flash: 0, dim: 0 })
-    }
+function AudioPage({ fixtures, liveColors, onToggleFixture, channelValues, sendDmxBatch }) {
+    const { start, stop, active, eqData, isMono, setIsMono, theme, setTheme } = useSystemAudio(sendDmxBatch)
 
     return (
         <div className="page audio-page">
@@ -708,49 +655,68 @@ function AudioPage({ fixtures, setChannelValues, channelValues, liveColors, onTo
                     <div className="audio-header">
                         <div className={`status-indicator ${active ? 'active' : ''}`} />
                         <Volume2 size={32} className={active ? 'pulse-icon' : ''} />
-                        <h2>Audio Reactive</h2>
+                        <h2>System Audio Direct</h2>
                     </div>
 
-                    <p className="subtitle">Sincroniza las luces con el micrófono</p>
+                    <p className="subtitle">Música interna sin ecos ni ruidos de ambiente</p>
 
-                    <div className="visualizer-container">
-                        <div className="visualizer">
-                            <div className="band-container">
-                                <motion.div className="bar bass" animate={{ height: `${levels.bass * 100}%` }} transition={{ type: 'spring', stiffness: 300, damping: 20 }} />
-                                <span className="band-label">BASS</span>
-                            </div>
-                            <div className="band-container">
-                                <motion.div className="bar mid" animate={{ height: `${levels.mid * 100}%` }} transition={{ type: 'spring', stiffness: 300, damping: 20 }} />
-                                <span className="band-label">MID</span>
-                            </div>
-                            <div className="band-container">
-                                <motion.div className="bar high" animate={{ height: `${levels.high * 100}%` }} transition={{ type: 'spring', stiffness: 300, damping: 20 }} />
-                                <span className="band-label">HIGH</span>
-                            </div>
+                    <div className="visualizer-container" style={{ height: '180px', marginBottom: '40px' }}>
+                        <div className="visualizer" style={{ height: '100%', gap: '6px' }}>
+                            {eqData.map((val, i) => (
+                                <div key={i} className="band-container" style={{ flex: 1 }}>
+                                    <motion.div
+                                        className="bar"
+                                        style={{
+                                            height: `${Math.max(5, val * 100)}%`,
+                                            background: i < 4 ? 'var(--accent)' : i < 10 ? '#00f2fe' : '#7f00ff',
+                                            borderRadius: '4px 4px 2px 2px',
+                                            width: '100%'
+                                        }}
+                                        animate={{ height: `${Math.max(5, val * 100)}%` }}
+                                        transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                                    />
+                                </div>
+                            ))}
                         </div>
                     </div>
 
-                    <div className="controls-row">
-                        <div className="control-group">
-                            <label>Sensibilidad: {gain.toFixed(1)}x</label>
-                            <input
-                                type="range"
-                                min="0.5"
-                                max="3.0"
-                                step="0.1"
-                                value={gain}
-                                onChange={(e) => setGain(parseFloat(e.target.value))}
-                                className="styled-range"
-                            />
+                    <div className="theme-selector" style={{ display: 'flex', gap: '8px', marginBottom: '24px', justifyContent: 'center' }}>
+                        {['PULSE', 'RAVE', 'FLOW', 'CHILL'].map(t => (
+                            <button
+                                key={t}
+                                className={`theme-btn ${theme === t ? 'active' : ''}`}
+                                onClick={() => setTheme(t)}
+                                style={{
+                                    padding: '8px 16px',
+                                    borderRadius: '12px',
+                                    border: '1px solid var(--glass-border)',
+                                    background: theme === t ? 'var(--accent)' : 'var(--glass)',
+                                    color: theme === t ? '#000' : 'var(--text)',
+                                    fontSize: '11px',
+                                    fontWeight: '700',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                {t}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="controls-row" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                        <div className={`bgr-toggle ${isMono ? 'active' : ''}`} onClick={() => setIsMono(!isMono)} title="Use same color for all fixtures (Best for single bar)" style={{ height: '48px', padding: '0 20px' }}>
+                            <div className="toggle-slider"></div>
+                            <span>MONO MODE</span>
                         </div>
 
                         <motion.button
                             className={`action-button ${active ? 'stop' : 'start'}`}
                             onClick={active ? stop : start}
+                            style={{ height: '48px', padding: '0 30px', margin: 0 }}
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
                         >
-                            {active ? <><PowerOff size={18} /> Detener</> : <><Play size={18} /> Iniciar</>}
+                            {active ? <><PowerOff size={18} /> Detener</> : <><Play size={18} /> Iniciar Loopback</>}
                         </motion.button>
                     </div>
                 </div>
@@ -762,120 +728,18 @@ function AudioPage({ fixtures, setChannelValues, channelValues, liveColors, onTo
     )
 }
 
-function AmbilightPage({ fixtures, setChannelValues, channelValues, liveColors, onToggleFixture, executeDmx, config }) {
-    const fps = config?.performance?.ambiFps || 30
-    const [capturing, setCapturing] = useState(false)
+function AmbilightPage({ fixtures, channelValues, liveColors, onToggleFixture, sendDmxBatch }) {
+    const { start, stop, capturing, colors: previewColors, isMono, setIsMono } = useGpuAmbilight(sendDmxBatch)
     const [sources, setSources] = useState([])
     const [selectedSource, setSelectedSource] = useState(null)
-    const [isBGR, setIsBGR] = useState(false)
-    const [previewColors, setPreviewColors] = useState(null)
-    const videoRef = useRef(null)
-    const canvasRef = useRef(null)
-    const captureInterval = useRef(null)
 
     useEffect(() => {
-        window.ambilight?.getSources()
-            .then(setSources)
-            .catch(err => {
-                console.warn('Ambilight not available:', err)
-                setSources([])
-            })
+        window.ambilight?.getSources().then(setSources)
     }, [])
 
-    const start = async () => {
-        const sourceId = selectedSource || sources[0]?.id
-        if (!sourceId) return
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                audio: false, video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId, minWidth: 1280, maxWidth: 1920, minHeight: 720, maxHeight: 1080 } }
-            })
-            if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play() }
-            setCapturing(true)
-            setChannelValues(prev => ({ ...prev, dim: 255 }))
-            await window.ambilight?.start(sourceId)
-            const ms = Math.round(1000 / fps)
-            captureInterval.current = setInterval(() => extract(), ms)
-        } catch (err) { console.error('Capture error:', err) }
-    }
-
-    const stop = () => {
-        if (videoRef.current?.srcObject) videoRef.current.srcObject.getTracks().forEach(t => t.stop())
-        if (captureInterval.current) clearInterval(captureInterval.current)
-        setCapturing(false)
-        setPreviewColors(null)
-        window.ambilight?.stop()
-        setChannelValues({ red: 0, green: 0, blue: 0, func: 0, spd: 0, flash: 0, dim: 0 })
-    }
-
-    // PRECOMPUTED GAMMA 2.2 TABLE (Linearizes LED output)
-    const GAMMA_TABLE = Array.from({ length: 256 }, (_, i) => Math.round(Math.pow(i / 255, 2.2) * 255))
-
-    const extract = () => {
-        if (!videoRef.current || !canvasRef.current) return
-        const canvas = canvasRef.current
-        const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true })
-        canvas.width = 160; canvas.height = 90
-        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height)
-
-        const frameData = ctx.getImageData(0, 0, canvas.width, canvas.height).data
-
-        // 1. GLOBAL DOMINANT EXTRACTION (Full Screen Sync)
-        let maxR = 0, maxG = 0, maxB = 0, maxVibrance = -1
-        const rowStride = canvas.width * 4
-
-        // Sample ENTIRE screen to find the strongest color (Philips "Natural" sync)
-        for (let y = 5; y < 85; y += 4) {
-            const rowOffset = y * rowStride
-            for (let x = 5; x < 155; x += 4) {
-                const i = rowOffset + (x * 4)
-                const r = frameData[i], g = frameData[i + 1], b = frameData[i + 2]
-
-                // Vibrance score: purely based on how "not grey" the color is
-                const vibrance = Math.max(r, g, b) - Math.min(r, g, b)
-                const brightness = (r + g + b) / 3
-
-                if (vibrance + (brightness * 0.5) > maxVibrance) {
-                    maxVibrance = vibrance + (brightness * 0.5)
-                    maxR = r; maxG = g; maxB = b
-                }
-            }
-        }
-
-        // 2. MASSIVE EXAGGERATION (For Global Impact)
-        let r = maxR, g = maxG, b = maxB
-
-        // Manual Channel Swap Fix (Linux Wayland/PipeWire BGR Buffer)
-        if (isBGR) {
-            const temp = r
-            r = b
-            b = temp
-        }
-
-        const max = Math.max(r, g, b, 1)
-
-        if (max > 10) {
-            const boost = 255 / max
-            r *= boost; g *= boost; b *= boost
-
-            // Color specific "Vivid" enhancement (Wimbledon/Action/Ocean)
-            if (g > r * 1.1 && g > b * 1.1) { g = 255; r *= 0.1; b *= 0.1 }
-            else if (r > g * 1.1 && r > b * 1.1) { r = 255; g *= 0.1; b *= 0.1 }
-            else if (b > r * 1.1 && b > g * 1.1) { b = 255; r *= 0.1; g *= 0.1 }
-        } else {
-            r = 0; g = 0; b = 0
-        }
-
-        const corr = (val) => GAMMA_TABLE[Math.min(255, Math.round(val))]
-        const syncColor = { r: corr(r), g: corr(g), b: corr(b) }
-
-        // Multi-bar support: All bars get the same color in Basic Sync Mode
-        // (In the future we can split the screen areas here)
-        const finalColors = fixtures.map(() => syncColor)
-        setPreviewColors(finalColors)
-
-        executeDmx(() => window.ambilight?.setColorsAsync({
-            colors: finalColors
-        }), true)
+    const handleStart = () => {
+        const id = selectedSource || sources[0]?.id
+        if (id) start(id)
     }
 
     return (
@@ -883,47 +747,62 @@ function AmbilightPage({ fixtures, setChannelValues, channelValues, liveColors, 
             <div className="ambilight-main">
                 <div className="glass-card ambilight-card">
                     <Monitor size={48} strokeWidth={1} style={{ color: capturing ? 'var(--accent)' : 'inherit', filter: capturing ? 'drop-shadow(0 0 10px var(--accent))' : 'none' }} />
-                    <h2>Ambilight Extreme</h2>
-                    <p className="subtitle">Real-time Dominant Color Extraction Engine</p>
+                    <h2>GPU Screen Sync</h2>
+                    <p className="subtitle">Mapeo espacial Izquierda-Centro-Derecha acelerado por hardware</p>
 
-                    <div className="ambilight-setup-row">
-                        <select className="source-select" onChange={(e) => setSelectedSource(e.target.value)} disabled={capturing}>
+                    <div className="ambilight-setup-row" style={{ gridTemplateColumns: '1.5fr 1fr auto auto' }}>
+                        <select
+                            className="source-select"
+                            onChange={(e) => setSelectedSource(e.target.value)}
+                            disabled={capturing}
+                            style={{ margin: 0, height: '48px' }}
+                        >
                             {sources.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                         </select>
 
-                        <div className={`bgr-toggle ${isBGR ? 'active' : ''}`} onClick={() => setIsBGR(!isBGR)} title="Swap Red/Blue channels (Fix for some Linux drivers)">
+                        <div className="status-badge" style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-secondary)', fontSize: '11px', whiteSpace: 'nowrap' }}>
+                            <Zap size={14} /> <span>AMD RX 6700 XT</span>
+                        </div>
+
+                        <div className={`bgr-toggle ${isMono ? 'active' : ''}`} onClick={() => setIsMono(!isMono)} title="Use center color for all fixtures">
                             <div className="toggle-slider"></div>
-                            <span>BGR FIX</span>
+                            <span>MONO</span>
                         </div>
 
                         <motion.button
                             className={`action-button ${capturing ? 'stop' : 'active'}`}
-                            onClick={capturing ? stop : start}
+                            onClick={capturing ? stop : handleStart}
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
                         >
-                            {capturing ? <><Square size={16} /> Stop Engine</> : <><Play size={16} /> Ignite Ambilight</>}
+                            {capturing ? <><Square size={16} /> Stop</> : <><Play size={16} /> Ignite</>}
                         </motion.button>
                     </div>
-
-                    <video ref={videoRef} style={{ display: 'none' }} />
 
                     {/* Real-time Extraction TV */}
                     <div className="extraction-monitor">
                         <div className="monitor-header">
-                            <span className="live-indicator"><div className="dot"></div> EXTRACTION TV</span>
-                            <span className="resolution-label">160x90 Downsampled Pipeline</span>
+                            <span className="live-indicator"><div className="dot"></div> GPU SPATIAL MONITOR</span>
+                            <span className="resolution-label">3x1 Hardware Downsampled</span>
                         </div>
-                        <div className="canvas-wrapper">
-                            <canvas ref={canvasRef} className="extraction-canvas" />
-                            {!capturing && <div className="canvas-placeholder">Select source and ignite engine...</div>}
+                        <div className="canvas-wrapper" style={{ gap: '4px', background: '#000', padding: '10px' }}>
+                            {previewColors.map((c, i) => (
+                                <div key={i} style={{
+                                    flex: 1,
+                                    height: '100%',
+                                    background: `rgb(${c.r}, ${c.g}, ${c.b})`,
+                                    borderRadius: '4px',
+                                    border: '1px solid rgba(255,255,255,0.1)'
+                                }} />
+                            ))}
+                            {!capturing && <div className="canvas-placeholder" style={{ position: 'absolute' }}>Select screen and ignite...</div>}
                         </div>
                     </div>
 
                     {/* Dominant Color Analyzer */}
                     {capturing && previewColors && (
                         <div className="color-analyzer">
-                            <div className="analyzer-label">DMX BUS MONITOR (VIVID OUTPUT)</div>
+                            <div className="analyzer-label">DMX SPATIAL BUS</div>
                             <div className="visualizer">
                                 {previewColors.map((c, i) => (
                                     <div key={i} className="analyzer-bar" style={{
@@ -936,7 +815,7 @@ function AmbilightPage({ fixtures, setChannelValues, channelValues, liveColors, 
                                             <span className="code-value">B:{c.b}</span>
                                         </div>
                                         <div className="hex-label">
-                                            {fixtures[i]?.name.split(' ')[1]}
+                                            {fixtures[i]?.name.split(' ')[1] || 'BAR'}
                                         </div>
                                     </div>
                                 ))}
@@ -1256,6 +1135,11 @@ function App() {
         pendingDmxUpdates.current[channel] = value
     }, [])
 
+    const sendDmxBatch = useCallback((colors) => {
+        window.ambilight?.setColorsAsync({ colors })
+        setLiveColors(colors)
+    }, [])
+
     const handleSelectedChannelsChange = useCallback((channels) => {
         setChannelValues(prev => ({ ...prev, ...channels }))
         Object.entries(channels).forEach(([ch, val]) => {
@@ -1337,7 +1221,8 @@ function App() {
         darkMode,
         onToggleTheme,
         handleChannelChange,
-        handleSelectedChannelsChange
+        handleSelectedChannelsChange,
+        sendDmxBatch
     }
 
     const renderPage = () => {
