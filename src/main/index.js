@@ -903,7 +903,7 @@ function setupIPC() {
 
     // Async High-Frequency Ambilight update (One-way)
     ipcMain.on('ambilight:setColorsAsync', (_, { left, center, right, colors: incomingColors }) => {
-        if (!dmxState.ambilightActive) return
+        if (!dmxState.ambilightActive && !dmxState.audioReactiveActive) return
 
         const targetColors = incomingColors || [left, center, right]
 
@@ -986,7 +986,13 @@ function createWindow() {
         frame: false, // Custom frame
         titleBarStyle: 'hidden', // Allows traffic lights on macOS, custom div on Windows/Linux
         icon: join(__dirname, '../../src/renderer/src/assets/logo.png'),
-        webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: false, contextIsolation: true, nodeIntegration: false }
+        webPreferences: {
+            preload: join(__dirname, '../preload/index.js'),
+            sandbox: false,
+            contextIsolation: true,
+            nodeIntegration: false,
+            backgroundThrottling: false  // CRITICAL: Keep audio engine running when minimized
+        }
     })
 
     // Window Ops

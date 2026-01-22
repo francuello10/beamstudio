@@ -1930,19 +1930,17 @@ body {
 
 .visualizer {
     display: flex;
-    gap: 16px;
-    height: 120px;
+    gap: 4px;
+    height: 100%;
     align-items: flex-end;
     justify-content: center;
-    margin: 32px 0;
+    width: 100%;
 }
 
 .visualizer .bar {
-    width: 40px;
-    min-height: 8px;
+    width: 100%;
+    min-height: 4px;
     border-radius: 4px;
-    width: 60px;
-    /* Wider bars */
 }
 
 .visualizer-container {

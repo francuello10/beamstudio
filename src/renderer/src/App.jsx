@@ -646,77 +646,203 @@ function DynamicScenesPage({ config, activeDynamicScene, onSelectScene, fixtures
 }
 
 function AudioPage({ fixtures, liveColors, onToggleFixture, channelValues, sendDmxBatch }) {
-    const { start, stop, active, eqData, isMono, setIsMono, theme, setTheme } = useSystemAudio(sendDmxBatch)
+    const { start, stop, active, detectedGenre, autoGenre, setAutoGenre, manualGenre, setManualGenre, telemetry, visualizerData } = useSystemAudio(sendDmxBatch)
 
     return (
         <div className="page audio-page">
             <div className="audio-main">
-                <div className="glass-card audio-card">
+                <div className="glass-card audio-card" style={{ maxWidth: '700px' }}>
                     <div className="audio-header">
                         <div className={`status-indicator ${active ? 'active' : ''}`} />
                         <Volume2 size={32} className={active ? 'pulse-icon' : ''} />
-                        <h2>System Audio Direct</h2>
+                        <h2>Stereo 2.1 DSP Engine</h2>
                     </div>
 
-                    <p className="subtitle">Música interna sin ecos ni ruidos de ambiente</p>
+                    <p className="subtitle">True Stereo Analysis • Auto Genre Detection</p>
 
-                    <div className="visualizer-container" style={{ height: '180px', marginBottom: '40px' }}>
-                        <div className="visualizer" style={{ height: '100%', gap: '6px' }}>
-                            {eqData.map((val, i) => (
-                                <div key={i} className="band-container" style={{ flex: 1 }}>
+                    {/* STEREO VISUALIZER */}
+                    <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', height: '160px' }}>
+                        {/* LEFT CHANNEL */}
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontSize: '10px', color: 'var(--text-secondary)', marginBottom: '8px', textAlign: 'center' }}>LEFT</span>
+                            <div style={{ display: 'flex', gap: '2px', height: '100%', alignItems: 'flex-end' }}>
+                                {visualizerData.left.map((val, i) => (
                                     <motion.div
-                                        className="bar"
+                                        key={i}
                                         style={{
-                                            height: `${Math.max(5, val * 100)}%`,
-                                            background: i < 4 ? 'var(--accent)' : i < 10 ? '#00f2fe' : '#7f00ff',
-                                            borderRadius: '4px 4px 2px 2px',
-                                            width: '100%'
+                                            flex: 1,
+                                            background: i < 3 ? 'var(--accent)' : i < 8 ? '#00f2fe' : '#7f00ff',
+                                            borderRadius: '2px'
                                         }}
-                                        animate={{ height: `${Math.max(5, val * 100)}%` }}
-                                        transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                                        animate={{ height: `${Math.max(4, val * 100)}%` }}
+                                        transition={{ type: 'tween', duration: 0.05 }}
                                     />
-                                </div>
-                            ))}
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* CENTER - BASS MONITOR + STEREO WIDTH */}
+                        <div style={{ width: '80px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ fontSize: '10px', color: 'var(--text-secondary)', marginBottom: '8px' }}>SUB</span>
+                            <motion.div
+                                style={{
+                                    width: '60px',
+                                    height: '60px',
+                                    borderRadius: '50%',
+                                    background: `radial-gradient(circle, rgba(255,${Math.round(100 - visualizerData.bass * 100)},0,${visualizerData.bass}) 0%, transparent 70%)`,
+                                    border: `2px solid rgba(var(--accent-rgb), ${0.3 + visualizerData.bass * 0.7})`,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                                animate={{ scale: 1 + visualizerData.bass * 0.2 }}
+                                transition={{ type: 'spring', stiffness: 500, damping: 20 }}
+                            >
+                                <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--accent)' }}>
+                                    {Math.round(visualizerData.bass * 100)}%
+                                </span>
+                            </motion.div>
+                            <div style={{ marginTop: '8px', fontSize: '9px', color: 'var(--text-secondary)' }}>
+                                WIDTH: {telemetry.stereoWidth}%
+                            </div>
+                        </div>
+
+                        {/* RIGHT CHANNEL */}
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontSize: '10px', color: 'var(--text-secondary)', marginBottom: '8px', textAlign: 'center' }}>RIGHT</span>
+                            <div style={{ display: 'flex', gap: '2px', height: '100%', alignItems: 'flex-end' }}>
+                                {visualizerData.right.map((val, i) => (
+                                    <motion.div
+                                        key={i}
+                                        style={{
+                                            flex: 1,
+                                            background: i < 3 ? 'var(--accent)' : i < 8 ? '#00f2fe' : '#7f00ff',
+                                            borderRadius: '2px'
+                                        }}
+                                        animate={{ height: `${Math.max(4, val * 100)}%` }}
+                                        transition={{ type: 'tween', duration: 0.05 }}
+                                    />
+                                ))}
+                            </div>
                         </div>
                     </div>
 
-                    <div className="theme-selector" style={{ display: 'flex', gap: '8px', marginBottom: '24px', justifyContent: 'center' }}>
-                        {['PULSE', 'RAVE', 'FLOW', 'CHILL'].map(t => (
-                            <button
-                                key={t}
-                                className={`theme-btn ${theme === t ? 'active' : ''}`}
-                                onClick={() => setTheme(t)}
+                    {/* GENRE CONTROL PANEL */}
+                    <div style={{
+                        marginBottom: '16px',
+                        padding: '16px',
+                        background: 'rgba(0,0,0,0.3)',
+                        borderRadius: '16px'
+                    }}>
+                        {/* AI Toggle */}
+                        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
+                            <div
+                                onClick={() => setAutoGenre(!autoGenre)}
                                 style={{
-                                    padding: '8px 16px',
-                                    borderRadius: '12px',
-                                    border: '1px solid var(--glass-border)',
-                                    background: theme === t ? 'var(--accent)' : 'var(--glass)',
-                                    color: theme === t ? '#000' : 'var(--text)',
-                                    fontSize: '11px',
-                                    fontWeight: '700',
+                                    padding: '8px 20px',
+                                    borderRadius: '20px',
+                                    background: autoGenre ? 'linear-gradient(135deg, #00f260, #0575e6)' : 'var(--glass)',
+                                    border: '1px solid rgba(255,255,255,0.2)',
                                     cursor: 'pointer',
-                                    transition: 'all 0.2s'
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    transition: 'all 0.3s'
                                 }}
                             >
-                                {t}
-                            </button>
-                        ))}
-                    </div>
-
-                    <div className="controls-row" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-                        <div className={`bgr-toggle ${isMono ? 'active' : ''}`} onClick={() => setIsMono(!isMono)} title="Use same color for all fixtures (Best for single bar)" style={{ height: '48px', padding: '0 20px' }}>
-                            <div className="toggle-slider"></div>
-                            <span>MONO MODE</span>
+                                <div style={{
+                                    width: '10px', height: '10px', borderRadius: '50%',
+                                    background: autoGenre ? '#fff' : 'rgba(255,255,255,0.3)',
+                                    boxShadow: autoGenre ? '0 0 10px #fff' : 'none'
+                                }} />
+                                <span style={{ fontSize: '11px', fontWeight: 700, color: '#fff', letterSpacing: '1px' }}>
+                                    AI AUTO-VIBE {autoGenre ? 'ON' : 'OFF'}
+                                </span>
+                            </div>
                         </div>
 
+                        {/* Manual Mode Buttons */}
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                            {['ELECTRO', 'ROCK', 'CHILL'].map(mode => {
+                                const isActive = autoGenre ? detectedGenre === mode : manualGenre === mode
+                                const gradients = {
+                                    ELECTRO: 'linear-gradient(135deg, #ff0080, #7928ca)',
+                                    ROCK: 'linear-gradient(135deg, #f5af19, #f12711)',
+                                    CHILL: 'linear-gradient(135deg, #00c6ff, #0072ff)'
+                                }
+                                return (
+                                    <button
+                                        key={mode}
+                                        onClick={() => !autoGenre && setManualGenre(mode)}
+                                        disabled={autoGenre}
+                                        style={{
+                                            padding: '10px 20px',
+                                            borderRadius: '12px',
+                                            border: isActive ? '2px solid #fff' : '1px solid rgba(255,255,255,0.2)',
+                                            background: isActive ? gradients[mode] : 'var(--glass)',
+                                            color: '#fff',
+                                            fontSize: '12px',
+                                            fontWeight: 700,
+                                            cursor: autoGenre ? 'not-allowed' : 'pointer',
+                                            opacity: autoGenre ? 0.5 : 1,
+                                            transition: 'all 0.2s',
+                                            boxShadow: isActive ? '0 0 20px rgba(255,255,255,0.3)' : 'none'
+                                        }}
+                                    >
+                                        {mode}
+                                    </button>
+                                )
+                            })}
+                        </div>
+
+                        {/* Active Genre Display */}
+                        <div style={{ textAlign: 'center', marginTop: '12px' }}>
+                            <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>
+                                {autoGenre ? 'AI DETECTED:' : 'MANUAL MODE:'}
+                            </span>
+                            <span style={{ fontSize: '14px', fontWeight: 800, color: '#fff', marginLeft: '8px', letterSpacing: '2px' }}>
+                                {autoGenre ? detectedGenre : manualGenre}
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* TELEMETRY DASHBOARD */}
+                    {active && (
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(3, 1fr)',
+                            gap: '12px',
+                            marginBottom: '24px',
+                            padding: '16px',
+                            background: 'rgba(0,0,0,0.3)',
+                            borderRadius: '12px',
+                            fontSize: '10px'
+                        }}>
+                            <div style={{ textAlign: 'center' }}>
+                                <div style={{ color: 'var(--text-secondary)' }}>LOW-END</div>
+                                <div style={{ color: 'var(--accent)', fontWeight: 700, fontSize: '14px' }}>{telemetry.lowEndDynamics}%</div>
+                            </div>
+                            <div style={{ textAlign: 'center' }}>
+                                <div style={{ color: 'var(--text-secondary)' }}>TRANSIENTS</div>
+                                <div style={{ color: '#00f2fe', fontWeight: 700, fontSize: '14px' }}>{telemetry.transientDensity}%</div>
+                            </div>
+                            <div style={{ textAlign: 'center' }}>
+                                <div style={{ color: 'var(--text-secondary)' }}>MID RMS</div>
+                                <div style={{ color: '#7f00ff', fontWeight: 700, fontSize: '14px' }}>{telemetry.midRms}%</div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* CONTROLS */}
+                    <div className="controls-row" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
                         <motion.button
                             className={`action-button ${active ? 'stop' : 'start'}`}
                             onClick={active ? stop : start}
-                            style={{ height: '48px', padding: '0 30px', margin: 0 }}
+                            style={{ height: '52px', padding: '0 40px', margin: 0, fontSize: '14px' }}
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
                         >
-                            {active ? <><PowerOff size={18} /> Detener</> : <><Play size={18} /> Iniciar Loopback</>}
+                            {active ? <><PowerOff size={20} /> Stop Engine</> : <><Play size={20} /> Engage 2.1 DSP</>}
                         </motion.button>
                     </div>
                 </div>
