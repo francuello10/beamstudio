@@ -96,16 +96,27 @@ const ConsoleMixerPage = ({ onReset }) => {
                     <div className="glass-card fixtures-card">
                         <h3>Fixture Patch</h3>
                         <div className="fixtures-list horizontal">
-                            {dmxFixtures.map(f => (
-                                <div
-                                    key={f.id}
-                                    className={`fixture-pill ${f.selected ? 'active' : ''}`}
-                                    onClick={() => toggleFixtureSelection(f.id)}
-                                >
-                                    <div className={`status-led ${f.selected ? 'on' : ''}`} />
-                                    <span>{f.name}</span>
-                                </div>
-                            ))}
+                            {dmxFixtures.map(f => {
+                                const activeColor = `rgb(${dmxUniverseState.red || 0},${dmxUniverseState.green || 0},${dmxUniverseState.blue || 0})`
+                                const hasColor = (dmxUniverseState.red || 0) + (dmxUniverseState.green || 0) + (dmxUniverseState.blue || 0) > 50
+                                return (
+                                    <div
+                                        key={f.id}
+                                        className={`fixture-pill ${f.selected ? 'active' : ''}`}
+                                        onClick={() => toggleFixtureSelection(f.id)}
+                                        style={{
+                                            borderColor: f.selected && hasColor ? activeColor : undefined,
+                                            boxShadow: f.selected && hasColor ? `0 0 10px ${activeColor}` : undefined
+                                        }}
+                                    >
+                                        <div
+                                            className={`status-led ${f.selected ? 'on' : ''}`}
+                                            style={{ background: f.selected && hasColor ? activeColor : undefined }}
+                                        />
+                                        <span>{f.name}</span>
+                                    </div>
+                                )
+                            })}
                         </div>
                     </div>
                 </div>

@@ -157,17 +157,78 @@ const SystemPage = () => {
                     <div className="card-header-icon">
                         <Radio size={20} className="accent-text" />
                         <h3>DMX Connection Mode</h3>
+                        {connectionStatus && (
+                            <span style={{
+                                marginLeft: 'auto',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                color: connectionStatus.type === 'success' ? 'var(--accent)' : '#ff4444',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                            }}>
+                                {connectionStatus.type === 'success' ? <Check size={14} /> : <AlertCircle size={14} />}
+                                {connectionStatus.message}
+                            </span>
+                        )}
                     </div>
-                    <div className="dmx-mode-toggle" style={{ marginTop: '16px' }}>
-                        <button className={`mode-btn ${dmxMode === 'artnet' ? 'active' : ''}`} onClick={() => handleModeChange('artnet')}>Art-Net</button>
-                        <button className={`mode-btn ${dmxMode !== 'artnet' ? 'active' : ''}`} onClick={() => handleModeChange('usb')}>USB Direct</button>
+                    <div className="dmx-mode-toggle" style={{ marginTop: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <button
+                            className={`mode-btn ${dmxMode === 'artnet' ? 'active' : ''}`}
+                            onClick={() => handleModeChange('artnet')}
+                            style={{
+                                padding: '12px 20px',
+                                borderRadius: '8px',
+                                border: dmxMode === 'artnet' ? '2px solid var(--accent)' : '1px solid var(--border-color)',
+                                background: dmxMode === 'artnet' ? 'rgba(255, 0, 128, 0.15)' : 'rgba(255, 255, 255, 0.03)',
+                                color: 'white',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            🌐 Art-Net
+                        </button>
+                        <button
+                            className={`mode-btn ${dmxMode !== 'artnet' ? 'active' : ''}`}
+                            onClick={() => handleModeChange('usb')}
+                            style={{
+                                padding: '12px 20px',
+                                borderRadius: '8px',
+                                border: dmxMode !== 'artnet' ? '2px solid var(--accent)' : '1px solid var(--border-color)',
+                                background: dmxMode !== 'artnet' ? 'rgba(255, 0, 128, 0.15)' : 'rgba(255, 255, 255, 0.03)',
+                                color: 'white',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            🔌 USB Direct
+                        </button>
                     </div>
                     {dmxMode !== 'artnet' && (
-                        <div className="native-config" style={{ marginTop: '16px' }}>
-                            <select value={selectedPort} onChange={(e) => setSelectedPort(e.target.value)} style={{ width: '100%' }}>
+                        <div className="native-config" style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            <select
+                                value={selectedPort}
+                                onChange={(e) => setSelectedPort(e.target.value)}
+                                className="system-select"
+                                style={{ padding: '10px 12px' }}
+                            >
                                 {serialPorts.map(p => <option key={p.path} value={p.path}>{p.displayName || p.path}</option>)}
                             </select>
-                            <button onClick={() => handleModeChange('usb')} className="action-button active" style={{ marginTop: '12px', width: '100%' }}>RECONNECT</button>
+                            <button
+                                onClick={() => handleModeChange('usb')}
+                                className="action-button active"
+                                disabled={isConnecting}
+                            >
+                                {isConnecting ? '⏳ CONNECTING...' : '🔄 RECONNECT'}
+                            </button>
+                        </div>
+                    )}
+                    {actualHz > 0 && (
+                        <div style={{ marginTop: '12px', fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent)', animation: 'pulse 1s infinite' }} />
+                            Transmitting at <strong style={{ color: 'var(--accent)' }}>{actualHz} Hz</strong>
                         </div>
                     )}
                 </div>

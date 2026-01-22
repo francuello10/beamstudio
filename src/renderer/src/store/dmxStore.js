@@ -14,6 +14,7 @@ export const useDmxStore = create((set) => ({
     dmxFixtures: [],
     activeProgram: null,
     activeDynamicScene: null,
+    activeFlag: null,
 
     // Actions
     /**
@@ -48,6 +49,7 @@ export const useDmxStore = create((set) => ({
 
     setActiveProgram: (activeProgram) => set({ activeProgram }),
     setActiveDynamicScene: (activeDynamicScene) => set({ activeDynamicScene }),
+    setActiveFlag: (activeFlag) => set({ activeFlag }),
 
     toggleBlackout: async (fixtureId) => {
         const { dmxUniverseState } = useDmxStore.getState()
@@ -60,7 +62,9 @@ export const useDmxStore = create((set) => ({
 
     resetDmx: () => set({
         dmxUniverseState: { red: 0, green: 0, blue: 0, func: 0, spd: 0, flash: 0, dim: 0 },
+        pixelMapBuffer: [],
         activeProgram: null,
-        activeDynamicScene: null
+        activeDynamicScene: null,
+        activeFlag: null
     })
 }))

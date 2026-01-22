@@ -35,6 +35,10 @@ class DmxScheduler {
 
     tick() {
         const state = useDmxStore.getState()
+
+        // Skip if a dynamic scene or flag is active (they handle their own colors)
+        if (state.activeDynamicScene || state.activeFlag) return
+
         const currentUniverse = state.dmxUniverseState
         const fixtures = state.dmxFixtures
 

@@ -26,6 +26,9 @@ const dmxAPI = {
         ipcRenderer.send('dmx:setChannelsAsync', { fixtureIds, channels: validated })
     },
 
+    // Set per-fixture colors in a single call (for flags, etc.)
+    setPerFixtureColors: (fixtureColors) => ipcRenderer.invoke('dmx:setPerFixtureColors', { fixtureColors }),
+
     // RESET ALL - Back to 0 0 0 0 0 0 0
     reset: () => ipcRenderer.invoke('dmx:reset'),
 

@@ -13,7 +13,14 @@ const LivePreviewContainer = React.memo(({ fixtures, masterDimmer, activeProgram
     const dmxUniverseState = useDmxStore(state => state.dmxUniverseState)
     const audioTelemetryDSP = useAudioStore(state => state.audioTelemetryDSP)
 
-    const colors = pixelMapBuffer || (fixtures || []).map(() => ({ r: 0, g: 0, b: 0 }))
+    // @ai-constraints Derive colors from pixelMapBuffer, fallback to dmxUniverseState RGB values
+    const colors = pixelMapBuffer?.length > 0
+        ? pixelMapBuffer
+        : (fixtures || []).map(() => ({
+            r: dmxUniverseState?.red || 0,
+            g: dmxUniverseState?.green || 0,
+            b: dmxUniverseState?.blue || 0
+        }))
 
     useEffect(() => {
         let animationId

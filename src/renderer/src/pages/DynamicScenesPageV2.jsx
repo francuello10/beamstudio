@@ -21,6 +21,8 @@ const DynamicScenesPageV2 = () => {
     const dmxFixtures = useDmxStore(state => state.dmxFixtures)
     const pixelMapBuffer = useDmxStore(state => state.pixelMapBuffer)
     const toggleBlackout = useDmxStore(state => state.toggleBlackout)
+    const activeFlag = useDmxStore(state => state.activeFlag)
+    const setActiveFlag = useDmxStore(state => state.setActiveFlag)
     const config = useConfigStore(state => state.config)
 
     const audioTelemetryDSP = useAudioStore(state => state.audioTelemetryDSP)
@@ -32,7 +34,6 @@ const DynamicScenesPageV2 = () => {
     // Page Local State
     const [audioReactive, setAudioReactive] = useState(false)
     const [sensitivity, setSensitivity] = useState(70)
-    const [activeFlag, setActiveFlag] = useState(null)
     const [sceneColors, setSceneColors] = useState([{ r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }])
     const [aiPrompt, setAiPrompt] = useState('')
     const [isGenerating, setIsGenerating] = useState(false)
@@ -163,19 +164,36 @@ const DynamicScenesPageV2 = () => {
         }
     }
 
-    const handleFlagSelect = (flagId) => {
+    const handleFlagSelect = async (flagId) => {
         if (activeFlag === flagId) {
+            // Deselect flag - reset to black
             setActiveFlag(null)
             if (!audioReactive) {
-                sendDmxBatch([{ r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }])
+                await window.dmx?.reset()
+                dispatchBulkDmxUpdate({ red: 0, green: 0, blue: 0, func: 0, spd: 0, flash: 0, dim: 0 })
             }
         } else {
+            // Select new flag
             setActiveFlag(flagId)
             setActiveDynamicScene(null)
             setPreviewScene(null)
-            if (!audioReactive) {
-                const flag = FLAGS[flagId]
-                if (flag) dispatchPixelMapUpdate(flag.colors)
+
+            const flag = FLAGS[flagId]
+            if (flag) {
+                // Send all 3 colors in a single atomic call
+                await window.dmx?.setPerFixtureColors(flag.colors)
+
+                // Update UI with the first fixture's color (for fader display)
+                const firstColor = flag.colors[0]
+                dispatchBulkDmxUpdate({
+                    red: firstColor.r,
+                    green: firstColor.g,
+                    blue: firstColor.b,
+                    dim: 255
+                })
+
+                // Update pixel map for preview
+                dispatchPixelMapUpdate(flag.colors)
             }
         }
     }

@@ -14,6 +14,8 @@ const navItems = [
 // Note: Sparkles import from lucide-react
 import { Sparkles } from 'lucide-react'
 
+import logoImg from '../assets/logo.png'
+
 const Sidebar = React.memo(() => {
     const activePage = useConfigStore(state => state.activePage)
     const setActivePage = useConfigStore(state => state.setActivePage)
@@ -22,7 +24,9 @@ const Sidebar = React.memo(() => {
 
     return (
         <div className="sidebar">
-            <div style={{ height: '20px' }} /> {/* Spacer */}
+            <div className="sidebar-logo-container" style={{ padding: '20px 0', display: 'flex', justifyContent: 'center' }}>
+                <img src={logoImg} alt="BeamStudio" style={{ width: '32px', height: '32px', filter: 'drop-shadow(0 0 10px rgba(255,0,128,0.5))' }} />
+            </div>
             <nav className="sidebar-nav">
                 {navItems.map(item => {
                     const Icon = item.id === 'dynamic' ? Sparkles : item.icon

@@ -533,22 +533,31 @@ function stopDMXLoop() {
 // Dynamic Scene Loop
 // ============================================================================
 
+/**
+ * @ai-constraints Dynamic Scenes run at 44Hz to match DMX refresh rate.
+ * DIM channel must be set to 255 to ensure lights are visible.
+ */
 function startDynamicScene(sceneId) {
     stopDynamicScene()
     const scene = DYNAMIC_SCENES[sceneId]
     if (!scene) return false
     dmxState.dynamicScene = sceneId
     dmxState.dynamicSceneFrame = 0
+
+    // Ensure DIM is set to 255 for all fixtures when starting a dynamic scene
+    fixtures.forEach((f) => {
+        const base = f.startChannel - 1
+        dmxState.channels[base + CHANNEL_MAP.DIM] = 255
+    })
+
     dynamicSceneInterval = setInterval(() => {
         const color = scene.handler(dmxState.dynamicSceneFrame)
-        // Use current dimmer value instead of hardcoded 255
-        fixtures.forEach((f, i) => {
-            const currentDim = dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM]
-            setFixtureColor(i, color.r, color.g, color.b, currentDim)
+        // Always use DIM=255 for dynamic scenes to ensure visibility
+        fixtures.forEach((_, i) => {
+            setFixtureColor(i, color.r, color.g, color.b, 255)
         })
         dmxState.dynamicSceneFrame++
-        // broadcastColors() -> UI interval will handle this at 20Hz
-    }, 1000 / 44) // Match DMX loop frequency
+    }, 1000 / 44)
     return true
 }
 
@@ -731,6 +740,22 @@ function setupIPC() {
                 }
             })
         })
+        broadcastColors()
+        return { success: true, colors: dmxState.fixtureColors }
+    })
+
+    /**
+     * @ai-constraints Sets individual colors for each fixture in a single atomic call.
+     * Used by Reactive Flags to display multi-color patterns (e.g., flag stripes).
+     * Always sets DIM to 255 (or color.dim if provided) to ensure visibility.
+     */
+    ipcMain.handle('dmx:setPerFixtureColors', (_, { fixtureColors }) => {
+        fixtureColors.forEach((color, idx) => {
+            if (idx < fixtures.length && color) {
+                setFixtureColor(idx, color.r, color.g, color.b, color.dim ?? 255)
+            }
+        })
+        transmitNow()
         broadcastColors()
         return { success: true, colors: dmxState.fixtureColors }
     })
@@ -956,7 +981,17 @@ function setupIPC() {
         }
     })
 
-    ipcMain.handle('ambilight:start', (_, sourceId) => { stopDynamicScene(); dmxState.activeProgram = null; dmxState.ambilightActive = true; return { success: true, sourceId } })
+    // @ai-constraints Set DIM=255 for all fixtures when starting ambilight to ensure visibility
+    ipcMain.handle('ambilight:start', (_, sourceId) => {
+        stopDynamicScene()
+        dmxState.activeProgram = null
+        dmxState.ambilightActive = true
+        // Set DIM to 255 for all fixtures to ensure lights are visible
+        fixtures.forEach((f) => {
+            dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM] = 255
+        })
+        return { success: true, sourceId }
+    })
     ipcMain.handle('ambilight:stop', () => { dmxState.ambilightActive = false; resetAll(); return { success: true } })
 
     let lastAmbiColors = fixtures.map(() => ({ r: 0, g: 0, b: 0 }))
@@ -972,10 +1007,11 @@ function setupIPC() {
         })
 
         lastAmbiColors = colors
+        // @ai-constraints Use DIM=255 minimum to ensure lights are visible
         colors.forEach((c, i) => {
             const f = fixtures[i]
-            const currentDim = dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM]
-            setFixtureColor(i, c.r, c.g, c.b, currentDim)
+            const currentDim = dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM] || 255
+            setFixtureColor(i, c.r, c.g, c.b, Math.max(currentDim, 255))
         })
         return { success: true, colors: dmxState.fixtureColors }
     })
@@ -1002,23 +1038,46 @@ function setupIPC() {
         })
 
         lastAmbiColors = colors
+        // @ai-constraints Use DIM=255 minimum to ensure lights are visible during ambilight mode
         colors.forEach((c, i) => {
             const f = fixtures[i]
-            const currentDim = dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM]
-            setFixtureColor(i, c.r, c.g, c.b, currentDim)
+            const currentDim = dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM] || 255
+            setFixtureColor(i, c.r, c.g, c.b, Math.max(currentDim, 255))
         })
     })
 
-    ipcMain.handle('audio:start', () => { stopDynamicScene(); dmxState.activeProgram = null; dmxState.audioReactiveActive = true; return { success: true } })
+    // @ai-constraints Set DIM=255 for all fixtures when starting audio reactive mode
+    ipcMain.handle('audio:start', () => {
+        stopDynamicScene()
+        dmxState.activeProgram = null
+        dmxState.audioReactiveActive = true
+        // Set DIM to 255 for all fixtures to ensure lights are visible
+        fixtures.forEach((f) => {
+            dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM] = 255
+        })
+        return { success: true }
+    })
     ipcMain.handle('audio:stop', () => { dmxState.audioReactiveActive = false; resetAll(); return { success: true } })
+    /**
+     * @ai-constraints Audio-reactive color formula with improved variety.
+     * Uses bass/mid/high levels to create dynamic, varied colors.
+     */
     ipcMain.handle('audio:setLevel', (_, { bass, mid, high, volume }) => {
         if (!dmxState.audioReactiveActive) return { success: false }
-        const r = Math.min(255, Math.round(Math.pow(bass, 1.5) * 255 + Math.pow(high, 1.3) * 100))
-        const g = Math.min(255, Math.round(Math.pow(mid, 1.2) * 200))
-        const b = Math.min(255, Math.round(Math.pow(high, 1.3) * 255 + Math.pow(bass, 1.5) * 50))
+
+        // Improved color formula for more variety (not just blue)
+        // Bass drives red/orange, mid drives green/yellow, high drives cyan/white
+        const bassExp = Math.pow(bass, 1.5)
+        const midExp = Math.pow(mid, 1.3)
+        const highExp = Math.pow(high, 1.4)
+
+        // Create more varied colors based on audio characteristics
+        const r = Math.min(255, Math.round(bassExp * 255 + highExp * 50))
+        const g = Math.min(255, Math.round(midExp * 200 + bassExp * 80))
+        const b = Math.min(255, Math.round(highExp * 200 + midExp * 100))
+
         const dim = Math.min(255, Math.round(128 + (volume || 0.5) * 127))
         setAllFixturesColor(r, g, b, dim)
-        // broadcastColors() -> Removed to prevent IPC flood
         return { success: true, colors: dmxState.fixtureColors }
     })
 
