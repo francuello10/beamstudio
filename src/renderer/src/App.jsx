@@ -725,7 +725,7 @@ function ProgramsPage({
 function DynamicScenesPageV2({
     config, activeDynamicScene, onSelectScene, fixtures, setChannelValues,
     channelValues, liveColors, onToggleFixture, executeDmx, sendDmxBatch,
-    spatialEnergies
+    spatialEnergies, handleChannelChange
 }) {
     const dynamicScenes = config?.dynamicScenes || []
     const [audioReactive, setAudioReactive] = useState(false)

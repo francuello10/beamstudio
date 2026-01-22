@@ -11,11 +11,12 @@
 
 A diferencia de los softwares tradicionales toscos y complicados, BeamStudio te permite transformar tu espacio con un solo clic:
 
-*   **Mixer Pro:** Control total de RGB, Dimmer, Strobo y Funciones Especiales.
-*   **Motor D2XX de Alta Precisión:** Comunicación directa con el hardware sin intermediarios. Latencia ultra-baja (< 2ms) para una respuesta instantánea.
+*   **Mixer Pro:** Control total de RGB, Dimmer, Strobo y Funciones Especiales. Incluye botones "MAX" para cada canal y bloqueo de selección para evitar errores en vivo.
+*   **Motor D2XX de Alta Precisión:** Comunicación directa con el hardware sin intermediarios. Latencia ultra-baja (<2ms) para una respuesta instantánea.
 *   **Ambilight TV:** Sincroniza tus luces con lo que pasa en tu monitor, creando una experiencia inmersiva para gaming o cine.
-*   **Audio Reactive:** Tus luces bailan al ritmo de la música analizando el espectro de audio en tiempo real.
-*   **Escenas Dinámicas:** Efectos fluidos (Vibe, Aurora, Rainbow, Fire) que mutan automáticamente.
+*   **Audio Reactive:** Tus luces bailan al ritmo de la música analizando el espectro de audio en tiempo real. El Live Output ahora muestra flashes en los golpes de bajo.
+*   **Escenas Dinámicas:** Efectos fluidos (Vibe, Aurora, Rainbow, Fire) que mutan automáticamente, con Master Dimmer para control de brillo global.
+*   **AI Scene Generation:** Crea escenas de iluminación personalizadas describiendo el ambiente que querés. Powered by Google Gemini 2.0 Flash.
 
 ---
 

@@ -527,7 +527,11 @@ function startDynamicScene(sceneId) {
     dmxState.dynamicSceneFrame = 0
     dynamicSceneInterval = setInterval(() => {
         const color = scene.handler(dmxState.dynamicSceneFrame)
-        setAllFixturesColor(color.r, color.g, color.b, 255)
+        // Use current dimmer value instead of hardcoded 255
+        fixtures.forEach((f, i) => {
+            const currentDim = dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM]
+            setFixtureColor(i, color.r, color.g, color.b, currentDim)
+        })
         dmxState.dynamicSceneFrame++
         // broadcastColors() -> UI interval will handle this at 20Hz
     }, 1000 / 44) // Match DMX loop frequency

@@ -25,10 +25,16 @@ BeamStudio es una aplicación **Electron** de alto rendimiento construida con **
 ## 📡 Implementación DMX y Flujo de Datos
 
 ### Motor de Transmisión (Main Process)
-El archivo `src/main/index.js` gestiona el bucle de transmisión DMX. Hemos migrado de una comunicación serial estándar a **D2XX Direct Direct**, lo que nos permite:
+El archivo `src/main/index.js` gestiona el bucle de transmisión DMX. Hemos migrado de una comunicación serial estándar a **D2XX Direct**, lo que nos permite:
 *   Bucle de alta precisión con un **MAB (Mark After Break)** calibrado por hardware.
 *   Latencia inferior a 2ms.
 *   Uso de un buffer de 512 canales con **Cero-Copia** de memoria durante la transmisión.
+
+### Integración con Google Gemini (AI)
+La generación de escenas por IA se realiza a través de un IPC handler en el proceso principal:
+*   El Renderer envía prompts vía `window.ai.generate()`.
+*   El Main Process ejecuta las llamadas a la API de `@google/generative-ai` con `apiVersion: 'v1beta'` para compatibilidad con modelos experimentales como Gemini 2.0 Flash.
+*   La respuesta JSON se parsea en el Renderer para crear escenas dinámicas o presets de color.
 
 ### Flujo de Datos de Usuario
 1.  **Interacción:** El Renderer (React) llama a `window.dmx.setChannelAsync()` (unidireccional para máximo performance en faders).
