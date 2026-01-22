@@ -1,9 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-
-// Validated limits to prevent hardware jitter
-const DMX_MIN = 0
-const DMX_MAX = 255
+import { HARDWARE_CONSTRAINTS } from '../shared/hardware-specs'
 
 // DMX API - StickTec 1019 P6 Mode
 const dmxAPI = {
@@ -15,17 +12,16 @@ const dmxAPI = {
 
     /**
      * High Performance - Async one-way calls
-     * @ai-constraints Mantener el throttle en 22-25ms para evitar saturación del chip FTDI.
-     * No intentar enviar ráfagas (bursts) asincrónicas fuera de este ciclo.
+     * @ai-constraints Usar HARDWARE_CONSTRAINTS para validación.
      */
     setChannelAsync: (channel, value) => {
-        const val = Math.max(DMX_MIN, Math.min(DMX_MAX, value))
+        const val = Math.max(HARDWARE_CONSTRAINTS.DMX_MIN, Math.min(HARDWARE_CONSTRAINTS.DMX_MAX, value))
         ipcRenderer.send('dmx:setChannelAsync', { channel, value: val })
     },
     setChannelsAsync: (fixtureIds, channels) => {
         const validated = {}
         Object.entries(channels).forEach(([ch, val]) => {
-            validated[ch] = Math.max(DMX_MIN, Math.min(DMX_MAX, val))
+            validated[ch] = Math.max(HARDWARE_CONSTRAINTS.DMX_MIN, Math.min(HARDWARE_CONSTRAINTS.DMX_MAX, val))
         })
         ipcRenderer.send('dmx:setChannelsAsync', { fixtureIds, channels: validated })
     },

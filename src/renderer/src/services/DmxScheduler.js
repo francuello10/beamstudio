@@ -1,5 +1,5 @@
 import { useDmxStore } from '../store/dmxStore'
-import { CORE_REFRESH_RATE } from '../utils/hardware-specs'
+import { CORE_TIMING } from '../../../shared/hardware-specs'
 
 /**
  * DmxScheduler - Elite Independent Transmission Engine
@@ -7,24 +7,23 @@ import { CORE_REFRESH_RATE } from '../utils/hardware-specs'
  * Provides a stable DMX signal regardless of UI performance.
  * Implements value-diffing to minimize IPC saturation.
  * 
- * @ai-constraints Mantener el throttle en 22-25ms (44Hz) para evitar el jitter del chip FTDI.
+ * @ai-constraints Mantener el throttle según CORE_TIMING.THROTTLE_BUFFER_MS para evitar jitter.
  * No intentar enviar ráfagas (bursts) asincrónicas fuera de este ciclo.
  */
 class DmxScheduler {
     constructor() {
         this.intervalId = null
         this.lastSentValues = {}
-        this.hz = CORE_REFRESH_RATE
     }
 
     start() {
         if (this.intervalId) return
 
-        console.log(`[DmxScheduler] Initializing engine at ${this.hz}Hz...`)
+        console.log(`[DmxScheduler] Initializing engine with ${CORE_TIMING.THROTTLE_BUFFER_MS}ms throttle...`)
 
         this.intervalId = setInterval(() => {
             this.tick()
-        }, 1000 / this.hz)
+        }, CORE_TIMING.THROTTLE_BUFFER_MS)
     }
 
     stop() {
@@ -51,7 +50,6 @@ class DmxScheduler {
         if (selectedIds.length === 0) return
 
         // 3. Send via IPC (Preload API)
-        // We use the async one-way call for maximum performance
         if (window.dmx?.setChannelsAsync) {
             window.dmx.setChannelsAsync(selectedIds, currentUniverse)
 

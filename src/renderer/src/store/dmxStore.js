@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { HARDWARE_CONSTRAINTS } from '../../../shared/hardware-specs'
 
 /**
  * useDmxStore - Atomic State Architecture for Ultra-Low Latency DMX Control

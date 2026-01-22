@@ -39,11 +39,11 @@ function App() {
     const setConfig = useConfigStore(state => state.setConfig)
 
     // DMX Store
-    const setFixtures = useDmxStore(state => state.setFixtures)
-    const setLiveColors = useDmxStore(state => state.setLiveColors)
+    const setDmxFixtures = useDmxStore(state => state.setDmxFixtures)
+    const setPixelMapBuffer = useDmxStore(state => state.setPixelMapBuffer)
     const resetDmx = useDmxStore(state => state.resetDmx)
-    const dmxUniverseState = useDmxStore(state => state.dmxUniverseState)
     const dispatchDmxAttributeUpdate = useDmxStore(state => state.dispatchDmxAttributeUpdate)
+    const dispatchBulkDmxUpdate = useDmxStore(state => state.dispatchBulkDmxUpdate)
 
     // Audio Store
     const setSpatialEnergies = useAudioStore(state => state.setSpatialEnergies)
@@ -54,33 +54,27 @@ function App() {
             const cfg = await window.dmx?.getConfig()
             if (cfg) setConfig(cfg)
             const fxt = await window.dmx?.getFixtures()
-            if (fxt) setFixtures(fxt.map(f => ({ ...f, selected: true })))
+            if (fxt) setDmxFixtures(fxt.map(f => ({ ...f, selected: true })))
         })()
-    }, [setConfig, setFixtures])
+    }, [setConfig, setDmxFixtures])
 
     // Global Subscriptions
     useEffect(() => {
-        const h1 = window.dmx?.onColorsUpdated(setLiveColors)
+        const h1 = window.dmx?.onColorsUpdated(setPixelMapBuffer)
         return () => h1 && h1()
-    }, [setLiveColors])
+    }, [setPixelMapBuffer])
 
     // Global Actions
     const handleReset = useCallback(async () => {
         resetDmx()
-        await window.dmx?.setChannel('func', 0)
-        await window.dmx?.setChannel('spd', 0)
-        await window.dmx?.setChannel('flash', 0)
         await window.dmx?.reset()
     }, [resetDmx])
 
     const handleMeet = useCallback(async () => {
         const warmWhite = { red: 255, green: 180, blue: 120, func: 0, spd: 0, flash: 0, dim: 150 }
-        useDmxStore.getState().setBulkChannelValues(warmWhite)
+        dispatchBulkDmxUpdate(warmWhite)
         await window.dmx?.colorMacro('WARM')
-        const dmxFixtures = useDmxStore.getState().dmxFixtures
-        const selectedIds = dmxFixtures.filter(f => f.selected).map(f => f.id)
-        await window.dmx?.setChannels(selectedIds, warmWhite)
-    }, [])
+    }, [dispatchBulkDmxUpdate])
 
     const handleIntenseFlash = useCallback(() => {
         window.dmx?.intenseFlash()
