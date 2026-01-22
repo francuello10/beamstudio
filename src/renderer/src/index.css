@@ -76,6 +76,8 @@ body {
     color: var(--text);
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
+    user-select: none;
+    /* Prevent accidental text selection during show operation */
 }
 
 ::-webkit-scrollbar {
@@ -156,7 +158,8 @@ body {
 .nav-item.active {
     background: linear-gradient(135deg, #FF0055 0%, #FF3377 100%);
     color: white;
-    box-shadow: 0 4px 15px rgba(255, 0, 85, 0.4);
+    box-shadow: 0 4px 20px rgba(255, 0, 85, 0.6);
+    filter: drop-shadow(0 0 10px rgba(255, 0, 85, 0.4));
 }
 
 .nav-item svg {
@@ -626,7 +629,37 @@ body {
 }
 
 .fader-track-container.rounded:hover .fader-thumb {
-    transform: translate(-50%, 50%) scale(1.2);
+    transform: translate(-50%, 50%) scale(1.4);
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+    background: #fff;
+}
+
+.fader-reset-btn {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.fader-reset-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.value-badge.success {
+    border: 1px solid #00ff8844;
+    color: #00ff88;
+}
+
+.value-badge.warning {
+    border: 1px solid #ffcc0044;
+    color: #ffcc00;
 }
 
 .fader-value {

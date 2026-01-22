@@ -1,0 +1,202 @@
+:root {
+    --fader-bg: rgba(255, 255, 255, 0.03);
+    --fader-border: rgba(255, 255, 255, 0.08);
+    --fader-track-bg: rgba(0, 0, 0, 0.4);
+    --fader-handle-bg: #ffffff;
+    --tooltip-bg: rgba(0, 0, 0, 0.9);
+    --color-precision: #00f2fe;
+    /* Cyan for Shift */
+    --color-fast: #ffcc00;
+    /* Amber for Alt */
+}
+
+.vertical-fader-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 8px;
+    background: var(--fader-bg);
+    border: 1px solid var(--fader-border);
+    border-radius: 16px;
+    backdrop-filter: blur(12px);
+    width: 80px;
+    height: 380px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    user-select: none;
+    touch-action: none;
+    outline: none;
+}
+
+/* Keyboard Focus State */
+.vertical-fader-container:focus-visible {
+    border-color: #fff;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2), 0 8px 32px rgba(0, 0, 0, 0.6);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.vertical-fader-container.hover-active {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* Modifier States */
+.vertical-fader-container.mod-shift {
+    border-color: var(--color-precision);
+}
+
+.vertical-fader-container.mod-alt {
+    border-color: var(--color-fast);
+}
+
+.fader-label-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.fader-value-display {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+}
+
+.fader-label-text {
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    opacity: 0.8;
+}
+
+.fader-track-area {
+    flex: 1;
+    width: 24px;
+    position: relative;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+}
+
+.fader-track-base {
+    width: 8px;
+    height: 100%;
+    background: var(--fader-track-bg);
+    border-radius: 4px;
+    position: relative;
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+.fader-ticks {
+    position: absolute;
+    top: 0;
+    left: -12px;
+    right: -12px;
+    height: 100%;
+    pointer-events: none;
+}
+
+.tick {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.fader-fill-neon {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    border-radius: 4px;
+}
+
+.fader-handle-pro {
+    position: absolute;
+    left: 50%;
+    width: 40px;
+    height: 12px;
+    background: #1a1a1a;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+    z-index: 10;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 1);
+}
+
+.handle-line-glow {
+    width: 100%;
+    height: 2px;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+/* Tooltip & Tags */
+.fader-tooltip {
+    position: absolute;
+    right: -50px;
+    background: var(--tooltip-bg);
+    color: #fff;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 700;
+    pointer-events: none;
+    white-space: nowrap;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.8);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    z-index: 50;
+    font-family: 'SF Mono', monospace;
+}
+
+.tooltip-shift {
+    border-color: var(--color-precision);
+    color: var(--color-precision);
+}
+
+.tooltip-alt {
+    border-color: var(--color-fast);
+    color: var(--color-fast);
+}
+
+.mod-tag {
+    font-size: 8px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.fader-quick-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+}
+
+.quick-btn {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 8px;
+    font-weight: 900;
+    padding: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.quick-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.3);
+}

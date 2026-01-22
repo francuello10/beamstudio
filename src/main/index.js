@@ -469,6 +469,8 @@ function broadcastColors() {
 let dmxInterval = null
 let uiInterval = null // Throttled UI update
 let lastInternalColors = fixtures.map(() => ({ r: 0, g: 0, b: 0 }))
+let frameCount = 0
+let lastFpsTime = performance.now()
 
 // Optimized color comparison (no JSON.stringify overhead)
 function colorsChanged() {
@@ -497,6 +499,18 @@ function startDMXLoop() {
                 for (let i = 0; i < 512; i++) dmxDriver.setChannel(i, dmxState.channels[i])
             }
             dmxDriver.transmit()
+            frameCount++
+
+            // Telemetry: Every 1 second
+            const now = performance.now()
+            if (now - lastFpsTime >= 1000) {
+                const actualHz = Math.round((frameCount * 1000) / (now - lastFpsTime))
+                BrowserWindow.getAllWindows().forEach(win => {
+                    win.webContents.send('dmx:telemetry', { actualHz })
+                })
+                frameCount = 0
+                lastFpsTime = now
+            }
         }, dmxMs)
     }
 

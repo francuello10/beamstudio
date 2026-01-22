@@ -122,16 +122,22 @@ const LivePreviewContainer = React.memo(({ fixtures, masterDimmer, activeProgram
                     const isBlackout = liveColors && liveColors[i]?.blackout
                     const finalC = isBlackout ? { r: 0, g: 0, b: 0 } : c
 
+                    // Strobe simulation logic
+                    const strobeVal = channelValues?.flash || 0
+                    let strobeVisible = true
+                    if (strobeVal > 10) {
+                        // Map 0-255 DMX to a frequency (e.g., 1Hz to 30Hz)
+                        const freq = (strobeVal / 255) * 29 + 1
+                        const period = 1000 / freq
+                        strobeVisible = (Date.now() % period) < (period / 2)
+                    }
+
                     // Audio Boost Calculation
-                    // If spatialEnergies are provided, boost the corresponding bars
-                    // Left fixtures (index 0-2), Center/Bass (3-4?), Right (5-7) - depends on mapping
-                    // Basic 50/50 split for now: < half is Left, > half is Right. 
                     const isLeft = i < fixtures.length / 2;
                     const energy = spatialEnergies ? (isLeft ? spatialEnergies.left : spatialEnergies.right) : 0;
-                    // Apply center (bass) boost to all or center fixtures? Let's add bass to everything slightly.
                     const bassKick = spatialEnergies ? spatialEnergies.center : 0;
 
-                    const boostHeight = energy * 40; // up to 40% height increase
+                    const boostHeight = energy * 40;
                     const boostOpacity = Math.max(0, Math.min(1, energy * 2));
 
                     return (
@@ -139,12 +145,15 @@ const LivePreviewContainer = React.memo(({ fixtures, masterDimmer, activeProgram
                             <motion.div
                                 className="preview-bar"
                                 animate={{
-                                    backgroundColor: `rgb(${finalC.r * dimFactor}, ${finalC.g * dimFactor}, ${finalC.b * dimFactor})`,
-                                    boxShadow: `0 0 ${40 * dimFactor}px rgba(${finalC.r}, ${finalC.g}, ${finalC.b}, ${0.6 * dimFactor})`,
-                                    // Subtle scale on beat
+                                    backgroundColor: strobeVisible
+                                        ? `rgb(${finalC.r * dimFactor}, ${finalC.g * dimFactor}, ${finalC.b * dimFactor})`
+                                        : 'rgb(0,0,0)',
+                                    boxShadow: strobeVisible
+                                        ? `0 0 ${40 * dimFactor}px rgba(${finalC.r}, ${finalC.g}, ${finalC.b}, ${0.6 * dimFactor})`
+                                        : 'none',
                                     scaleY: 1 + (bassKick * 0.1),
                                 }}
-                                transition={{ duration: 0.05 }} // Snappy audio response
+                                transition={{ duration: 0.05 }}
                                 style={{
                                     width: '100%',
                                     flex: 1,
@@ -171,7 +180,7 @@ const LivePreviewContainer = React.memo(({ fixtures, masterDimmer, activeProgram
                                         }} />
                                         {/* White Flash Strobe on Kick */}
                                         <motion.div
-                                            animate={{ opacity: bassKick > 0.8 ? 0.8 : 0 }}
+                                            animate={{ opacity: (bassKick > 0.8 && strobeVisible) ? 0.8 : 0 }}
                                             transition={{ duration: 0.05 }}
                                             style={{
                                                 position: 'absolute',
@@ -245,11 +254,36 @@ const Sidebar = React.memo(({ activePage, setActivePage, darkMode, onToggleTheme
 
 function Header({ onReset, onMeet, onFlash, windowOps, isSyncing }) {
     const [isFlashing, setIsFlashing] = useState(false)
+    const [offHoldProgress, setOffHoldProgress] = useState(0)
+    const offTimerRef = useRef(null)
 
     const handleFlash = async () => {
         setIsFlashing(true)
         await onFlash()
         setTimeout(() => setIsFlashing(false), 1500)
+    }
+
+    const startOffTimer = () => {
+        let start = Date.now()
+        const duration = 1000 // 1 second hold
+        setOffHoldProgress(0)
+
+        offTimerRef.current = setInterval(() => {
+            const elapsed = Date.now() - start
+            const progress = Math.min(100, (elapsed / duration) * 100)
+            setOffHoldProgress(progress)
+
+            if (elapsed >= duration) {
+                clearInterval(offTimerRef.current)
+                onReset()
+                setOffHoldProgress(0)
+            }
+        }, 30)
+    }
+
+    const cancelOffTimer = () => {
+        clearInterval(offTimerRef.current)
+        setOffHoldProgress(0)
     }
 
     return (
@@ -288,10 +322,27 @@ function Header({ onReset, onMeet, onFlash, windowOps, isSyncing }) {
 
                 <motion.button
                     className="off-button"
-                    onClick={onReset}
+                    onMouseDown={startOffTimer}
+                    onMouseUp={cancelOffTimer}
+                    onMouseLeave={cancelOffTimer}
+                    onTouchStart={startOffTimer}
+                    onTouchEnd={cancelOffTimer}
+                    style={{ position: 'relative', overflow: 'hidden' }}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
+                    title="Hold 1s to Turn Off"
                 >
+                    {/* Visual Progress Overlay */}
+                    <div style={{
+                        position: 'absolute',
+                        left: 0,
+                        bottom: 0,
+                        height: '100%',
+                        width: `${offHoldProgress}%`,
+                        background: 'rgba(255, 0, 0, 0.3)',
+                        transition: 'width 0.03s linear',
+                        pointerEvents: 'none'
+                    }} />
                     <PowerOff size={18} />
                     <span>OFF</span>
                 </motion.button>
@@ -323,6 +374,14 @@ const VerticalFader = React.memo(({ channel, value, onChange, config }) => {
         onChange(channel.id, Math.round(percent * 255))
     }, [channel.id, onChange])
 
+    const handleWheel = useCallback((e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        const delta = e.deltaY > 0 ? -5 : 5 // Scroll up increases, down decreases
+        const newValue = Math.max(0, Math.min(255, value + delta))
+        onChange(channel.id, newValue)
+    }, [channel.id, value, onChange])
+
     const handleMouseDown = useCallback((e) => { isDragging.current = true; updateValue(e) }, [updateValue])
 
     useEffect(() => {
@@ -340,7 +399,7 @@ const VerticalFader = React.memo(({ channel, value, onChange, config }) => {
     const percent = (value / 255) * 100
 
     return (
-        <div className="fader-strip aesthetic">
+        <div className="fader-strip aesthetic" onWheel={handleWheel}>
             <div className="fader-track-container rounded" ref={sliderRef} onMouseDown={handleMouseDown}>
                 <div className="fader-track-bg" />
                 <div
@@ -1118,7 +1177,7 @@ function AudioPage({ fixtures, liveColors, onToggleFixture, channelValues, sendD
                                             borderRadius: '2px'
                                         }}
                                         animate={{ height: `${Math.max(4, val * 100)}%` }}
-                                        transition={{ type: 'tween', duration: 0.05 }}
+                                        transition={{ type: 'spring', stiffness: 300, damping: 20 }}
                                     />
                                 ))}
                             </div>
@@ -1163,7 +1222,7 @@ function AudioPage({ fixtures, liveColors, onToggleFixture, channelValues, sendD
                                             borderRadius: '2px'
                                         }}
                                         animate={{ height: `${Math.max(4, val * 100)}%` }}
-                                        transition={{ type: 'tween', duration: 0.05 }}
+                                        transition={{ type: 'spring', stiffness: 300, damping: 20 }}
                                     />
                                 ))}
                             </div>
@@ -1516,12 +1575,19 @@ function SystemPage({ config, fixtures, setFixtures, onUpdatePerformance }) {
     const [serialPorts, setSerialPorts] = useState([])
     const [isConnecting, setIsConnecting] = useState(false)
     const [connectionStatus, setConnectionStatus] = useState(null)
+    const [actualHz, setActualHz] = useState(0)
 
     // AI Configuration
     const [geminiKey, setGeminiKey] = useState(localStorage.getItem('RENDERER_VITE_GEMINI_API_KEY') || '')
     const [geminiModel, setGeminiModel] = useState(localStorage.getItem('RENDERER_VITE_GEMINI_MODEL') || 'gemini-2.0-flash-exp')
     const [keySaved, setKeySaved] = useState(false)
     const [testStatus, setTestStatus] = useState(null) // { type: 'success' | 'error', message: string } | null
+
+    useEffect(() => {
+        const handleTelemetry = (data) => setActualHz(data.actualHz)
+        const cleanup = window.dmx?.onTelemetryUpdated(handleTelemetry)
+        return () => cleanup && cleanup()
+    }, [])
 
     const handleSaveKey = () => {
         localStorage.setItem('RENDERER_VITE_GEMINI_API_KEY', geminiKey)
@@ -1560,6 +1626,12 @@ function SystemPage({ config, fixtures, setFixtures, onUpdatePerformance }) {
     }
 
     const handleModeChange = async (newMode) => {
+        // Safety Guard: Don't switch if it's the same mode or without confirmation
+        if (newMode === dmxMode) return;
+
+        const confirmSwitch = window.confirm(`WARNING: Switching DMX mode to ${newMode.toUpperCase()} will momentarily interrupt communication. Proceed?`);
+        if (!confirmSwitch) return;
+
         setIsConnecting(true)
         setConnectionStatus(null)
         try {
@@ -1745,7 +1817,12 @@ function SystemPage({ config, fixtures, setFixtures, onUpdatePerformance }) {
                         <div className="perf-control">
                             <div className="label-row">
                                 <span>DMX Refresh Rate</span>
-                                <span className="value-badge">{perf.dmxHz} Hz</span>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    <span className={`value-badge ${actualHz > 0 && Math.abs(actualHz - perf.dmxHz) > 5 ? 'warning' : 'success'}`} style={{ background: actualHz > 0 ? (Math.abs(actualHz - perf.dmxHz) <= 2 ? '#00ff8844' : '#ffcc0044') : undefined }}>
+                                        {actualHz} Hz Real
+                                    </span>
+                                    <span className="value-badge">{perf.dmxHz} Hz Set</span>
+                                </div>
                             </div>
                             <input type="range" min="10" max="44" value={perf.dmxHz} onChange={(e) => handleUpdate('dmxHz', e.target.value)} />
                             <span className="hint">Lower this if lights flicker or lag (USB congestion).</span>
