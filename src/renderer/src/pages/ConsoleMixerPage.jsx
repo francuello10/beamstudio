@@ -7,33 +7,40 @@ import { CHANNELS, QUICK_COLORS } from '../utils/constants'
 import { useDmxStore } from '../store/dmxStore'
 import { useConfigStore } from '../store/configStore'
 
-const MixerPage = ({ onReset }) => {
+/**
+ * ConsoleMixerPage - Grand Master Control Center
+ * 
+ * Provides professional-grade attribute control for the active fixture patch.
+ * Implements industry-standard naming conventions (Console Mixer / Grand Master).
+ */
+const ConsoleMixerPage = ({ onReset }) => {
     // Stores
-    const channelValues = useDmxStore(state => state.channelValues)
-    const setChannelValue = useDmxStore(state => state.setChannelValue)
-    const setBulkChannelValues = useDmxStore(state => state.setBulkChannelValues)
-    const fixtures = useDmxStore(state => state.fixtures)
-    const setFixtures = useDmxStore(state => state.setFixtures)
+    const dmxUniverseState = useDmxStore(state => state.dmxUniverseState)
+    const dispatchDmxAttributeUpdate = useDmxStore(state => state.dispatchDmxAttributeUpdate)
+    const dispatchBulkDmxUpdate = useDmxStore(state => state.dispatchBulkDmxUpdate)
+    const dmxFixtures = useDmxStore(state => state.dmxFixtures)
+    const setDmxFixtures = useDmxStore(state => state.setDmxFixtures)
     const toggleFixtureSelection = useDmxStore(state => state.toggleFixtureSelection)
-    const liveColors = useDmxStore(state => state.liveColors)
+    const pixelMapBuffer = useDmxStore(state => state.pixelMapBuffer)
+
     const config = useConfigStore(state => state.config)
     const incrementPending = useConfigStore(state => state.incrementPending)
     const decrementPending = useConfigStore(state => state.decrementPending)
 
     const handleChannelChange = useCallback((channel, value) => {
-        setChannelValue(channel, value)
-    }, [setChannelValue])
+        dispatchDmxAttributeUpdate(channel, value)
+    }, [dispatchDmxAttributeUpdate])
 
     const handleSelectedChannelsChange = useCallback((channels) => {
-        setBulkChannelValues(channels)
-    }, [setBulkChannelValues])
+        dispatchBulkDmxUpdate(channels)
+    }, [dispatchBulkDmxUpdate])
 
     const applyColor = (color) => {
         const updates = { red: color.r, green: color.g, blue: color.b }
         handleSelectedChannelsChange(updates)
 
         // Rapid IPC send for colors
-        const selectedIds = fixtures.filter(f => f.selected).map(f => f.id)
+        const selectedIds = dmxFixtures.filter(f => f.selected).map(f => f.id)
         if (selectedIds.length > 0) {
             window.dmx?.setChannelsAsync(selectedIds, updates)
         }
@@ -45,7 +52,7 @@ const MixerPage = ({ onReset }) => {
             const res = await window.dmx?.toggleBlackout(fixtureId)
             if (res?.success && !res.blackout) {
                 // Restore current mix
-                await window.dmx?.setChannels([fixtureId], channelValues)
+                await window.dmx?.setChannels([fixtureId], dmxUniverseState)
             }
         } finally {
             decrementPending()
@@ -56,13 +63,13 @@ const MixerPage = ({ onReset }) => {
         <div className="mixer-page">
             <div className="mixer-console">
                 <section className="console-section faders-section">
-                    <h3><Sliders size={16} /> Console Master</h3>
+                    <h3><Sliders size={16} /> GrandMaster Console</h3>
                     <div className="faders-grid">
                         {CHANNELS.map(ch => (
                             <VerticalFader
                                 key={ch.id}
                                 channel={ch}
-                                value={channelValues[ch.id]}
+                                value={dmxUniverseState[ch.id]}
                                 onChange={handleChannelChange}
                                 config={config}
                             />
@@ -72,7 +79,7 @@ const MixerPage = ({ onReset }) => {
 
                 <div className="console-bottom">
                     <div className="glass-card colors-card">
-                        <h3>Quick Colors</h3>
+                        <h3>Quick Palettes</h3>
                         <div className="colors-grid">
                             {QUICK_COLORS.map(c => (
                                 <button
@@ -87,9 +94,9 @@ const MixerPage = ({ onReset }) => {
                     </div>
 
                     <div className="glass-card fixtures-card">
-                        <h3>Fixtures Selection</h3>
+                        <h3>Fixture Patch</h3>
                         <div className="fixtures-list horizontal">
-                            {fixtures.map(f => (
+                            {dmxFixtures.map(f => (
                                 <div
                                     key={f.id}
                                     className={`fixture-pill ${f.selected ? 'active' : ''}`}
@@ -106,13 +113,13 @@ const MixerPage = ({ onReset }) => {
 
             <div className="mixer-sidebar">
                 <div className="glass-card color-wheel-card" style={{ marginBottom: '20px' }}>
-                    <h3>Color Palette</h3>
+                    <h3>Color Selector</h3>
                     <ColorWheel onChange={applyColor} size={220} />
                 </div>
 
                 <LivePreviewContainer
-                    fixtures={fixtures}
-                    masterDimmer={channelValues.dim}
+                    fixtures={dmxFixtures}
+                    masterDimmer={dmxUniverseState.dim}
                     onToggleFixture={onToggleFixture}
                 />
             </div>
@@ -120,4 +127,4 @@ const MixerPage = ({ onReset }) => {
     )
 }
 
-export default MixerPage
+export default ConsoleMixerPage

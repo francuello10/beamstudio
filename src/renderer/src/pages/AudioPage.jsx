@@ -8,20 +8,20 @@ import { useAudioStore } from '../store/audioStore'
 
 const AudioPage = () => {
     // Stores
-    const fixtures = useDmxStore(state => state.fixtures)
-    const liveColors = useDmxStore(state => state.liveColors)
-    const channelValues = useDmxStore(state => state.channelValues)
+    const dmxFixtures = useDmxStore(state => state.dmxFixtures)
+    const pixelMapBuffer = useDmxStore(state => state.pixelMapBuffer)
+    const dmxUniverseState = useDmxStore(state => state.dmxUniverseState)
     const toggleBlackout = useDmxStore(state => state.toggleBlackout)
-    const sendLiveColors = useDmxStore(state => state.sendLiveColors)
+    const sendPixelMapBuffer = useDmxStore(state => state.sendPixelMapBuffer)
 
-    const setSpatialEnergies = useAudioStore(state => state.setSpatialEnergies)
+    const setAudioTelemetryDSP = useAudioStore(state => state.setAudioTelemetryDSP)
     const setAudioData = useAudioStore(state => state.setAudioData)
 
     // Core Engine
     const {
         start, stop, active, detectedGenre, autoGenre, setAutoGenre,
         manualGenre, setManualGenre, telemetry, visualizerData
-    } = useSystemAudio(sendLiveColors, null, setSpatialEnergies)
+    } = useSystemAudio(sendPixelMapBuffer, null, setAudioTelemetryDSP)
 
     // Sync store with hook data
     React.useEffect(() => {
@@ -210,8 +210,8 @@ const AudioPage = () => {
             </div>
             <div className="audio-sidebar">
                 <LivePreviewContainer
-                    fixtures={fixtures}
-                    masterDimmer={channelValues.dim}
+                    fixtures={dmxFixtures}
+                    masterDimmer={dmxUniverseState.dim}
                     onToggleFixture={toggleBlackout}
                 />
             </div>

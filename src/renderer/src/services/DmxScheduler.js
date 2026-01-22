@@ -36,12 +36,12 @@ class DmxScheduler {
 
     tick() {
         const state = useDmxStore.getState()
-        const currentValues = state.channelValues
-        const fixtures = state.fixtures
+        const currentUniverse = state.dmxUniverseState
+        const fixtures = state.dmxFixtures
 
         // 1. Check if values have changed (Dirty-Checking)
-        const hasChanged = Object.keys(currentValues).some(
-            key => currentValues[key] !== this.lastSentValues[key]
+        const hasChanged = Object.keys(currentUniverse).some(
+            key => currentUniverse[key] !== this.lastSentValues[key]
         )
 
         if (!hasChanged) return
@@ -53,10 +53,10 @@ class DmxScheduler {
         // 3. Send via IPC (Preload API)
         // We use the async one-way call for maximum performance
         if (window.dmx?.setChannelsAsync) {
-            window.dmx.setChannelsAsync(selectedIds, currentValues)
+            window.dmx.setChannelsAsync(selectedIds, currentUniverse)
 
             // 4. Update memory for next tick
-            this.lastSentValues = { ...currentValues }
+            this.lastSentValues = { ...currentUniverse }
         }
     }
 }

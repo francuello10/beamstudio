@@ -3,7 +3,7 @@ import { Sliders, Music, Lightbulb, Monitor, Settings, Sun, Moon } from 'lucide-
 import { useConfigStore } from '../store/configStore'
 
 const navItems = [
-    { id: 'mixer', icon: Sliders, label: 'Mixer' },
+    { id: 'mixer', icon: Sliders, label: 'Console Mixer' },
     { id: 'programs', icon: Lightbulb, label: 'Programs' },
     { id: 'dynamic', icon: Sparkles, icon_override: true, label: 'Dynamic' }, // We'll fix Sparkles import
     { id: 'audio', icon: Music, label: 'Audio' },

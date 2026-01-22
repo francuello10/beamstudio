@@ -1,8 +1,16 @@
 import { create } from 'zustand'
 
+/**
+ * useAudioStore - High-Bandwidth Telemetry & DSP State
+ * 
+ * Centralized store for real-time audio analysis and telemetry.
+ * 
+ * @ai-constraints Este store recibe ráfagas de alta frecuencia (60Hz). 
+ * No utilizar para estados que requieran persistencia pesada o lógica de negocio compleja.
+ */
 export const useAudioStore = create((set) => ({
     // State
-    spatialEnergies: { left: 0, center: 0, right: 0 },
+    audioTelemetryDSP: { left: 0, center: 0, right: 0 },
     telemetry: {
         lowEndDynamics: 0,
         transientDensity: 0,
@@ -19,7 +27,7 @@ export const useAudioStore = create((set) => ({
     energyFactor: 1,
 
     // Actions
-    setSpatialEnergies: (spatialEnergies) => set({ spatialEnergies }),
+    setAudioTelemetryDSP: (audioTelemetryDSP) => set({ audioTelemetryDSP }),
 
     setAudioData: (data) => set((state) => ({
         ...state,

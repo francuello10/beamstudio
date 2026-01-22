@@ -6,7 +6,7 @@ import Sidebar from './components/Sidebar'
 import Header from './components/Header'
 
 // Pages
-import MixerPage from './pages/MixerPage'
+import ConsoleMixerPage from './pages/ConsoleMixerPage'
 import ProgramsPage from './pages/ProgramsPage'
 import DynamicScenesPageV2 from './pages/DynamicScenesPageV2'
 import AudioPage from './pages/AudioPage'
@@ -42,8 +42,8 @@ function App() {
     const setFixtures = useDmxStore(state => state.setFixtures)
     const setLiveColors = useDmxStore(state => state.setLiveColors)
     const resetDmx = useDmxStore(state => state.resetDmx)
-    const channelValues = useDmxStore(state => state.channelValues)
-    const setChannelValue = useDmxStore(state => state.setChannelValue)
+    const dmxUniverseState = useDmxStore(state => state.dmxUniverseState)
+    const dispatchDmxAttributeUpdate = useDmxStore(state => state.dispatchDmxAttributeUpdate)
 
     // Audio Store
     const setSpatialEnergies = useAudioStore(state => state.setSpatialEnergies)
@@ -77,8 +77,8 @@ function App() {
         const warmWhite = { red: 255, green: 180, blue: 120, func: 0, spd: 0, flash: 0, dim: 150 }
         useDmxStore.getState().setBulkChannelValues(warmWhite)
         await window.dmx?.colorMacro('WARM')
-        const fixtures = useDmxStore.getState().fixtures
-        const selectedIds = fixtures.filter(f => f.selected).map(f => f.id)
+        const dmxFixtures = useDmxStore.getState().dmxFixtures
+        const selectedIds = dmxFixtures.filter(f => f.selected).map(f => f.id)
         await window.dmx?.setChannels(selectedIds, warmWhite)
     }, [])
 
@@ -88,13 +88,13 @@ function App() {
 
     const renderPage = () => {
         switch (activePage) {
-            case 'mixer': return <MixerPage onReset={handleReset} />
+            case 'mixer': return <ConsoleMixerPage onReset={handleReset} />
             case 'programs': return <ProgramsPage />
             case 'dynamic': return <DynamicScenesPageV2 />
             case 'audio': return <AudioPage />
             case 'ambilight': return <AmbilightPage />
             case 'system': return <SystemPage />
-            default: return <MixerPage />
+            default: return <ConsoleMixerPage />
         }
     }
 

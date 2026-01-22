@@ -7,11 +7,11 @@ import { useConfigStore } from '../store/configStore'
 
 const ProgramsPage = () => {
     // Stores
-    const channelValues = useDmxStore(state => state.channelValues)
-    const setChannelValue = useDmxStore(state => state.setChannelValue)
+    const dmxUniverseState = useDmxStore(state => state.dmxUniverseState)
+    const dispatchDmxAttributeUpdate = useDmxStore(state => state.dispatchDmxAttributeUpdate)
     const activeProgram = useDmxStore(state => state.activeProgram)
     const setActiveProgram = useDmxStore(state => state.setActiveProgram)
-    const fixtures = useDmxStore(state => state.fixtures)
+    const dmxFixtures = useDmxStore(state => state.dmxFixtures)
     const toggleBlackout = useDmxStore(state => state.toggleBlackout)
     const config = useConfigStore(state => state.config)
 
@@ -19,14 +19,14 @@ const ProgramsPage = () => {
 
     const handleProgramChange = async (value) => {
         setActiveProgram(value)
-        setChannelValue('func', value)
-        if ((channelValues?.dim || 0) < 255) {
-            setChannelValue('dim', 255)
+        dispatchDmxAttributeUpdate('func', value)
+        if ((dmxUniverseState?.dim || 0) < 255) {
+            dispatchDmxAttributeUpdate('dim', 255)
         }
     }
 
     const handleSpeed = (speed) => {
-        setChannelValue('spd', speed)
+        dispatchDmxAttributeUpdate('spd', speed)
     }
 
     // Determine active range name
@@ -98,13 +98,13 @@ const ProgramsPage = () => {
                                 type="range"
                                 min="0"
                                 max="255"
-                                value={channelValues?.spd || 0}
+                                value={dmxUniverseState?.spd || 0}
                                 onChange={(e) => handleSpeed(parseInt(e.target.value))}
                                 className="big-slider"
                                 style={{ flex: 1, height: '12px' }}
                             />
                             <div className="value-display" style={{ minWidth: '60px' }}>
-                                <span className="value-number" style={{ fontSize: '1.5rem' }}>{channelValues?.spd || 0}</span>
+                                <span className="value-number" style={{ fontSize: '1.5rem' }}>{dmxUniverseState?.spd || 0}</span>
                             </div>
                         </div>
                     </div>
@@ -130,15 +130,15 @@ const ProgramsPage = () => {
                     <span className="control-label">MASTER BRIGHTNESS</span>
                     <input
                         type="range" min="0" max="255"
-                        value={channelValues.dim}
-                        onChange={(e) => setChannelValue('dim', parseInt(e.target.value))}
+                        value={dmxUniverseState.dim}
+                        onChange={(e) => dispatchDmxAttributeUpdate('dim', parseInt(e.target.value))}
                         className="big-slider"
                         style={{ height: '8px', marginBottom: '12px' }}
                     />
                 </div>
                 <LivePreviewContainer
-                    fixtures={fixtures}
-                    masterDimmer={channelValues.dim}
+                    fixtures={dmxFixtures}
+                    masterDimmer={dmxUniverseState.dim}
                     activeProgram={activeProgram}
                     onToggleFixture={toggleBlackout}
                 />

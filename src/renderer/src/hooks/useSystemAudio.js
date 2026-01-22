@@ -10,7 +10,7 @@ import { multiplyBrightness, GENRE_PROFILES } from '../utils/palettes'
  * - Smart Vibe Engine (Auto Genre Detection) with LATIN/CINEMA
  * - Pro Visuals Data Export
  * - Modifier Mode (accepts inputColors and modulates brightness)
- * - NEW: spatialEnergies export for Ambilight Boost
+ * - NEW: audioTelemetryDSP export for Ambilight Boost
  */
 export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate = null) => {
     // === STATE ===
@@ -32,8 +32,8 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
     const [modifierMode, setModifierMode] = useState(false)
     const [energyFactor, setEnergyFactor] = useState(1)
 
-    // NEW V5.0: Spatial energies for Ambilight boost
-    const [spatialEnergies, setSpatialEnergies] = useState({
+    // NEW V5.0: Audio telemetry DSP for Ambilight boost
+    const [audioTelemetryDSP, setAudioTelemetryDSP] = useState({
         left: 0,
         center: 0,
         right: 0
@@ -78,7 +78,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
         setActive(false)
         setDetectedGenre('UNKNOWN')
         setVisualizerData({ left: new Array(16).fill(0), right: new Array(16).fill(0), bass: 0 })
-        setSpatialEnergies({ left: 0, center: 0, right: 0 })
+        setAudioTelemetryDSP({ left: 0, center: 0, right: 0 })
         window.audio?.stop()
     }, [])
 
@@ -248,7 +248,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                     center: bassEnergy,
                     right: midHighR
                 }
-                setSpatialEnergies(energies)
+                setAudioTelemetryDSP(energies)
                 if (onAudioUpdate) onAudioUpdate(energies)
 
                 // Color mapping based on genre (auto or manual)
@@ -346,7 +346,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
         // Modifier Mode
         modifierMode, setModifierMode, energyFactor,
         // NEW V5.0: Spatial energies for Ambilight
-        spatialEnergies,
+        audioTelemetryDSP,
         // Telemetry
         telemetry,
         // Visualizer

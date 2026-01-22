@@ -9,11 +9,11 @@ const LivePreviewContainer = React.memo(({ fixtures, masterDimmer, activeProgram
     const [simFrame, setSimFrame] = useState(0)
 
     // Subscribe to stores
-    const liveColors = useDmxStore(state => state.liveColors)
-    const channelValues = useDmxStore(state => state.channelValues)
-    const spatialEnergies = useAudioStore(state => state.spatialEnergies)
+    const pixelMapBuffer = useDmxStore(state => state.pixelMapBuffer)
+    const dmxUniverseState = useDmxStore(state => state.dmxUniverseState)
+    const audioTelemetryDSP = useAudioStore(state => state.audioTelemetryDSP)
 
-    const colors = liveColors || (fixtures || []).map(() => ({ r: 0, g: 0, b: 0 }))
+    const colors = pixelMapBuffer || (fixtures || []).map(() => ({ r: 0, g: 0, b: 0 }))
 
     useEffect(() => {
         let animationId
@@ -32,7 +32,7 @@ const LivePreviewContainer = React.memo(({ fixtures, masterDimmer, activeProgram
             <div className="preview-header">
                 <img src={logoImg} alt="BeamStudio" className="preview-logo" />
                 <span>Live Output {activeProgram ? '(Auto)' : ''}</span>
-                {spatialEnergies && (
+                {audioTelemetryDSP && (
                     <motion.span
                         animate={{ opacity: [0.4, 1, 0.4], scale: [1, 1.1, 1] }}
                         transition={{ duration: 0.5, repeat: Infinity }}
@@ -61,11 +61,11 @@ const LivePreviewContainer = React.memo(({ fixtures, masterDimmer, activeProgram
                     }
 
                     const dimFactor = (masterDimmer !== undefined ? masterDimmer : 255) / 255
-                    const isBlackout = liveColors && liveColors[i]?.blackout
+                    const isBlackout = pixelMapBuffer && pixelMapBuffer[i]?.blackout
                     const finalC = isBlackout ? { r: 0, g: 0, b: 0 } : c
 
                     // Strobe simulation logic
-                    const strobeVal = channelValues?.flash || 0
+                    const strobeVal = dmxUniverseState?.flash || 0
                     let strobeVisible = true
                     if (strobeVal > 10) {
                         const freq = (strobeVal / 255) * 29 + 1
@@ -75,8 +75,8 @@ const LivePreviewContainer = React.memo(({ fixtures, masterDimmer, activeProgram
 
                     // Audio Boost Calculation
                     const isLeft = i < fixtures.length / 2;
-                    const energy = spatialEnergies ? (isLeft ? spatialEnergies.left : spatialEnergies.right) : 0;
-                    const bassKick = spatialEnergies ? spatialEnergies.center : 0;
+                    const energy = audioTelemetryDSP ? (isLeft ? audioTelemetryDSP.left : audioTelemetryDSP.right) : 0;
+                    const bassKick = audioTelemetryDSP ? audioTelemetryDSP.center : 0;
 
                     return (
                         <div key={fixture.id} className="preview-strip-wrapper" style={{ position: 'relative', height: '100%', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -102,7 +102,7 @@ const LivePreviewContainer = React.memo(({ fixtures, masterDimmer, activeProgram
                                     overflow: 'hidden'
                                 }}
                             >
-                                {spatialEnergies && (
+                                {audioTelemetryDSP && (
                                     <>
                                         {/* Color Fill */}
                                         <div style={{

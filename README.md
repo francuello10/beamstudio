@@ -1,61 +1,58 @@
-# ⚡ BeamStudio - Control DMX Aesthetic
+# ⚡ BeamStudio v3.0 - Atomic State DMX Controller
 
 [![GitHub Repo](https://img.shields.io/badge/GitHub-Repo-blue?logo=github)](https://github.com/francuello10/beamstudio)
 [![DMX Precision](https://img.shields.io/badge/DMX-Ultra--Precision-red)](https://github.com/francuello10/beamstudio)
 
-**BeamStudio** es una interfaz moderna, potente y de alta fidelidad diseñada para el control total de sistemas de iluminación DMX512. Creada por **Fran Cuello**, está optimizada para setups donde la estética, la velocidad de respuesta y la facilidad de uso son prioridad.
+**BeamStudio** is a next-generation high-fidelity interface for professional DMX512 control. Re-engineered with an **Atomic State Architecture**, it transforms standard hardware into a precision lighting instrument.
 
 ---
 
-## 🌟 ¿Qué podés hacer con BeamStudio?
+## 🌟 Professional Features
 
-A diferencia de los softwares tradicionales toscos y complicados, BeamStudio te permite transformar tu espacio con un solo clic:
+BeamStudio v3.0 introduces industry-standard workflows and a professional semantic lexicon:
 
-*   **Mixer Pro:** Control total de RGB, Dimmer, Strobo y Funciones Especiales. Incluye botones "MAX" para cada canal y bloqueo de selección para evitar errores en vivo.
-*   **Motor D2XX de Alta Precisión:** Comunicación directa con el hardware sin intermediarios. Latencia ultra-baja (<2ms) para una respuesta instantánea.
-*   **Ambilight TV:** Sincroniza tus luces con lo que pasa en tu monitor, creando una experiencia inmersiva para gaming o cine.
-*   **Audio Reactive:** Tus luces bailan al ritmo de la música analizando el espectro de audio en tiempo real. El Live Output ahora muestra flashes en los golpes de bajo.
-*   **Escenas Dinámicas:** Efectos fluidos (Vibe, Aurora, Rainbow, Fire) que mutan automáticamente, con Master Dimmer para control de brillo global.
-*   **AI Scene Generation:** Crea escenas de iluminación personalizadas describiendo el ambiente que querés. Powered by Google Gemini 2.0 Flash.
-
----
-
-## 🚀 Instalación Hiper-Simplificada (Windows)
-
-Ahora configurar tus luces es más fácil que nunca:
-
-1.  **Instalá el Driver FTDI:** Descargá el ejecutable oficial de [FTDI Drivers](https://ftdichip.com/drivers/vcp-drivers/) e instalalo.
-2.  **Instalá BeamStudio:** Bajá el `.exe` desde la sección de *Releases* e instalalo.
-3.  **Encendé la Magia:** Conectá tu interfaz, abrí la app, andá a **System** y hacé clic en **ACTIVATE HIGH PRECISION DMX**.
-
-*¡No más configuraciones complejas de puertos COM o puentes externos! (Aunque seguimos soportando Art-Net si preferís usar QLC+).*
+*   **Console Mixer (GrandMaster):** Professional-grade attribute control with built-in Fixture Patch management.
+*   **Atomic State Architecture:** Ultra-low latency state management (<2ms) designed for high-bandwidth telemetry.
+*   **Hardware Shielding:** Native protection for FTDI chip stability, locking the universe capacity to 33 bytes (32+1).
+*   **Audio Telemetry DSP:** True stereo 2.1 spectral analysis with real-time visual feedback.
+*   **AI Procedural Scenes:** Generate complex lighting code on-the-fly using Google Gemini 2.0 Flash.
 
 ---
 
-## 🛠️ Hardware Recomendado
-*   **Interfaz:** KMTronic USB DMX512 (o cualquier interfaz basada en chips FTDI).
-*   **Luces:** Barras LED o focos DMX. Recomendamos las American Pro (StickTec 1019).
-*   **Direccionamiento (P6 Mode):**
-    *   **Barra 1:** Canales 1-7 (Start `d001`).
-    *   **Barra 2:** Canales 8-14 (Start `d008`).
-    *   **Barra 3:** Canales 15-21 (Start `d015`).
+## 📡 Professional Nomenclature
+
+The system uses a standardized technical lexicon:
+| Concept | Technical Name | Responsibility |
+| :--- | :--- | :--- |
+| **State** | `dmxUniverseState` | The 512-channel logical buffer. |
+| **Patch** | `dmxFixtures` | Logical representation of physical hardware. |
+| **Buffer** | `pixelMapBuffer` | High-frequency intermediate color data. |
+| **DSP** | `audioTelemetryDSP` | Spectral analysis results for reactive effects. |
 
 ---
 
-## 💻 Desarrollo y Contribución
+## 🚀 Installation & Setup
 
-Si sos desarrollador y querés jugar con el código:
-1. Cloná el repo: `git clone https://github.com/francuello10/beamstudio.git`
-2. Instalá dependencias: `npm install`
-3. Ejecutá en dev: `npm run dev`
-
----
-
-## 🔗 Links Útiles
-*   **Autor:** [Fran Cuello](https://github.com/francuello10)
-*   **Repositorio:** [BeamStudio en GitHub](https://github.com/francuello10/beamstudio)
-*   **Guía Detallada:** [Configuración en Windows](docs/WINDOWS_SETUP.md)
+1.  **Drivers:** Install official [FTDI VCP Drivers](https://ftdichip.com/drivers/vcp-drivers/).
+2.  **Deployment:** Substantially faster ignition via the **Console Mixer**.
+3.  **Activation:** Navigate to **System** and engage the **Ultra-Low Latency D2XX Driver**.
 
 ---
 
-*Desarrollado con ❤️ por Fran Cuello para setups aesthetic.*
+## 🛠️ Hardware Requirements
+*   **Interface:** KMTronic USB DMX512 or any FTDI D2XX-compatible hardware.
+*   **Fixtures:** StickTec 1019 (American Pro) or standard RGB DMX units.
+*   **Addressing (P6 Mode):**
+    *   **Bar 1:** Start `d001` (Ch 1-7)
+    *   **Bar 2:** Start `d008` (Ch 8-14)
+    *   **Bar 3:** Start `d015` (Ch 15-21)
+
+---
+
+## 🔗 Links
+*   **Author:** [Fran Cuello](https://github.com/francuello10)
+*   **Source:** [GitHub Repository](https://github.com/francuello10/beamstudio)
+*   **Technical Docs:** [Developer README](README_DEV.md)
+
+---
+*Desarrollado con ❤️ por Fran Cuello para setups de alta fidelidad.*

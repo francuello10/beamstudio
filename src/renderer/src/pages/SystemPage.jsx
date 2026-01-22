@@ -10,8 +10,8 @@ const SystemPage = () => {
     const config = useConfigStore(state => state.config)
     const setConfig = useConfigStore(state => state.setConfig)
     const updatePerformance = useConfigStore(state => state.updatePerformance)
-    const fixtures = useDmxStore(state => state.fixtures)
-    const setFixtures = useDmxStore(state => state.setFixtures)
+    const dmxFixtures = useDmxStore(state => state.dmxFixtures)
+    const setDmxFixtures = useDmxStore(state => state.setDmxFixtures)
 
     const funcRanges = config?.funcRanges || []
     const perf = config?.performance || { dmxHz: 40, uiHz: 20, ambiFps: 30 }
@@ -61,7 +61,7 @@ const SystemPage = () => {
     }, [])
 
     const handleRename = (id, newName) => {
-        setFixtures(fixtures.map(f => f.id === id ? { ...f, name: newName } : f))
+        setDmxFixtures(dmxFixtures.map(f => f.id === id ? { ...f, name: newName } : f))
     }
 
     const handleModeChange = async (newMode) => {
@@ -175,7 +175,7 @@ const SystemPage = () => {
                 <div className="glass-card hardware-card">
                     <h3>Fixtures Config</h3>
                     <div className="fixtures-config-list" style={{ marginTop: '10px' }}>
-                        {fixtures.map(f => (
+                        {dmxFixtures.map(f => (
                             <div key={f.id} className="fixture-config-row" style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '8px' }}>
                                 <img src={sticktecImg} alt="bar" style={{ width: '30px', opacity: 0.5 }} />
                                 <input

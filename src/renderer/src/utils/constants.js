@@ -4,7 +4,7 @@ import {
 } from 'lucide-react'
 
 export const NAV_ITEMS = [
-    { id: 'mixer', icon: Sliders, label: 'Mixer' },
+    { id: 'mixer', icon: Sliders, label: 'Console Mixer' },
     { id: 'programs', icon: Lightbulb, label: 'Programs' },
     { id: 'dynamic', icon: Sparkles, label: 'Dynamic' },
     { id: 'audio', icon: Music, label: 'Audio' },

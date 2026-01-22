@@ -13,18 +13,18 @@ import { compileAIResponse, executeAIScene } from '../utils/aiRuntime'
 
 const DynamicScenesPageV2 = () => {
     // Stores
-    const channelValues = useDmxStore(state => state.channelValues)
-    const setChannelValue = useDmxStore(state => state.setChannelValue)
-    const setBulkChannelValues = useDmxStore(state => state.setBulkChannelValues)
+    const dmxUniverseState = useDmxStore(state => state.dmxUniverseState)
+    const dispatchDmxAttributeUpdate = useDmxStore(state => state.dispatchDmxAttributeUpdate)
+    const dispatchBulkDmxUpdate = useDmxStore(state => state.dispatchBulkDmxUpdate)
     const activeDynamicScene = useDmxStore(state => state.activeDynamicScene)
     const setActiveDynamicScene = useDmxStore(state => state.setActiveDynamicScene)
-    const fixtures = useDmxStore(state => state.fixtures)
-    const liveColors = useDmxStore(state => state.liveColors)
+    const dmxFixtures = useDmxStore(state => state.dmxFixtures)
+    const pixelMapBuffer = useDmxStore(state => state.pixelMapBuffer)
     const toggleBlackout = useDmxStore(state => state.toggleBlackout)
     const config = useConfigStore(state => state.config)
 
-    const spatialEnergies = useAudioStore(state => state.spatialEnergies)
-    const setSpatialEnergies = useAudioStore(state => state.setSpatialEnergies)
+    const audioTelemetryDSP = useAudioStore(state => state.audioTelemetryDSP)
+    const setAudioTelemetryDSP = useAudioStore(state => state.setAudioTelemetryDSP)
     const setAudioData = useAudioStore(state => state.setAudioData)
 
     const dynamicScenes = config?.dynamicScenes || []
@@ -56,10 +56,10 @@ const DynamicScenesPageV2 = () => {
         }
     }, [])
 
-    const sendDmxBatch = useCallback((colors) => {
+    const dispatchPixelMapUpdate = useCallback((colors) => {
         window.ambilight?.setColorsAsync({ colors })
         // We use dmxStore to track live colors for preview
-        useDmxStore.getState().setLiveColors(colors)
+        useDmxStore.getState().setPixelMapBuffer(colors)
     }, [])
 
     const handleAiGenerate = async (promptType = "surprise") => {
@@ -141,9 +141,9 @@ const DynamicScenesPageV2 = () => {
     }
 
     const { start: startAudio, stop: stopAudio, energyFactor, visualizerData, setModifierMode } = useSystemAudio(
-        sendDmxBatch,
+        dispatchPixelMapUpdate,
         colorsForAudio,
-        setSpatialEnergies
+        setAudioTelemetryDSP
     )
 
     useEffect(() => {
@@ -175,7 +175,7 @@ const DynamicScenesPageV2 = () => {
             setPreviewScene(null)
             if (!audioReactive) {
                 const flag = FLAGS[flagId]
-                if (flag) sendDmxBatch(flag.colors)
+                if (flag) dispatchPixelMapUpdate(flag.colors)
             }
         }
     }
@@ -185,11 +185,11 @@ const DynamicScenesPageV2 = () => {
         if (activeDynamicScene === sceneId) {
             await window.dmx?.dynamicScene(sceneId, false)
             setActiveDynamicScene(null)
-            setBulkChannelValues({ red: 0, green: 0, blue: 0, func: 0, spd: 0, flash: 0, dim: 0 })
+            dispatchBulkDmxUpdate({ red: 0, green: 0, blue: 0, func: 0, spd: 0, flash: 0, dim: 0 })
         } else {
             await window.dmx?.dynamicScene(sceneId, true)
             setActiveDynamicScene(sceneId)
-            setChannelValue('dim', 255)
+            dispatchDmxAttributeUpdate('dim', 255)
         }
     }
 
@@ -339,15 +339,15 @@ const DynamicScenesPageV2 = () => {
                         <span className="control-label">MASTER DIMMER</span>
                         <input
                             type="range" min="0" max="255"
-                            value={channelValues.dim}
-                            onChange={(e) => setChannelValue('dim', parseInt(e.target.value))}
+                            value={dmxUniverseState.dim}
+                            onChange={(e) => dispatchDmxAttributeUpdate('dim', parseInt(e.target.value))}
                             className="big-slider"
                             style={{ height: '8px', marginBottom: '12px' }}
                         />
                     </div>
                     <LivePreviewContainer
-                        fixtures={fixtures}
-                        masterDimmer={channelValues.dim}
+                        fixtures={dmxFixtures}
+                        masterDimmer={dmxUniverseState.dim}
                         onToggleFixture={toggleBlackout}
                     />
 

@@ -9,14 +9,14 @@ import { useAudioStore } from '../store/audioStore'
 
 const AmbilightPage = () => {
     // Stores
-    const fixtures = useDmxStore(state => state.fixtures)
-    const channelValues = useDmxStore(state => state.channelValues)
-    const liveColors = useDmxStore(state => state.liveColors)
+    const dmxFixtures = useDmxStore(state => state.dmxFixtures)
+    const dmxUniverseState = useDmxStore(state => state.dmxUniverseState)
+    const pixelMapBuffer = useDmxStore(state => state.pixelMapBuffer)
     const toggleBlackout = useDmxStore(state => state.toggleBlackout)
-    const sendLiveColors = useDmxStore(state => state.sendLiveColors)
+    const sendPixelMapBuffer = useDmxStore(state => state.sendPixelMapBuffer)
 
-    const spatialEnergies = useAudioStore(state => state.spatialEnergies)
-    const setSpatialEnergies = useAudioStore(state => state.setSpatialEnergies)
+    const audioTelemetryDSP = useAudioStore(state => state.audioTelemetryDSP)
+    const setAudioTelemetryDSP = useAudioStore(state => state.setAudioTelemetryDSP)
 
     // Local State
     const [sources, setSources] = useState([])
@@ -24,13 +24,13 @@ const AmbilightPage = () => {
     const [audioBoost, setAudioBoost] = useState(false)
 
     // GPU Extraction Engine
-    const { start: startAmbilight, stop: stopAmbilight, capturing, colors: previewColors, isMono, setIsMono } = useGpuAmbilight(sendLiveColors, spatialEnergies)
+    const { start: startAmbilight, stop: stopAmbilight, capturing, colors: previewColors, isMono, setIsMono } = useGpuAmbilight(sendPixelMapBuffer, audioTelemetryDSP)
 
     // Audio Boost Engine
     const { start: startAudio, stop: stopAudio, setModifierMode, energyFactor } = useSystemAudio(
-        sendLiveColors,
+        sendPixelMapBuffer,
         previewColors,
-        setSpatialEnergies
+        setAudioTelemetryDSP
     )
 
     useEffect(() => {
@@ -166,8 +166,8 @@ const AmbilightPage = () => {
             </div>
             <div className="ambilight-sidebar">
                 <LivePreviewContainer
-                    fixtures={fixtures}
-                    masterDimmer={channelValues.dim}
+                    fixtures={dmxFixtures}
+                    masterDimmer={dmxUniverseState.dim}
                     onToggleFixture={toggleBlackout}
                 />
             </div>
