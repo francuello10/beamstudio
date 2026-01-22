@@ -1,13 +1,27 @@
 import { useEffect, useRef, useState } from 'react'
+import { lerpColor } from '../utils/palettes'
 
 /**
- * useGpuAmbilight - Ultra-low CPU Screen Sync
- * Uses GPU downscaling via OffscreenCanvas (3x1)
+ * useGpuAmbilight v5.0 - Ultra-smooth GPU Screen Sync
+ * 
+ * Features:
+ * - GPU downscaling via OffscreenCanvas (3x1)
+ * - LERP color smoothing (anti-flicker)
+ * - Spatial Boost integration (audio-reactive brightness)
  */
-export const useGpuAmbilight = (sendDmxBatch) => {
+export const useGpuAmbilight = (sendDmxBatch, audioEnergies = null) => {
     const [capturing, setCapturing] = useState(false)
     const [isMono, setIsMono] = useState(false)
+    const [boostEnabled, setBoostEnabled] = useState(false)
+    const [boostFactor, setBoostFactor] = useState(0.8) // 0.5-1.5 range
     const [colors, setColors] = useState([
+        { r: 0, g: 0, b: 0 },
+        { r: 0, g: 0, b: 0 },
+        { r: 0, g: 0, b: 0 }
+    ])
+
+    // Smoothed colors for LERP
+    const smoothedColors = useRef([
         { r: 0, g: 0, b: 0 },
         { r: 0, g: 0, b: 0 },
         { r: 0, g: 0, b: 0 }
@@ -15,7 +29,14 @@ export const useGpuAmbilight = (sendDmxBatch) => {
 
     // Ref for mode to avoid closure staleness in requestAnimationFrame
     const isMonoRef = useRef(false)
+    const boostEnabledRef = useRef(false)
+    const boostFactorRef = useRef(0.8)
+    const audioEnergiesRef = useRef(null)
+
     useEffect(() => { isMonoRef.current = isMono }, [isMono])
+    useEffect(() => { boostEnabledRef.current = boostEnabled }, [boostEnabled])
+    useEffect(() => { boostFactorRef.current = boostFactor }, [boostFactor])
+    useEffect(() => { audioEnergiesRef.current = audioEnergies }, [audioEnergies])
 
     const videoRef = useRef(null)
     const canvasRef = useRef(null)
@@ -29,6 +50,7 @@ export const useGpuAmbilight = (sendDmxBatch) => {
         if (requestRef.current) cancelAnimationFrame(requestRef.current)
         setCapturing(false)
         setColors([{ r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }])
+        smoothedColors.current = [{ r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }]
         window.ambilight?.stop()
     }
 
@@ -82,20 +104,44 @@ export const useGpuAmbilight = (sendDmxBatch) => {
                 ctx.drawImage(videoRef.current, 0, 0, 3, 1)
                 const data = ctx.getImageData(0, 0, 3, 1).data
 
-                let newColors;
+                let rawColors
                 if (isMonoRef.current) {
                     const monoColor = { r: data[4], g: data[5], b: data[6] }
-                    newColors = [monoColor, monoColor, monoColor]
+                    rawColors = [monoColor, monoColor, monoColor]
                 } else {
-                    newColors = [
+                    rawColors = [
                         { r: data[0], g: data[1], b: data[2] },
                         { r: data[4], g: data[5], b: data[6] },
                         { r: data[8], g: data[9], b: data[10] }
                     ]
                 }
 
-                setColors(newColors)
-                sendDmxBatch(newColors)
+                // === SPATIAL BOOST (Audio-reactive brightness) ===
+                if (boostEnabledRef.current && audioEnergiesRef.current) {
+                    const energies = audioEnergiesRef.current
+                    const bf = boostFactorRef.current
+
+                    rawColors = rawColors.map((c, i) => {
+                        const energy = i === 0 ? energies.left : (i === 1 ? energies.center : energies.right)
+                        const multiplier = 1 + (energy * bf)
+                        return {
+                            r: Math.min(255, Math.round(c.r * multiplier)),
+                            g: Math.min(255, Math.round(c.g * multiplier)),
+                            b: Math.min(255, Math.round(c.b * multiplier))
+                        }
+                    })
+                }
+
+                // === LERP SMOOTHING (Anti-flicker) ===
+                const lerpFactor = 0.25 // Colors chase target at 25% per frame
+                smoothedColors.current = smoothedColors.current.map((current, i) =>
+                    lerpColor(current, rawColors[i], lerpFactor)
+                )
+
+                const finalColors = smoothedColors.current
+
+                setColors(finalColors)
+                sendDmxBatch(finalColors)
                 requestRef.current = requestAnimationFrame(process)
             }
             process()
@@ -111,5 +157,10 @@ export const useGpuAmbilight = (sendDmxBatch) => {
         return () => stop()
     }, [])
 
-    return { start, stop, capturing, colors, isMono, setIsMono }
+    return {
+        start, stop, capturing, colors,
+        isMono, setIsMono,
+        boostEnabled, setBoostEnabled,
+        boostFactor, setBoostFactor
+    }
 }

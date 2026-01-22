@@ -1,0 +1,229 @@
+/* ==========================================================================
+   Dynamic Page V2 (Slim Redesign)
+   ========================================================================== */
+
+.dynamic-page-v2 {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    /* Fill available space, don't exceed it */
+    overflow: hidden;
+    background: var(--bg);
+}
+
+.dynamic-workspace {
+    display: flex;
+    flex: 1;
+    /* Takes available space above chat */
+    overflow: hidden;
+    gap: 0;
+    /* No gap between panels, borders handle separation */
+}
+
+/* Left Panel: Scenes & Controls */
+.dynamic-console {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-y: hidden;
+    /* Main container hidden, inner components scroll */
+    padding: 0;
+}
+
+.dynamic-scroll-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    background: radial-gradient(circle at center, rgba(255, 51, 102, 0.02) 0%, transparent 70%);
+}
+
+/* Hide scrollbar completely for the "wow" effect if content is expected to fit */
+.dynamic-scroll-area::-webkit-scrollbar {
+    width: 0px;
+    background: transparent;
+}
+
+.section-header-slim {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.section-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Right Panel: Preview & Status */
+.dynamic-preview-sidebar {
+    width: 300px;
+    /* Fixed width */
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--border-color);
+    background: rgba(0, 0, 0, 0.2);
+    padding: 16px;
+    gap: 16px;
+    overflow-y: auto;
+}
+
+/* Bottom Floating AI Bar - Fixed to bottom of console */
+.ai-floating-container {
+    padding: 10px 20px;
+    padding-bottom: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(to top, var(--bg) 0%, transparent 100%);
+    z-index: 50;
+    margin-top: -10px;
+    /* Overlap slightly with scroll area to save space */
+}
+
+.ai-input-pill {
+    display: flex;
+    align-items: center;
+    background: rgba(30, 30, 30, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 20px;
+    /* Match standard rounded corner theme */
+    padding: 0 24px;
+    width: 100%;
+    max-width: 900px;
+    /* Slightly wider */
+    height: 60px;
+    gap: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(20px);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ai-input-pill:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 8px 40px rgba(var(--accent-rgb), 0.2);
+    transform: translateY(-2px);
+    background: rgba(40, 40, 40, 0.9);
+}
+
+.ai-chat-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 15px;
+    font-weight: 500;
+    outline: none;
+    min-width: 0;
+    /* Prevents overflow */
+}
+
+.ai-chat-input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.surprise-btn-small {
+    background: linear-gradient(90deg, #FF0080 0%, #7928CA 100%);
+    border: none;
+    border-radius: 9999px;
+    padding: 8px 16px;
+    color: white;
+    font-weight: 700;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+    height: 32px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.surprise-btn-small:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 20px rgba(255, 0, 128, 0.4);
+}
+
+.active-scene-banner {
+    background: linear-gradient(90deg, rgba(255, 51, 102, 0.15) 0%, transparent 100%);
+    border: 1px solid rgba(255, 51, 102, 0.3);
+    padding: 16px;
+    border-radius: 16px;
+    /* Rounded borders */
+    margin-bottom: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Slim Scene Card (Restored & Updated) */
+.scene-card-slim {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px 12px;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    /* Larger radius */
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    text-align: center;
+}
+
+.scene-card-slim:hover {
+    background: var(--nav-hover-bg);
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: translateY(-4px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+}
+
+.scene-card-slim.active {
+    background: linear-gradient(135deg, rgba(255, 51, 102, 0.1) 0%, rgba(121, 40, 202, 0.1) 100%);
+    border-color: var(--accent);
+    box-shadow: 0 4px 20px rgba(255, 51, 102, 0.2);
+}
+
+.scene-card-slim .scene-name {
+    font-size: 16px;
+    /* Larger text */
+    font-weight: 700;
+    margin-top: 10px;
+}
+
+.scene-card-slim .scene-desc {
+    font-size: 11px;
+    color: var(--text-secondary);
+    display: none;
+}
+
+.scene-card-slim:hover .scene-desc {
+    display: block;
+    position: absolute;
+    bottom: 8px;
+    left: 0;
+    right: 0;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 4px;
+}
+
+.scenes-grid-slim {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    /* Dramatically larger cards */
+    gap: 16px;
+}

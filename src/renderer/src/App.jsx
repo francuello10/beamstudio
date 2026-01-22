@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
     Sliders, Music, Lightbulb, Monitor, Settings, PowerOff,
     Zap, Check, Sun, Moon, Play, Square, Volume2,
-    Waves, Flame, Droplets, Sparkles, Radio, PartyPopper, Heart, CloudSun
+    Waves, Flame, Droplets, Sparkles, Radio, PartyPopper, Heart, CloudSun,
+    AlertCircle, X, Minus
 } from 'lucide-react'
 
 import logoImg from './assets/logo.png'
@@ -12,6 +13,10 @@ import dmxControllerImg from './assets/dmx-controller.png'
 
 import { useGpuAmbilight } from './hooks/useGpuAmbilight'
 import { useSystemAudio } from './hooks/useSystemAudio'
+import { DYNAMIC_SCENES, FLAGS } from './utils/palettes'
+import { generateLightScene } from './services/geminiService'
+import { compileAIResponse, executeAIScene } from './utils/aiRuntime'
+import './dynamic.css' // Dynamic Page V2 Styles
 
 // ============================================================================
 // Navigation
@@ -64,7 +69,7 @@ const quickColors = [
 // Live Preview Container (Optimized)
 // ============================================================================
 
-const LivePreviewContainer = React.memo(({ fixtures, masterDimmer, activeProgram, overrideColors, liveColors, onToggleFixture }) => {
+const LivePreviewContainer = React.memo(({ fixtures, masterDimmer, activeProgram, overrideColors, liveColors, onToggleFixture, spatialEnergies }) => {
     const [simFrame, setSimFrame] = useState(0)
     const colors = liveColors || (fixtures || []).map(() => ({ r: 0, g: 0, b: 0 }))
 
@@ -85,6 +90,15 @@ const LivePreviewContainer = React.memo(({ fixtures, masterDimmer, activeProgram
             <div className="preview-header">
                 <img src={logoImg} alt="BeamStudio" className="preview-logo" />
                 <span>Live Output {activeProgram ? '(Auto)' : ''}</span>
+                {spatialEnergies && (
+                    <motion.span
+                        animate={{ opacity: [0.4, 1, 0.4], scale: [1, 1.1, 1] }}
+                        transition={{ duration: 0.5, repeat: Infinity }}
+                        style={{ marginLeft: 'auto', fontSize: '10px', color: 'var(--accent)', fontWeight: 800, letterSpacing: '1px' }}
+                    >
+                        SOUND ACTIVE
+                    </motion.span>
+                )}
             </div>
             <div className="preview-bars">
                 {fixtures?.map((fixture, i) => {
@@ -108,17 +122,68 @@ const LivePreviewContainer = React.memo(({ fixtures, masterDimmer, activeProgram
                     const isBlackout = liveColors && liveColors[i]?.blackout
                     const finalC = isBlackout ? { r: 0, g: 0, b: 0 } : c
 
+                    // Audio Boost Calculation
+                    // If spatialEnergies are provided, boost the corresponding bars
+                    // Left fixtures (index 0-2), Center/Bass (3-4?), Right (5-7) - depends on mapping
+                    // Basic 50/50 split for now: < half is Left, > half is Right. 
+                    const isLeft = i < fixtures.length / 2;
+                    const energy = spatialEnergies ? (isLeft ? spatialEnergies.left : spatialEnergies.right) : 0;
+                    // Apply center (bass) boost to all or center fixtures? Let's add bass to everything slightly.
+                    const bassKick = spatialEnergies ? spatialEnergies.center : 0;
+
+                    const boostHeight = energy * 40; // up to 40% height increase
+                    const boostOpacity = Math.max(0, Math.min(1, energy * 2));
+
                     return (
                         <div key={fixture.id} className="preview-strip-wrapper" style={{ position: 'relative', height: '100%', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                             <motion.div
                                 className="preview-bar"
                                 animate={{
                                     backgroundColor: `rgb(${finalC.r * dimFactor}, ${finalC.g * dimFactor}, ${finalC.b * dimFactor})`,
-                                    boxShadow: `0 0 ${40 * dimFactor}px rgba(${finalC.r}, ${finalC.g}, ${finalC.b}, ${0.6 * dimFactor})`
+                                    boxShadow: `0 0 ${40 * dimFactor}px rgba(${finalC.r}, ${finalC.g}, ${finalC.b}, ${0.6 * dimFactor})`,
+                                    // Subtle scale on beat
+                                    scaleY: 1 + (bassKick * 0.1),
                                 }}
-                                transition={{ duration: 0.1 }}
-                                style={{ width: '100%', flex: 1, borderRadius: '8px', marginBottom: '8px', opacity: isSelected ? 1 : 0.2 }}
+                                transition={{ duration: 0.05 }} // Snappy audio response
+                                style={{
+                                    width: '100%',
+                                    flex: 1,
+                                    borderRadius: '8px',
+                                    marginBottom: '8px',
+                                    opacity: isSelected ? 1 : 0.2,
+                                    position: 'relative',
+                                    overflow: 'hidden'
+                                }}
                             >
+                                {/* Audio overlay boost */}
+                                {spatialEnergies && (
+                                    <>
+                                        {/* Color Fill */}
+                                        <div style={{
+                                            position: 'absolute',
+                                            bottom: 0,
+                                            left: 0,
+                                            width: '100%',
+                                            height: `${bassKick * 100}%`,
+                                            background: 'linear-gradient(to top, rgba(255,255,255,0.4), transparent)',
+                                            opacity: 0.6,
+                                            transition: 'height 0.05s ease-out'
+                                        }} />
+                                        {/* White Flash Strobe on Kick */}
+                                        <motion.div
+                                            animate={{ opacity: bassKick > 0.8 ? 0.8 : 0 }}
+                                            transition={{ duration: 0.05 }}
+                                            style={{
+                                                position: 'absolute',
+                                                top: 0, left: 0, right: 0, bottom: 0,
+                                                background: 'white',
+                                                pointerEvents: 'none',
+                                                zIndex: 1
+                                            }}
+                                        />
+                                    </>
+                                )}
+
                                 <div className="preview-bar-icon">
                                     <div className={`preview-led ${c.r + c.g + c.b > 50 && !isBlackout ? 'on' : ''}`} />
                                 </div>
@@ -233,9 +298,9 @@ function Header({ onReset, onMeet, onFlash, windowOps, isSyncing }) {
             </div>
             {windowOps && (
                 <div className="window-controls">
-                    <button className="control-btn minimize" onClick={windowOps.minimize}>─</button>
-                    <button className="control-btn maximize" onClick={windowOps.toggleMaximize}>□</button>
-                    <button className="control-btn close" onClick={windowOps.close}>✕</button>
+                    <button className="control-btn minimize" onClick={windowOps.minimize}><Minus size={14} /></button>
+                    <button className="control-btn maximize" onClick={windowOps.toggleMaximize}><Square size={12} /></button>
+                    <button className="control-btn close" onClick={windowOps.close}><X size={14} /></button>
                 </div>
             )}
         </header>
@@ -293,6 +358,14 @@ const VerticalFader = React.memo(({ channel, value, onChange, config }) => {
                 <span className="fader-label" style={{ color: channel.color }}>{channel.label}</span>
                 <span className="fader-mode">{funcName || ''}</span>
 
+                <button
+                    className={`fader-reset-btn ${value === 255 ? 'active-max' : ''}`}
+                    onClick={(e) => { e.stopPropagation(); onChange(channel.id, 255); }}
+                    title="Maximizar (255)"
+                    style={{ marginBottom: '4px' }}
+                >
+                    MAX
+                </button>
                 <button
                     className={`fader-reset-btn ${value === 0 ? 'at-zero' : ''}`}
                     onClick={(e) => { e.stopPropagation(); onChange(channel.id, 0); }}
@@ -367,8 +440,10 @@ function ColorWheel({ onChange, size = 180 }) {
 
 function MixerPage({
     channelValues, handleChannelChange, handleSelectedChannelsChange, setChannelValues,
-    fixtures, setFixtures, config, onReset, liveColors, onToggleFixture, executeDmx
+    fixtures, setFixtures, config, onReset, liveColors, onToggleFixture, executeDmx,
+    spatialEnergies
 }) {
+    const [lockedSelection, setLockedSelection] = useState(false)
     const applyColor = async (color) => {
         if (color.r === 0 && color.g === 0 && color.b === 0) {
             onReset() // Use reset for Off
@@ -383,7 +458,28 @@ function MixerPage({
             <div className="mixer-console">
                 {/* Faders Section */}
                 <div className="console-section faders-section">
-                    <h3>Master Faders</h3>
+                    <div className="section-header-slim">
+                        <h3>Master Faders</h3>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <button
+                                className="surprise-btn-small"
+                                style={{ background: 'rgba(255,255,255,0.1)', height: '24px', fontSize: '10px' }}
+                                onClick={() => {
+                                    const allMax = channels.reduce((acc, ch) => ({ ...acc, [ch.id]: 255 }), {})
+                                    handleSelectedChannelsChange(allMax)
+                                }}
+                            >
+                                MAX ALL
+                            </button>
+                            <button
+                                className="surprise-btn-small"
+                                style={{ background: 'rgba(255,0,0,0.2)', color: '#ff4444', height: '24px', fontSize: '10px' }}
+                                onClick={onReset}
+                            >
+                                RESET ALL
+                            </button>
+                        </div>
+                    </div>
                     <div className="faders-grid">
                         {channels.map((ch) => (
                             <VerticalFader
@@ -437,13 +533,25 @@ function MixerPage({
                     </div>
 
                     <div className="console-card fixtures-card">
-                        <h3>Fixtures Selection</h3>
+                        <div className="section-header-slim">
+                            <h3>Fixtures Selection</h3>
+                            <button
+                                onClick={() => setLockedSelection(!lockedSelection)}
+                                className={`surprise-btn-small ${lockedSelection ? 'active' : ''}`}
+                                style={{ background: lockedSelection ? '#ff3366' : 'rgba(255,255,255,0.1)', height: '24px' }}
+                            >
+                                {lockedSelection ? 'LOCKED' : 'UNLOCK'}
+                            </button>
+                        </div>
                         <div className="fixtures-list horizontal">
                             {fixtures.map((f, i) => (
                                 <div
                                     key={f.id}
-                                    className={`fixture-pill ${f.selected ? 'selected' : ''}`}
-                                    onClick={() => setFixtures(fixtures.map(fx => fx.id === f.id ? { ...fx, selected: !fx.selected } : fx))}
+                                    className={`fixture-pill ${f.selected ? 'selected' : ''} ${lockedSelection ? 'locked' : ''}`}
+                                    onClick={() => {
+                                        if (lockedSelection) return;
+                                        setFixtures(fixtures.map(fx => fx.id === f.id ? { ...fx, selected: !fx.selected } : fx))
+                                    }}
                                 >
                                     <div className={`fixture-led ${f.selected ? 'on' : ''}`} />
                                     <span>{f.name}</span>
@@ -456,14 +564,21 @@ function MixerPage({
 
             {/* Right Sidebar for Live Output */}
             <div className="mixer-sidebar">
-                <LivePreviewContainer fixtures={fixtures} masterDimmer={channelValues.dim} liveColors={liveColors} onToggleFixture={onToggleFixture} />
+                <LivePreviewContainer
+                    fixtures={fixtures}
+                    masterDimmer={channelValues.dim}
+                    liveColors={liveColors}
+                    onToggleFixture={onToggleFixture}
+                    spatialEnergies={spatialEnergies}
+                />
             </div>
         </div>
     )
 }
 function ProgramsPage({
     config, activeProgram, onSelectProgram, channelValues, setChannelValues,
-    fixtures, liveColors, onToggleFixture, executeDmx, handleChannelChange
+    fixtures, liveColors, onToggleFixture, executeDmx, handleChannelChange,
+    spatialEnergies
 }) {
     const funcRanges = config?.funcRanges || []
 
@@ -492,7 +607,7 @@ function ProgramsPage({
                 {/* Main Slider Control */}
                 <div className="glass-card main-control">
                     <div className="control-header">
-                        <h3>�️ Selector de Programa (0-255)</h3>
+                        <h3><Sliders size={16} /> Selector de Programa (0-255)</h3>
                         <div className="value-display">
                             <span className="value-label">VALOR DMX</span>
                             <span className="value-number">{activeProgram || 0}</span>
@@ -522,7 +637,7 @@ function ProgramsPage({
 
                 {/* Programs Grid (Reference & Presets) */}
                 <div className="glass-card">
-                    <h3>📚 Guía de Rangos Completa (0-255)</h3>
+                    <h3><Lightbulb size={16} /> Guía de Rangos Completa (0-255)</h3>
                     <p className="subtitle">Click en un rango para ir a su valor inicial</p>
 
                     <div className="func-grid">
@@ -549,7 +664,7 @@ function ProgramsPage({
                 {/* Speed & Sound */}
                 <div className="programs-bottom">
                     <div className="glass-card speed-card">
-                        <h3>⚡ Velocidad (Channel SPD)</h3>
+                        <h3><Zap size={16} /> Velocidad (Channel SPD)</h3>
                         <div className="speed-control-container" style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '1rem' }}>
                             <input
                                 type="range"
@@ -567,7 +682,7 @@ function ProgramsPage({
                     </div>
 
                     <div className="glass-card sound-card">
-                        <h3>🔊 Modo Sound</h3>
+                        <h3><Music size={16} /> Modo Sound</h3>
                         <motion.button
                             className={`sound-btn ${activeProgram >= 220 ? 'active' : ''}`}
                             onClick={() => handleProgramChange(220)}
@@ -583,23 +698,182 @@ function ProgramsPage({
             </div>
 
             <div className="programs-sidebar">
+                <div className="sidebar-control-group">
+                    <span className="control-label">MASTER BRIGHTNESS</span>
+                    <input
+                        type="range" min="0" max="255"
+                        value={channelValues.dim}
+                        onChange={(e) => handleChannelChange('dim', parseInt(e.target.value))}
+                        className="big-slider"
+                        style={{ height: '8px', marginBottom: '12px' }}
+                    />
+                </div>
                 {/* Pass 'activeProgram' to preview to allow simulation */}
                 <LivePreviewContainer
                     fixtures={fixtures}
-                    masterDimmer={255}
+                    masterDimmer={channelValues.dim}
                     activeProgram={activeProgram}
                     liveColors={liveColors}
                     onToggleFixture={onToggleFixture}
+                    spatialEnergies={spatialEnergies}
                 />
             </div>
         </div>
     )
 }
 
-function DynamicScenesPage({ config, activeDynamicScene, onSelectScene, fixtures, setChannelValues, channelValues, liveColors, onToggleFixture, executeDmx }) {
+function DynamicScenesPageV2({
+    config, activeDynamicScene, onSelectScene, fixtures, setChannelValues,
+    channelValues, liveColors, onToggleFixture, executeDmx, sendDmxBatch,
+    spatialEnergies
+}) {
     const dynamicScenes = config?.dynamicScenes || []
+    const [audioReactive, setAudioReactive] = useState(false)
+    const [sensitivity, setSensitivity] = useState(70) // 0-100%
+    const [activeFlag, setActiveFlag] = useState(null)
+    const [sceneColors, setSceneColors] = useState([{ r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }])
+
+    // AI State
+    const [aiChatOpen, setAiChatOpen] = useState(true) // ALWAYS OPEN
+    const [aiPrompt, setAiPrompt] = useState('')
+    const [isGenerating, setIsGenerating] = useState(false)
+    const [previewScene, setPreviewScene] = useState(null)
+    const [customScenes, setCustomScenes] = useState([])
+
+    // Load custom scenes on mount
+    useEffect(() => {
+        const saved = localStorage.getItem('CUSTOM_AI_SCENES')
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved)
+                const hydrated = parsed.map(s => {
+                    if (s.type === 'DYNAMIC' && s.code) {
+                        return { ...s, compiledFunc: compileAIResponse(s.code) }
+                    }
+                    return s
+                })
+                setCustomScenes(hydrated)
+            } catch (e) { console.error("Failed to load custom scenes", e) }
+        }
+    }, [])
+
+    const handleAiGenerate = async (promptType = "surprise") => {
+        setIsGenerating(true)
+        // setAiChatOpen(true) // Already open
+
+        const prompt = promptType === "surprise" ? "Surprise me with something amazing" : aiPrompt
+        const aiJson = await generateLightScene(prompt)
+
+        if (aiJson) {
+            let scene = { ...aiJson, id: Date.now() }
+            if (aiJson.type === 'DYNAMIC') {
+                const func = compileAIResponse(aiJson.code)
+                if (func) {
+                    scene.compiledFunc = func
+                    setPreviewScene(scene)
+                    setActiveDynamicScene(null)
+                    setActiveFlag(null)
+                    setAudioReactive(true)
+                }
+            } else if (aiJson.type === 'FLAG') {
+                setPreviewScene(scene)
+                setActiveDynamicScene(null)
+                setActiveFlag(null)
+            }
+        }
+        setIsGenerating(false)
+    }
+
+    const saveAiScene = () => {
+        if (!previewScene) return
+        const newScenes = [...customScenes, previewScene]
+        setCustomScenes(newScenes)
+        const toStore = newScenes.map(({ compiledFunc, ...rest }) => rest)
+        localStorage.setItem('CUSTOM_AI_SCENES', JSON.stringify(toStore))
+        setPreviewScene(null)
+        setAudioReactive(false)
+    }
+
+    useEffect(() => {
+        window.dmx?.setDynamicRendererActive(!!activeFlag || audioReactive)
+        return () => window.dmx?.setDynamicRendererActive(false)
+    }, [activeFlag, audioReactive])
+
+    useEffect(() => {
+        if (!audioReactive && !previewScene) return
+
+        let frameId
+        let scene
+
+        if (previewScene && previewScene.type === 'DYNAMIC') {
+            scene = {
+                getFrame: (t) => {
+                    return executeAIScene(previewScene.compiledFunc, t, window.currentBassLevel || 0.5)
+                }
+            }
+        } else if (activeDynamicScene) {
+            const sceneKey = activeDynamicScene.toUpperCase()
+            scene = DYNAMIC_SCENES[sceneKey]
+        }
+
+        if (!scene) return
+
+        const updateFrame = () => {
+            const colors = scene.getFrame(Date.now())
+            setSceneColors(colors)
+            frameId = requestAnimationFrame(updateFrame)
+        }
+
+        frameId = requestAnimationFrame(updateFrame)
+        return () => {
+            if (frameId) cancelAnimationFrame(frameId)
+        }
+    }, [activeDynamicScene, audioReactive, previewScene])
+
+    let colorsForAudio = sceneColors
+    if (previewScene) {
+        if (previewScene.type === 'FLAG') colorsForAudio = previewScene.colors
+    } else if (activeFlag) {
+        colorsForAudio = FLAGS[activeFlag]?.colors
+    }
+
+    const { start: startAudio, stop: stopAudio, active: audioActive, setModifierMode, energyFactor, visualizerData } = useSystemAudio(sendDmxBatch, colorsForAudio)
+
+    useEffect(() => {
+        window.currentBassLevel = visualizerData.bass
+    }, [visualizerData.bass])
+
+    const handleAudioReactiveToggle = async () => {
+        if (audioReactive) {
+            setAudioReactive(false)
+            setModifierMode(false)
+            stopAudio()
+        } else {
+            setAudioReactive(true)
+            setModifierMode(true)
+            await startAudio()
+        }
+    }
+
+    const handleFlagSelect = (flagId) => {
+        if (activeFlag === flagId) {
+            setActiveFlag(null)
+            if (!audioReactive) {
+                sendDmxBatch([{ r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }])
+            }
+        } else {
+            setActiveFlag(flagId)
+            onSelectScene(null)
+            setPreviewScene(null)
+            if (!audioReactive) {
+                const flag = FLAGS[flagId]
+                if (flag) sendDmxBatch(flag.colors)
+            }
+        }
+    }
 
     const handleSelect = async (sceneId) => {
+        setActiveFlag(null)
         if (activeDynamicScene === sceneId) {
             executeDmx(() => window.dmx?.dynamicScene(sceneId, false))
             onSelectScene(null)
@@ -611,42 +885,211 @@ function DynamicScenesPage({ config, activeDynamicScene, onSelectScene, fixtures
         }
     }
 
+    // Keep static flag colors when not audio reactive
+    useEffect(() => {
+        if (activeFlag && !audioReactive) {
+            const flag = FLAGS[activeFlag]
+            if (flag) {
+                sendDmxBatch(flag.colors)
+            }
+        }
+    }, [activeFlag, audioReactive])
+
+    const brightnessFloor = 0.35
+    const effectiveSensitivity = sensitivity / 100
+
     return (
-        <div className="page dynamic-page">
-            <div className="dynamic-main">
-                <div className="glass-card">
-                    <h3>Dynamic Scenes</h3>
-                    <p className="subtitle">Software-generated effects • Click to toggle</p>
-                    <div className="scenes-grid">
-                        {dynamicScenes.map(scene => {
-                            const Icon = dynamicSceneIcons[scene.id] || Sparkles
-                            const isActive = activeDynamicScene === scene.id
-                            return (
-                                <motion.button
-                                    key={scene.id}
-                                    className={`scene-card ${isActive ? 'active' : ''}`}
-                                    onClick={() => handleSelect(scene.id)}
-                                    whileHover={{ y: -4 }}
-                                    whileTap={{ scale: 0.98 }}
+        <div className="page dynamic-page-v2">
+            <div className="dynamic-workspace">
+                {/* LEFT CONSOLE: SCENES & FLAGS */}
+                <div className="dynamic-console">
+                    <div className="dynamic-scroll-area">
+                        {/* HEADER */}
+                        <div className="section-header-slim">
+                            <span className="section-title">Dynamic Scenes</span>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                <div
+                                    onClick={handleAudioReactiveToggle}
+                                    style={{
+                                        padding: '6px 12px',
+                                        borderRadius: '20px',
+                                        background: audioReactive ? 'linear-gradient(135deg, #ff0080, #7928ca)' : 'rgba(255,255,255,0.05)',
+                                        border: '1px solid rgba(255,255,255,0.1)',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        fontSize: '11px',
+                                        fontWeight: 700,
+                                        transition: 'all 0.3s'
+                                    }}
                                 >
-                                    <Icon size={28} />
-                                    <span className="scene-name">{scene.name}</span>
-                                    <span className="scene-desc">{scene.desc}</span>
-                                </motion.button>
-                            )
-                        })}
+                                    <Music size={14} />
+                                    <span>AUDIO REACTIVE {audioReactive ? 'ON' : 'OFF'}</span>
+                                    {audioReactive && <span style={{ opacity: 0.7, marginLeft: '4px' }}>x{energyFactor.toFixed(1)}</span>}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* SENSITIVITY SLIDER (If Audio Reactive) */}
+                        {audioReactive && (
+                            <div className="glass-card" style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>SENSITIVITY</span>
+                                    <input
+                                        type="range" min="0" max="100" value={sensitivity}
+                                        onChange={(e) => setSensitivity(parseInt(e.target.value))}
+                                        style={{ flex: 1 }}
+                                    />
+                                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--accent)' }}>{sensitivity}%</span>
+                                </div>
+                                <div style={{ display: 'flex', gap: '4px', height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden' }}>
+                                    <motion.div
+                                        animate={{ width: `${visualizerData.bass * 100}%` }}
+                                        style={{ height: '100%', background: 'var(--accent)', boxShadow: '0 0 10px var(--accent)' }}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* SCENES GRID */}
+                        <div className="scenes-grid-slim">
+                            {dynamicScenes.map(scene => {
+                                const Icon = dynamicSceneIcons[scene.id] || Sparkles
+                                const isActive = activeDynamicScene === scene.id
+                                return (
+                                    <div
+                                        key={scene.id}
+                                        className={`scene-card-slim ${isActive ? 'active' : ''}`}
+                                        onClick={() => handleSelect(scene.id)}
+                                    >
+                                        <Icon size={44} className="scene-icon" style={{ marginBottom: '8px', opacity: isActive ? 1 : 0.7 }} />
+                                        <span className="scene-name">{scene.name}</span>
+                                        <span className="scene-desc" style={{ fontSize: '12px' }}>{scene.desc}</span>
+                                    </div>
+                                )
+                            })}
+                        </div>
+
+                        {/* FLAGS HEADER */}
+                        <div className="section-header-slim" style={{ marginTop: '24px' }}>
+                            <span className="section-title" style={{ fontSize: '14px' }}>Reactive Flags</span>
+                        </div>
+
+                        {/* FLAGS GRID */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                            {Object.entries(FLAGS).map(([id, flag]) => {
+                                const isActive = activeFlag === id
+                                const [left, center, right] = flag.colors
+                                return (
+                                    <button
+                                        key={id}
+                                        onClick={() => handleFlagSelect(id)}
+                                        style={{
+                                            padding: '12px 24px',
+                                            borderRadius: '30px',
+                                            background: isActive
+                                                ? `linear-gradient(90deg, rgb(${left.r},${left.g},${left.b}), rgb(${center.r},${center.g},${center.b}), rgb(${right.r},${right.g},${right.b}))`
+                                                : 'rgba(255,255,255,0.05)',
+                                            border: isActive ? '2px solid white' : '1px solid rgba(255,255,255,0.1)',
+                                            color: 'white',
+                                            fontWeight: 800,
+                                            fontSize: '14px',
+                                            cursor: 'pointer',
+                                            boxShadow: isActive ? '0 0 20px rgba(255,255,255,0.4)' : 'none',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '12px',
+                                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+                                        }}
+                                    >
+                                        {flag.name}
+                                        {isActive && audioReactive && (
+                                            <span style={{ fontSize: '10px', opacity: 0.8 }}>x{energyFactor.toFixed(1)}</span>
+                                        )}
+                                    </button>
+                                )
+                            })}
+                        </div>
                     </div>
+
+                    {/* BOTTOM BAR: AI CHAT (Moved Inside Console) */}
+                    <div className="ai-floating-container">
+                        <div className="ai-input-pill">
+                            {isGenerating ? (
+                                <div className="spinner" style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.3)', borderTop: '2px solid white', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                            ) : (
+                                <Sparkles size={18} color="var(--accent)" />
+                            )}
+                            <input
+                                type="text"
+                                className="ai-chat-input"
+                                value={aiPrompt}
+                                onChange={(e) => setAiPrompt(e.target.value)}
+                                placeholder="Describe a lighting vibe..."
+                                onKeyDown={(e) => e.key === 'Enter' && handleAiGenerate("custom")}
+                                disabled={isGenerating}
+                            />
+                            <button
+                                className="surprise-btn-small"
+                                onClick={() => handleAiGenerate("surprise")}
+                                disabled={isGenerating}
+                            >
+                                <Sparkles size={12} fill="white" />
+                                SURPRISE ME
+                            </button>
+                        </div>
+                        <span style={{ fontSize: '10px', color: 'var(--text-secondary)', textAlign: 'center', marginTop: '6px', textShadow: '0 1px 2px black' }}>
+                            Powered by Google Gemini 2.0 Flash
+                        </span>
+                    </div>
+
+                </div>
+
+                {/* RIGHT SIDEBAR: PREVIEW */}
+                <div className="programs-sidebar">
+                    <div className="sidebar-control-group">
+                        <span className="control-label">MASTER DIMMER</span>
+                        <input
+                            type="range" min="0" max="255"
+                            value={channelValues.dim}
+                            onChange={(e) => handleChannelChange('dim', parseInt(e.target.value))}
+                            className="big-slider"
+                            style={{ height: '8px', marginBottom: '12px' }}
+                        />
+                    </div>
+                    <LivePreviewContainer
+                        fixtures={fixtures}
+                        masterDimmer={channelValues.dim}
+                        liveColors={liveColors}
+                        onToggleFixture={onToggleFixture}
+                        spatialEnergies={spatialEnergies}
+                    />
+
+                    {/* Active Info / Status */}
+                    {previewScene && (
+                        <div className="active-scene-banner">
+                            <div style={{ overflow: 'hidden' }}>
+                                <h4 style={{ margin: 0, color: '#0fdbc2', fontSize: '13px' }}>Previewing AI Scene</h4>
+                                <span style={{ fontSize: '12px', opacity: 0.7, whiteSpace: 'nowrap', textOverflow: 'ellipsis', display: 'block' }}>{previewScene.name}</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                                <button onClick={saveAiScene} className="surprise-btn-small" style={{ background: '#0fdbc2', padding: '6px 10px' }}>SAVE</button>
+                                <button onClick={() => { setPreviewScene(null); setAudioReactive(false); }} className="surprise-btn-small" style={{ background: 'rgba(255,255,255,0.1)', padding: '6px 10px' }}>X</button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
-            <div className="dynamic-sidebar">
-                <LivePreviewContainer fixtures={fixtures} masterDimmer={channelValues.dim} liveColors={liveColors} onToggleFixture={onToggleFixture} />
-            </div>
+
+
         </div>
     )
 }
 
-function AudioPage({ fixtures, liveColors, onToggleFixture, channelValues, sendDmxBatch }) {
-    const { start, stop, active, detectedGenre, autoGenre, setAutoGenre, manualGenre, setManualGenre, telemetry, visualizerData } = useSystemAudio(sendDmxBatch)
+
+function AudioPage({ fixtures, liveColors, onToggleFixture, channelValues, sendDmxBatch, onAudioUpdate }) {
+    const { start, stop, active, detectedGenre, autoGenre, setAutoGenre, manualGenre, setManualGenre, telemetry, visualizerData } = useSystemAudio(sendDmxBatch, null, onAudioUpdate)
 
     return (
         <div className="page audio-page">
@@ -854,14 +1297,37 @@ function AudioPage({ fixtures, liveColors, onToggleFixture, channelValues, sendD
     )
 }
 
-function AmbilightPage({ fixtures, channelValues, liveColors, onToggleFixture, sendDmxBatch }) {
+function AmbilightPage({ fixtures, channelValues, liveColors, onToggleFixture, sendDmxBatch, onAudioUpdate }) {
     const { start, stop, capturing, colors: previewColors, isMono, setIsMono } = useGpuAmbilight(sendDmxBatch)
     const [sources, setSources] = useState([])
     const [selectedSource, setSelectedSource] = useState(null)
+    const [audioBoost, setAudioBoost] = useState(false)
+
+    // Audio engine in modifier mode for Ambilight colors
+    const { start: startAudio, stop: stopAudio, active: audioActive, setModifierMode, energyFactor } = useSystemAudio(
+        (colors) => {
+            // Only send to DMX if audio boost is active
+            if (audioBoost) sendDmxBatch(colors)
+        },
+        previewColors,
+        onAudioUpdate
+    )
 
     useEffect(() => {
         window.ambilight?.getSources().then(setSources)
     }, [])
+
+    const handleAudioBoostToggle = async () => {
+        if (audioBoost) {
+            setAudioBoost(false)
+            setModifierMode(false)
+            stopAudio()
+        } else {
+            setAudioBoost(true)
+            setModifierMode(true)
+            await startAudio()
+        }
+    }
 
     const handleStart = () => {
         const id = selectedSource || sources[0]?.id
@@ -876,33 +1342,56 @@ function AmbilightPage({ fixtures, channelValues, liveColors, onToggleFixture, s
                     <h2>GPU Screen Sync</h2>
                     <p className="subtitle">Mapeo espacial Izquierda-Centro-Derecha acelerado por hardware</p>
 
-                    <div className="ambilight-setup-row" style={{ gridTemplateColumns: '1.5fr 1fr auto auto' }}>
-                        <select
-                            className="source-select"
-                            onChange={(e) => setSelectedSource(e.target.value)}
-                            disabled={capturing}
-                            style={{ margin: 0, height: '48px' }}
-                        >
-                            {sources.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                        </select>
+                    <div className="ambilight-controls" style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
+                        {/* Row 1: Source & Status */}
+                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                            <select
+                                className="source-select"
+                                onChange={(e) => setSelectedSource(e.target.value)}
+                                disabled={capturing}
+                                style={{ flex: 1, margin: 0, height: '42px' }}
+                            >
+                                {sources.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            </select>
 
-                        <div className="status-badge" style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-secondary)', fontSize: '11px', whiteSpace: 'nowrap' }}>
-                            <Zap size={14} /> <span>AMD RX 6700 XT</span>
+                            <div className="status-badge" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0 12px', height: '42px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-secondary)', fontSize: '11px', whiteSpace: 'nowrap' }}>
+                                <Zap size={14} color="#FFD700" fill="#FFD700" />
+                                <span>RX 6700 XT</span>
+                            </div>
                         </div>
 
-                        <div className={`bgr-toggle ${isMono ? 'active' : ''}`} onClick={() => setIsMono(!isMono)} title="Use center color for all fixtures">
-                            <div className="toggle-slider"></div>
-                            <span>MONO</span>
-                        </div>
+                        {/* Row 2: Toggles & Action */}
+                        <div style={{ display: 'flex', gap: '12px', alignItems: 'stretch' }}>
+                            <div className={`bgr-toggle ${isMono ? 'active' : ''}`} onClick={() => setIsMono(!isMono)} title="Use center color for all fixtures" style={{ height: '48px', padding: '0 16px' }}>
+                                <div className="toggle-slider"></div>
+                                <span>MONO</span>
+                            </div>
 
-                        <motion.button
-                            className={`action-button ${capturing ? 'stop' : 'active'}`}
-                            onClick={capturing ? stop : handleStart}
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                        >
-                            {capturing ? <><Square size={16} /> Stop</> : <><Play size={16} /> Ignite</>}
-                        </motion.button>
+                            <div
+                                className={`bgr-toggle ${audioBoost ? 'active' : ''}`}
+                                onClick={handleAudioBoostToggle}
+                                title="Modulate brightness with audio"
+                                style={{
+                                    height: '48px',
+                                    padding: '0 16px',
+                                    background: audioBoost ? 'linear-gradient(135deg, #ff0080, #7928ca)' : undefined,
+                                    borderColor: audioBoost ? 'transparent' : undefined
+                                }}
+                            >
+                                <div className="toggle-slider"></div>
+                                <span>BOOST {audioBoost && `x${energyFactor.toFixed(1)}`}</span>
+                            </div>
+
+                            <motion.button
+                                className={`action-button ${capturing ? 'stop' : 'active'}`}
+                                onClick={capturing ? stop : handleStart}
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                style={{ flex: 1, margin: 0, height: '48px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}
+                            >
+                                {capturing ? <><Square size={18} fill="currentColor" /> STOP ENGINE</> : <><Play size={18} fill="currentColor" /> IGNITE SYSTEM</>}
+                            </motion.button>
+                        </div>
                     </div>
 
                     {/* Real-time Extraction TV */}
@@ -912,15 +1401,67 @@ function AmbilightPage({ fixtures, channelValues, liveColors, onToggleFixture, s
                             <span className="resolution-label">3x1 Hardware Downsampled</span>
                         </div>
                         <div className="canvas-wrapper" style={{ gap: '4px', background: '#000', padding: '10px' }}>
-                            {previewColors.map((c, i) => (
-                                <div key={i} style={{
-                                    flex: 1,
-                                    height: '100%',
-                                    background: `rgb(${c.r}, ${c.g}, ${c.b})`,
-                                    borderRadius: '4px',
-                                    border: '1px solid rgba(255,255,255,0.1)'
-                                }} />
-                            ))}
+                            {previewColors.map((c, i) => {
+                                // Energy bar height based on audio energy if boost active
+                                const energyLabels = ['L', 'C', 'R']
+                                const boostPercent = audioBoost ? Math.round(energyFactor * 100 - 100) : 0
+
+                                return (
+                                    <div key={i} style={{
+                                        flex: 1,
+                                        height: '100%',
+                                        background: `rgb(${c.r}, ${c.g}, ${c.b})`,
+                                        borderRadius: '4px',
+                                        border: '1px solid rgba(255,255,255,0.1)',
+                                        position: 'relative',
+                                        overflow: 'hidden'
+                                    }}>
+                                        {/* Energy bar overlay */}
+                                        {audioBoost && (
+                                            <div style={{
+                                                position: 'absolute',
+                                                bottom: 0,
+                                                left: 0,
+                                                right: 0,
+                                                height: `${Math.min(100, boostPercent)}%`,
+                                                background: 'rgba(255,255,255,0.25)',
+                                                transition: 'height 0.1s ease',
+                                                borderRadius: '0 0 4px 4px'
+                                            }} />
+                                        )}
+                                        {/* Zone label */}
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: '50%',
+                                            left: '50%',
+                                            transform: 'translate(-50%, -50%)',
+                                            fontSize: '14px',
+                                            fontWeight: 700,
+                                            color: 'rgba(255,255,255,0.6)',
+                                            textShadow: '0 1px 3px rgba(0,0,0,0.5)'
+                                        }}>
+                                            {energyLabels[i]}
+                                        </div>
+                                        {/* Boost percentage */}
+                                        {audioBoost && (
+                                            <div style={{
+                                                position: 'absolute',
+                                                bottom: '4px',
+                                                left: '50%',
+                                                transform: 'translateX(-50%)',
+                                                fontSize: '9px',
+                                                fontWeight: 700,
+                                                color: '#fff',
+                                                background: 'rgba(0,0,0,0.5)',
+                                                padding: '1px 4px',
+                                                borderRadius: '3px'
+                                            }}>
+                                                +{boostPercent}%
+                                            </div>
+                                        )}
+                                    </div>
+                                )
+                            })}
                             {!capturing && <div className="canvas-placeholder" style={{ position: 'absolute' }}>Select screen and ignite...</div>}
                         </div>
                     </div>
@@ -975,6 +1516,19 @@ function SystemPage({ config, fixtures, setFixtures, onUpdatePerformance }) {
     const [serialPorts, setSerialPorts] = useState([])
     const [isConnecting, setIsConnecting] = useState(false)
     const [connectionStatus, setConnectionStatus] = useState(null)
+
+    // AI Configuration
+    const [geminiKey, setGeminiKey] = useState(localStorage.getItem('RENDERER_VITE_GEMINI_API_KEY') || '')
+    const [geminiModel, setGeminiModel] = useState(localStorage.getItem('RENDERER_VITE_GEMINI_MODEL') || 'gemini-2.0-flash-exp')
+    const [keySaved, setKeySaved] = useState(false)
+    const [testStatus, setTestStatus] = useState(null) // { type: 'success' | 'error', message: string } | null
+
+    const handleSaveKey = () => {
+        localStorage.setItem('RENDERER_VITE_GEMINI_API_KEY', geminiKey)
+        localStorage.setItem('RENDERER_VITE_GEMINI_MODEL', geminiModel)
+        setKeySaved(true)
+        setTimeout(() => setKeySaved(false), 2000)
+    }
 
     // Load serial ports on mount
     useEffect(() => {
@@ -1054,6 +1608,132 @@ function SystemPage({ config, fixtures, setFixtures, onUpdatePerformance }) {
                     </div>
                 </div>
 
+                {/* AI Configuration */}
+                <div className="glass-card ai-config-card">
+                    <div className="card-header-icon">
+                        <Sparkles size={20} className="accent-text" />
+                        <h3>AI Engine Configuration</h3>
+                    </div>
+                    <p className="subtitle">Configure your Google Gemini integration.</p>
+
+                    <div style={{ display: 'flex', gap: '16px', flexDirection: 'column' }}>
+                        {/* API KEY ROW */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Gemini API Key</label>
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <input
+                                    type="password"
+                                    value={geminiKey}
+                                    onChange={(e) => {
+                                        // Remove special characters that cause ByteString errors (like 8226 bullet points)
+                                        const sanitized = e.target.value.replace(/[^\x00-\x7F]/g, "").trim();
+                                        setGeminiKey(sanitized);
+                                    }}
+                                    placeholder="Paste your API Key here"
+                                    style={{
+                                        flex: 1,
+                                        padding: '12px',
+                                        borderRadius: '12px',
+                                        border: '1px solid var(--border-color)',
+                                        background: 'rgba(0,0,0,0.3)',
+                                        color: 'white',
+                                        outline: 'none',
+                                        fontSize: '13px'
+                                    }}
+                                />
+                            </div>
+                        </div>
+
+                        {/* MODEL SELECTION ROW */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Model Selection</label>
+                            <select
+                                value={geminiModel}
+                                onChange={(e) => setGeminiModel(e.target.value)}
+                                style={{
+                                    padding: '12px',
+                                    borderRadius: '12px',
+                                    border: '1px solid var(--border-color)',
+                                    background: 'rgba(0,0,0,0.3)',
+                                    color: 'white',
+                                    outline: 'none',
+                                    fontSize: '13px',
+                                    appearance: 'none',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                <option value="gemini-1.5-flash">Gemini 1.5 Flash (Recommended)</option>
+                                <option value="gemini-1.5-flash-8b">Gemini 1.5 Flash-8B (Lightweight)</option>
+                                <option value="gemini-1.5-pro">Gemini 1.5 Pro (Smarter)</option>
+                                <option value="gemini-2.0-flash-exp">Gemini 2.0 Flash Experimental</option>
+                            </select>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <button
+                                onClick={handleSaveKey}
+                                style={{
+                                    flex: 1,
+                                    padding: '12px',
+                                    borderRadius: '12px',
+                                    background: keySaved ? '#00f260' : 'var(--accent)',
+                                    color: 'white',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    fontWeight: 'bold',
+                                    transition: 'all 0.2s',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '1px'
+                                }}
+                            >
+                                {keySaved ? <><Check size={16} /> Config Saved</> : 'Save AI Configuration'}
+                            </button>
+
+                            <button
+                                onClick={async () => {
+                                    setTestStatus(null);
+                                    const btn = document.getElementById('test-conn-btn');
+                                    if (btn) { btn.innerText = "TESTING..."; btn.disabled = true; }
+                                    try {
+                                        if (!geminiKey) throw new Error("Please enter an API Key first");
+
+                                        const { testConnection } = await import('./services/geminiService');
+                                        await testConnection();
+
+                                        setTestStatus({ type: 'success', message: `Successfully connected to ${geminiModel}!` });
+                                    } catch (e) {
+                                        setTestStatus({ type: 'error', message: e.message || "Connection failed. Check your API key and model selection." });
+                                    } finally {
+                                        if (btn) { btn.innerText = "TEST CONNECTION"; btn.disabled = false; }
+                                    }
+                                }}
+                                id="test-conn-btn"
+                                style={{
+                                    width: '180px',
+                                    padding: '12px',
+                                    background: 'transparent',
+                                    border: '1px solid rgba(255,255,255,0.1)',
+                                    color: 'var(--text-secondary)',
+                                    borderRadius: '12px',
+                                    cursor: 'pointer',
+                                    fontSize: '11px',
+                                    fontWeight: 700,
+                                    letterSpacing: '1px',
+                                    textTransform: 'uppercase'
+                                }}
+                            >
+                                Test Connection
+                            </button>
+                        </div>
+
+                        {testStatus && (
+                            <div className={`connection-status ${testStatus.type}`} style={{ padding: '12px', borderRadius: '8px', fontSize: '12px', textAlign: 'center' }}>
+                                {testStatus.type === 'success' ? <Check size={16} /> : <AlertCircle size={16} />} {testStatus.message}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
                 <div className="glass-card performance-card">
                     <div className="card-header-icon">
                         <Zap size={20} className="accent-text" />
@@ -1105,7 +1785,7 @@ function SystemPage({ config, fixtures, setFixtures, onUpdatePerformance }) {
                             onClick={() => handleModeChange('artnet')}
                             disabled={isConnecting}
                         >
-                            <span className="mode-icon">📡</span>
+                            <span className="mode-icon"><Radio size={18} /></span>
                             <span className="mode-label">Art-Net</span>
                             <span className="mode-desc">Via QLC+ (~80ms)</span>
                         </button>
@@ -1114,7 +1794,7 @@ function SystemPage({ config, fixtures, setFixtures, onUpdatePerformance }) {
                             onClick={() => handleModeChange('usb')}
                             disabled={isConnecting}
                         >
-                            <span className="mode-icon">⚡</span>
+                            <span className="mode-icon"><Zap size={18} /></span>
                             <span className="mode-label">Direct USB</span>
                             <span className="mode-desc">FTDI D2XX (&lt; 2ms)</span>
                         </button>
@@ -1135,11 +1815,11 @@ function SystemPage({ config, fixtures, setFixtures, onUpdatePerformance }) {
                                         {serialPorts.length === 0 && <option value="">No FTDI devices found</option>}
                                         {serialPorts.map(p => (
                                             <option key={p.path} value={p.path}>
-                                                {p.displayName || p.path} {p.isRecommended ? '⭐' : ''}
+                                                {p.displayName || p.path} {p.isRecommended ? <Check size={12} color="var(--accent)" /> : ''}
                                             </option>
                                         ))}
                                     </select>
-                                    <button className="refresh-btn" onClick={refreshPorts} title="Refresh ports">🔄</button>
+                                    <button className="refresh-btn" onClick={refreshPorts} title="Refresh ports"><Zap size={14} /></button>
                                 </div>
                             </div>
 
@@ -1223,6 +1903,7 @@ function App() {
     const [activeDynamicScene, setActiveDynamicScene] = useState(null)
     const [fixtures, setFixtures] = useState([])
     const [liveColors, setLiveColors] = useState([])
+    const [globalAudioEnergy, setGlobalAudioEnergy] = useState(null) // { left, center, right }
     const [pendingRequests, setPendingRequests] = useState(0)
 
     // Helper to track DMX calls
@@ -1322,11 +2003,17 @@ function App() {
     }
 
     const handleMeet = useCallback(async () => {
-        setChannelValues({ red: 255, green: 255, blue: 255, func: 0, spd: 0, flash: 0, dim: 255 })
+        // Warmer, softer light (Warm White at 60%)
+        const warmWhite = { red: 255, green: 180, blue: 120, func: 0, spd: 0, flash: 0, dim: 150 }
+        setChannelValues(warmWhite)
         setActiveProgram(null)
         setActiveDynamicScene(null)
-        executeDmx(() => window.dmx?.colorMacro('WHITE'))
-    }, [executeDmx])
+        executeDmx(async () => {
+            await window.dmx?.colorMacro('WARM') // Map to warm macro if exists, or custom colors
+            const selectedIds = fixtures.filter(f => f.selected).map(f => f.id)
+            await window.dmx?.setChannels(selectedIds, warmWhite)
+        })
+    }, [executeDmx, fixtures])
 
     const handleIntenseFlash = useCallback(() => executeDmx(() => window.dmx?.intenseFlash()), [executeDmx])
 
@@ -1348,16 +2035,17 @@ function App() {
         onToggleTheme,
         handleChannelChange,
         handleSelectedChannelsChange,
-        sendDmxBatch
+        sendDmxBatch,
+        spatialEnergies: globalAudioEnergy // Pass global energy to all pages
     }
 
     const renderPage = () => {
         switch (activePage) {
             case 'mixer': return <MixerPage {...commonProps} onReset={handleReset} />
             case 'programs': return <ProgramsPage {...commonProps} activeProgram={activeProgram} onSelectProgram={setActiveProgram} />
-            case 'dynamic': return <DynamicScenesPage config={config} activeDynamicScene={activeDynamicScene} onSelectScene={setActiveDynamicScene} {...commonProps} />
-            case 'audio': return <AudioPage {...commonProps} />
-            case 'ambilight': return <AmbilightPage {...commonProps} />
+            case 'dynamic': return <DynamicScenesPageV2 config={config} activeDynamicScene={activeDynamicScene} onSelectScene={setActiveDynamicScene} {...commonProps} />
+            case 'audio': return <AudioPage {...commonProps} onAudioUpdate={setGlobalAudioEnergy} />
+            case 'ambilight': return <AmbilightPage {...commonProps} onAudioUpdate={setGlobalAudioEnergy} />
             case 'system': return <SystemPage {...commonProps} onUpdatePerformance={handleUpdatePerformance} />
             default: return null
         }

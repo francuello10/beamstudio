@@ -1,4 +1,5 @@
-import { app, shell, BrowserWindow, ipcMain, desktopCapturer, nativeTheme } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, desktopCapturer, nativeTheme } from 'electron' // Force Rebuild 01:10
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import dmxnet from 'dmxnet'
@@ -369,6 +370,7 @@ const dmxState = {
     programSpeed: 127,
     ambilightActive: false,
     audioReactiveActive: false,
+    dynamicRendererActive: false, // For flags and renderer-driven scenes
     performance: {
         dmxHz: 44,   // DMX512 standard
         uiHz: 30,    // Smoother UI sync
@@ -542,6 +544,55 @@ function stopDynamicScene() {
 // ============================================================================
 
 function setupIPC() {
+    ipcMain.handle('ai:generate', async (_, { apiKey, model, prompt, systemInstruction }) => {
+        try {
+            console.log(`[AI] Starting generation request...`)
+            const genAI = new GoogleGenerativeAI(apiKey)
+            const modelId = model.includes('/') ? model : `models/${model}`
+            console.log(`[AI] Model: ${modelId} (v1beta)`)
+
+            const genModel = genAI.getGenerativeModel(
+                { model: modelId, systemInstruction },
+                { apiVersion: 'v1beta' }
+            )
+
+            console.log(`[AI] Sending prompt to Gemini...`)
+            const result = await genModel.generateContent(prompt)
+
+            console.log(`[AI] Response received. Extracting text...`)
+            const response = await result.response
+            const text = response.text()
+
+            console.log(`[AI] Generation successful! (${text.length} chars)`)
+            return text
+        } catch (error) {
+            console.error('[AI] Generation failed:', error)
+            throw error
+        }
+    })
+
+    ipcMain.handle('ai:test', async (_, { apiKey, model }) => {
+        try {
+            const genAI = new GoogleGenerativeAI(apiKey)
+            const modelId = model.includes('/') ? model : `models/${model}`
+            console.log(`[AI] Testing connection with model: ${modelId} (v1beta)`)
+
+            const genModel = genAI.getGenerativeModel(
+                { model: modelId },
+                { apiVersion: 'v1beta' }
+            )
+            const result = await genModel.generateContent("Respond with only the word OK.")
+            return result.response.text().trim()
+        } catch (error) {
+            console.error('[AI] Test failed:', error.message)
+            throw error
+        }
+    })
+
+    ipcMain.handle('ai:listModels', async (_, { apiKey }) => {
+        return ["gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-1.5-pro", "gemini-2.0-flash-exp"]
+    })
+
     ipcMain.handle('dmx:getFixtures', () => fixtures.map((f, i) => ({ ...f, color: dmxState.fixtureColors[i] })))
 
     ipcMain.handle('dmx:getConfig', () => ({
@@ -858,6 +909,12 @@ function setupIPC() {
         }
     })
 
+    ipcMain.handle('dmx:setDynamicRendererActive', (_, active) => {
+        dmxState.dynamicRendererActive = active
+        if (!active) resetAll()
+        return { success: true, active }
+    })
+
     ipcMain.handle('dmx:soundMode', (_, active) => {
         stopDynamicScene()
         if (active) {
@@ -897,13 +954,17 @@ function setupIPC() {
         })
 
         lastAmbiColors = colors
-        colors.forEach((c, i) => setFixtureColor(i, c.r, c.g, c.b, 255))
+        colors.forEach((c, i) => {
+            const f = fixtures[i]
+            const currentDim = dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM]
+            setFixtureColor(i, c.r, c.g, c.b, currentDim)
+        })
         return { success: true, colors: dmxState.fixtureColors }
     })
 
     // Async High-Frequency Ambilight update (One-way)
     ipcMain.on('ambilight:setColorsAsync', (_, { left, center, right, colors: incomingColors }) => {
-        if (!dmxState.ambilightActive && !dmxState.audioReactiveActive) return
+        if (!dmxState.ambilightActive && !dmxState.audioReactiveActive && !dmxState.dynamicRendererActive) return
 
         const targetColors = incomingColors || [left, center, right]
 
@@ -923,7 +984,11 @@ function setupIPC() {
         })
 
         lastAmbiColors = colors
-        colors.forEach((c, i) => setFixtureColor(i, c.r, c.g, c.b, 255))
+        colors.forEach((c, i) => {
+            const f = fixtures[i]
+            const currentDim = dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM]
+            setFixtureColor(i, c.r, c.g, c.b, currentDim)
+        })
     })
 
     ipcMain.handle('audio:start', () => { stopDynamicScene(); dmxState.activeProgram = null; dmxState.audioReactiveActive = true; return { success: true } })
@@ -1019,6 +1084,46 @@ if (process.platform === 'linux') {
     app.commandLine.appendSwitch('enable-features', 'WebRTCPipeWireCapturer')
     app.commandLine.appendSwitch('enable-webrtc-pipewire-capturer') // Fallback legacy
 }
+
+// Media Bridge - IPC Handler
+// Returns { title, artist } or null
+const execPromise = (cmd) => new Promise((resolve) => {
+    const { exec } = require('child_process')
+    exec(cmd, { timeout: 1500 }, (error, stdout) => {
+        if (error || !stdout) resolve(null)
+        else resolve(stdout.trim())
+    })
+})
+
+const getWindowsMedia = async () => {
+    const psScript = `
+        try {
+            $ctl = [Windows.Media.Control.GlobalSystemMediaTransportControls,Windows.Media.Control,ContentType=WindowsRuntime]::GetForCurrentView().SessionManager.GetCurrentSession()
+            if ($ctl) {
+                $info = $ctl.TryGetMediaPropertiesAsync().GetAwaiter().GetResult()
+                Write-Output "$($info.Title)|$($info.Artist)"
+            }
+        } catch {}
+    `
+    // Encode command for PowerShell
+    const cmd = `powershell -NoProfile -NonInteractive -Command "${psScript.replace(/\n/g, ' ')}"`
+    const output = await execPromise(cmd)
+    if (!output || !output.includes('|')) return null
+    const [title, artist] = output.split('|')
+    return { title: title.trim(), artist: artist.trim() }
+}
+const getLinuxMedia = async () => {
+    const output = await execPromise("playerctl metadata --format '{{title}}|{{artist}}'")
+    if (!output || !output.includes('|')) return null
+    const [title, artist] = output.split('|')
+    return { title: title.trim(), artist: artist.trim() }
+}
+
+ipcMain.handle('get-system-media', async () => {
+    if (process.platform === 'win32') return await getWindowsMedia()
+    if (process.platform === 'linux') return await getLinuxMedia()
+    return null
+})
 
 app.whenReady().then(async () => {
     electronApp.setAppUserModelId('com.beamstudio.dmx')

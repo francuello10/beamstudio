@@ -776,6 +776,16 @@ body {
     box-shadow: 0 4px 12px rgba(255, 51, 102, 0.2);
 }
 
+.fixture-pill.locked {
+    cursor: not-allowed;
+    opacity: 0.8;
+}
+
+.fixture-pill.locked:hover {
+    transform: none;
+    background: rgba(255, 255, 255, 0.05);
+}
+
 .fixture-led {
     width: 6px;
     height: 6px;
@@ -931,6 +941,13 @@ body {
 .programs-sidebar {
     width: 280px;
     height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    gap: 16px;
+    border-left: 1px solid var(--border-color);
+    background: rgba(0, 0, 0, 0.2);
+    overflow-y: auto;
 }
 
 /* FUNC Grid - Programs */
@@ -1125,6 +1142,7 @@ body {
 
 .big-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
+    appearance: none;
     width: 32px;
     height: 32px;
     background: linear-gradient(135deg, var(--accent) 0%, #cc0044 100%);
@@ -1998,6 +2016,7 @@ body {
 
 .styled-range {
     -webkit-appearance: none;
+    appearance: none;
     width: 100%;
     height: 6px;
     background: rgba(255, 255, 255, 0.1);
@@ -2007,6 +2026,7 @@ body {
 
 .styled-range::-webkit-slider-thumb {
     -webkit-appearance: none;
+    appearance: none;
     width: 16px;
     height: 16px;
     background: var(--text);
@@ -2186,13 +2206,13 @@ body {
 /* Fader Reset Button */
 .fader-reset-btn {
     margin-top: 10px;
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
+    width: 32px;
+    height: 20px;
+    border-radius: 4px;
     border: 1px solid var(--btn-reset-border);
     background: var(--btn-reset-bg);
     color: var(--btn-reset-text);
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 800;
     cursor: pointer;
     display: flex;
@@ -2205,13 +2225,21 @@ body {
     background: var(--nav-hover-bg);
     color: var(--nav-hover-text);
     border-color: var(--nav-hover-text);
-    transform: scale(1.1);
+    transform: scale(1.05);
 }
 
 .fader-reset-btn.at-zero {
     border-color: var(--border-subtle);
     color: var(--text-secondary);
     opacity: 0.3;
+}
+
+.fader-reset-btn.active-max {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+    box-shadow: 0 0 10px var(--accent-glow);
+    opacity: 1;
 }
 
 /* Flash Action Button */
@@ -2490,4 +2518,58 @@ select:disabled {
     opacity: 0.5;
     cursor: not-allowed;
     background-color: rgba(20, 20, 20, 0.5);
+}
+
+/* AI & Connection Status Styles */
+.connection-status {
+    margin-top: 12px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: slideInUp 0.3s ease-out;
+}
+
+.connection-status.success {
+    background: rgba(0, 242, 96, 0.1);
+    color: #00f260;
+    border: 1px solid rgba(0, 242, 96, 0.2);
+}
+
+.connection-status.error {
+    background: rgba(255, 51, 102, 0.1);
+    color: #ff3366;
+    border: 1px solid rgba(255, 51, 102, 0.2);
+}
+
+@keyframes slideInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.ai-config-card select {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    color: white;
+    padding: 12px;
+    cursor: pointer;
+    font-family: inherit;
+    outline: none;
+    transition: all 0.2s;
+}
+
+.ai-config-card select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.1);
 }

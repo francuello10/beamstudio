@@ -1,15 +1,18 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { multiplyBrightness, GENRE_PROFILES } from '../utils/palettes'
 
 /**
- * useSystemAudio v3.0 - True Stereo 2.1 DSP Engine
+ * useSystemAudio v5.0 - True Stereo 2.1 DSP Engine + Spatial Export
  * 
  * Features:
  * - 3 Separate AnalyserNodes (L, R, Bass)
  * - Virtual 2.1 Crossover (Bass → Center, Mids/Highs → Sides)
- * - Smart Vibe Engine (Auto Genre Detection)
+ * - Smart Vibe Engine (Auto Genre Detection) with LATIN/CINEMA
  * - Pro Visuals Data Export
+ * - Modifier Mode (accepts inputColors and modulates brightness)
+ * - NEW: spatialEnergies export for Ambilight Boost
  */
-export const useSystemAudio = (sendDmxBatch) => {
+export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate = null) => {
     // === STATE ===
     const [active, setActive] = useState(false)
     const [autoGenre, setAutoGenre] = useState(true)
@@ -26,6 +29,22 @@ export const useSystemAudio = (sendDmxBatch) => {
         right: new Array(16).fill(0),
         bass: 0
     })
+    const [modifierMode, setModifierMode] = useState(false)
+    const [energyFactor, setEnergyFactor] = useState(1)
+
+    // NEW V5.0: Spatial energies for Ambilight boost
+    const [spatialEnergies, setSpatialEnergies] = useState({
+        left: 0,
+        center: 0,
+        right: 0
+    })
+
+    // === REFS FOR CLOSURE SAFETY ===
+    const inputColorsRef = useRef(inputColors)
+    const modifierModeRef = useRef(modifierMode)
+
+    useEffect(() => { inputColorsRef.current = inputColors }, [inputColors])
+    useEffect(() => { modifierModeRef.current = modifierMode }, [modifierMode])
 
     // === REFS ===
     const audioCtx = useRef(null)
@@ -59,6 +78,7 @@ export const useSystemAudio = (sendDmxBatch) => {
         setActive(false)
         setDetectedGenre('UNKNOWN')
         setVisualizerData({ left: new Array(16).fill(0), right: new Array(16).fill(0), bass: 0 })
+        setSpatialEnergies({ left: 0, center: 0, right: 0 })
         window.audio?.stop()
     }, [])
 
@@ -165,7 +185,12 @@ export const useSystemAudio = (sendDmxBatch) => {
                 for (let i = 0; i < 16; i++) diffSum += Math.abs(bandsL[i] - bandsR[i])
                 const stereoWidth = diffSum / 16
 
-                // === GENRE DETECTION (Every 2.5s) ===
+                // === LOW-MIDS FOR LATIN (200-800Hz ~ bands 2-6) ===
+                const lowMidL = bandsL.slice(2, 7).reduce((a, b) => a + b, 0) / 5
+                const lowMidR = bandsR.slice(2, 7).reduce((a, b) => a + b, 0) / 5
+                const lowMidAvg = (lowMidL + lowMidR) / 2
+
+                // === GENRE DETECTION (Every 2.5s) with LATIN/CINEMA ===
                 const now = performance.now()
                 if (now - lastGenreCheck.current > 2500) {
                     lastGenreCheck.current = now
@@ -181,16 +206,21 @@ export const useSystemAudio = (sendDmxBatch) => {
                     const avgEnergy = (bandsL.reduce((a, b) => a + b, 0) + bandsR.reduce((a, b) => a + b, 0)) / 32
                     const transientRatio = avgEnergy > 0.01 ? peakMax / avgEnergy : 0
 
-                    // Classify
+                    // Dynamic range for CINEMA detection
+                    const dynamicRange = peakMax - avgEnergy
+
+                    // Classify with new genres
                     let genre = 'CHILL'
                     if (bassRMS > 0.5 && transientRatio > 1.8) genre = 'ELECTRO'
                     else if (midRms > 0.4 && transientRatio > 1.2) genre = 'ROCK'
+                    else if (lowMidAvg > 0.35 && transientRatio > 1.0 && transientRatio < 1.5) genre = 'LATIN'
+                    else if (dynamicRange > 0.6 && transientRatio > 2.0) genre = 'CINEMA'
 
                     genreHistory.current.push(genre)
                     if (genreHistory.current.length > 5) genreHistory.current.shift()
 
                     // Mode of last 5
-                    const counts = { ELECTRO: 0, ROCK: 0, CHILL: 0 }
+                    const counts = { ELECTRO: 0, ROCK: 0, CHILL: 0, LATIN: 0, CINEMA: 0 }
                     genreHistory.current.forEach(g => counts[g]++)
                     const stable = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]
 
@@ -212,9 +242,19 @@ export const useSystemAudio = (sendDmxBatch) => {
                 const bassExp = Math.pow(bassEnergy, 2.5)
                 const kickFlash = bassEnergy > 0.8 // Kick detected!
 
+                // === UPDATE SPATIAL ENERGIES FOR AMBILIGHT ===
+                const energies = {
+                    left: midHighL,
+                    center: bassEnergy,
+                    right: midHighR
+                }
+                setSpatialEnergies(energies)
+                if (onAudioUpdate) onAudioUpdate(energies)
+
                 // Color mapping based on genre (auto or manual)
                 let colorL, colorC, colorR
                 const currentGenre = autoGenre ? detectedGenre : manualGenre
+                const profile = GENRE_PROFILES[currentGenre] || GENRE_PROFILES.CHILL
 
                 if (currentGenre === 'ELECTRO') {
                     // Hard strobe: White flash on bass peaks
@@ -236,6 +276,22 @@ export const useSystemAudio = (sendDmxBatch) => {
                     }
                     colorL = { r: Math.round(midHighL * 200), g: Math.round(midHighL * 100), b: 0 }
                     colorR = { r: Math.round(midHighR * 200), g: Math.round(midHighR * 100), b: 0 }
+                } else if (currentGenre === 'LATIN') {
+                    // Warm mid-focused (low-mids drive the color)
+                    const warmFactor = lowMidAvg * profile.midWeight
+                    colorC = { r: Math.round(warmFactor * 255), g: Math.round(warmFactor * 150), b: Math.round(bassExp * 50) }
+                    colorL = { r: Math.round(lowMidL * 200), g: Math.round(lowMidL * 120), b: 0 }
+                    colorR = { r: Math.round(lowMidR * 200), g: Math.round(lowMidR * 120), b: 0 }
+                } else if (currentGenre === 'CINEMA') {
+                    // Extreme dynamics - punchy bass, dramatic
+                    const cinemaBase = bassExp * profile.bassWeight
+                    if (kickFlash) {
+                        colorC = { r: 255, g: 200, b: 100 } // Explosion flash
+                    } else {
+                        colorC = { r: Math.round(cinemaBase * 200), g: Math.round(cinemaBase * 100), b: Math.round(cinemaBase * 255) }
+                    }
+                    colorL = { r: Math.round(midHighL * 150), g: Math.round(midHighL * 80), b: Math.round(midHighL * 255) }
+                    colorR = { r: Math.round(midHighR * 150), g: Math.round(midHighR * 80), b: Math.round(midHighR * 255) }
                 } else {
                     // CHILL: Cool tones, smooth but still reactive
                     colorC = { r: 0, g: Math.round(bassExp * 80), b: Math.round(bassExp * 200) }
@@ -243,7 +299,23 @@ export const useSystemAudio = (sendDmxBatch) => {
                     colorR = { r: 0, g: Math.round(midHighR * 100), b: Math.round(midHighR * 200) }
                 }
 
-                sendDmxBatch([colorL, colorC, colorR])
+                // === MODIFIER MODE: Apply audio energy to external colors ===
+                const globalEnergy = (bassEnergy + (midHighL + midHighR) / 2) / 2
+                const boostFactor = 0.3 + globalEnergy * 1.2 // Range: 0.3 to 1.5 (overdrive on peaks)
+                setEnergyFactor(boostFactor)
+
+                let finalColors = [colorL, colorC, colorR]
+
+                // If modifierMode is ON and we have inputColors, modulate those instead
+                if (modifierModeRef.current && inputColorsRef.current && inputColorsRef.current.length >= 3) {
+                    finalColors = inputColorsRef.current.map((c, i) => {
+                        // Apply bass boost to center, mid/high boost to sides
+                        const factor = i === 1 ? (0.3 + bassExp * 1.5) : (0.3 + (i === 0 ? midHighL : midHighR) * 1.5)
+                        return multiplyBrightness(c, factor)
+                    })
+                }
+
+                sendDmxBatch(finalColors)
 
                 // === UPDATE VISUALIZER DATA ===
                 setVisualizerData({
@@ -271,6 +343,10 @@ export const useSystemAudio = (sendDmxBatch) => {
         start, stop, active,
         // Genre
         detectedGenre, autoGenre, setAutoGenre, manualGenre, setManualGenre,
+        // Modifier Mode
+        modifierMode, setModifierMode, energyFactor,
+        // NEW V5.0: Spatial energies for Ambilight
+        spatialEnergies,
         // Telemetry
         telemetry,
         // Visualizer

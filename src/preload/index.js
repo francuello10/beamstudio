@@ -5,6 +5,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 const dmxAPI = {
     getFixtures: () => ipcRenderer.invoke('dmx:getFixtures'),
     getConfig: () => ipcRenderer.invoke('dmx:getConfig'),
+    getSystemMedia: () => ipcRenderer.invoke('get-system-media'),
     setChannels: (fixtureIds, channels) => ipcRenderer.invoke('dmx:setChannels', { fixtureIds, channels }),
     setChannel: (channel, value) => ipcRenderer.invoke('dmx:setChannel', { channel, value }),
 
@@ -47,6 +48,7 @@ const dmxAPI = {
 
     // Dynamic scenes (software)
     dynamicScene: (sceneId, active) => ipcRenderer.invoke('dmx:dynamicScene', { sceneId, active }),
+    setDynamicRendererActive: (active) => ipcRenderer.invoke('dmx:setDynamicRendererActive', active),
     updatePerformance: (settings) => ipcRenderer.invoke('dmx:updatePerformance', settings),
 
     // DMX Mode Control (Art-Net vs Native USB)
@@ -98,6 +100,13 @@ const themeAPI = {
     set: (theme) => ipcRenderer.invoke('theme:set', theme)
 }
 
+// AI API
+const aiAPI = {
+    generate: (apiKey, model, prompt, systemInstruction) => ipcRenderer.invoke('ai:generate', { apiKey, model, prompt, systemInstruction }),
+    test: (apiKey, model) => ipcRenderer.invoke('ai:test', { apiKey, model }),
+    listModels: (apiKey) => ipcRenderer.invoke('ai:listModels', { apiKey })
+}
+
 // Expose APIs
 if (process.contextIsolated) {
     try {
@@ -107,6 +116,7 @@ if (process.contextIsolated) {
         contextBridge.exposeInMainWorld('audio', audioAPI)
         contextBridge.exposeInMainWorld('scene', sceneAPI)
         contextBridge.exposeInMainWorld('theme', themeAPI)
+        contextBridge.exposeInMainWorld('ai', aiAPI)
         contextBridge.exposeInMainWorld('windowOps', windowOps)
     } catch (error) {
         console.error(error)
