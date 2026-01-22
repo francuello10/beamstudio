@@ -4,7 +4,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import dmxnet from 'dmxnet'
 import { performance } from 'perf_hooks'
-import { readFileSync, writeFileSync } from 'fs'
+import { readFileSync } from 'fs'
 
 import { Worker } from 'worker_threads'
 
