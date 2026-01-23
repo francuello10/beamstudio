@@ -35,11 +35,11 @@ const LivePreviewContainer = React.memo(({ fixtures, masterDimmer, activeProgram
     }, [activeProgram])
 
     return (
-        <div className="glass-card live-preview">
-            <div className="preview-header">
+        <div className="glass-card live-preview" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <div className="preview-header" style={{ flexShrink: 0 }}>
                 <img src={logoImg} alt="BeamStudio" className="preview-logo" />
                 <span>Live Output {activeProgram ? '(Auto)' : ''}</span>
-                {audioTelemetryDSP && (
+                {audioTelemetryDSP && (audioTelemetryDSP.center > 0.05 || audioTelemetryDSP.left > 0.05) && (
                     <motion.span
                         animate={{ opacity: [0.4, 1, 0.4], scale: [1, 1.1, 1] }}
                         transition={{ duration: 0.5, repeat: Infinity }}
@@ -49,7 +49,7 @@ const LivePreviewContainer = React.memo(({ fixtures, masterDimmer, activeProgram
                     </motion.span>
                 )}
             </div>
-            <div className="preview-bars">
+            <div className="preview-bars" style={{ flex: 1, display: 'flex', gap: '8px', minHeight: 0 }}>
                 {fixtures?.map((fixture, i) => {
                     const isSelected = fixture.selected !== false
                     let c = overrideColors && overrideColors[i]
@@ -81,9 +81,16 @@ const LivePreviewContainer = React.memo(({ fixtures, masterDimmer, activeProgram
                     }
 
                     // Audio Boost Calculation
-                    const isLeft = i < fixtures.length / 2;
-                    const energy = audioTelemetryDSP ? (isLeft ? audioTelemetryDSP.left : audioTelemetryDSP.right) : 0;
-                    const bassKick = audioTelemetryDSP ? audioTelemetryDSP.center : 0;
+                    // @ai-constraints Calculate precise energy per fixture (L/R) for visualization
+                    const isLeft = i < fixtures.length / 2
+                    // Use Left energy for left fixtures, Right for right. Mix of Center (Bass) for all.
+                    const channelEnergy = audioTelemetryDSP
+                        ? (isLeft ? audioTelemetryDSP.left : audioTelemetryDSP.right)
+                        : 0
+                    const boostPercent = Math.round(channelEnergy * 100)
+
+                    // Center/Bass affects everyone for punch, but sides have their own jitter
+                    const totalDeformation = 1 + (audioTelemetryDSP ? (audioTelemetryDSP.center * 0.2 + channelEnergy * 0.1) : 0)
 
                     return (
                         <div key={fixture.id} className="preview-strip-wrapper" style={{ position: 'relative', height: '100%', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -96,7 +103,7 @@ const LivePreviewContainer = React.memo(({ fixtures, masterDimmer, activeProgram
                                     boxShadow: strobeVisible
                                         ? `0 0 ${40 * dimFactor}px rgba(${finalC.r}, ${finalC.g}, ${finalC.b}, ${0.6 * dimFactor})`
                                         : 'none',
-                                    scaleY: 1 + (bassKick * 0.1),
+                                    scaleY: totalDeformation, // Use combined deformation
                                 }}
                                 transition={{ duration: 0.05 }}
                                 style={{
@@ -106,25 +113,47 @@ const LivePreviewContainer = React.memo(({ fixtures, masterDimmer, activeProgram
                                     marginBottom: '8px',
                                     opacity: isSelected ? 1 : 0.2,
                                     position: 'relative',
-                                    overflow: 'hidden'
+                                    overflow: 'hidden',
+                                    minHeight: 0,
+                                    // Origin at bottom so it grows up
+                                    transformOrigin: 'bottom'
                                 }}
                             >
                                 {audioTelemetryDSP && (
                                     <>
-                                        {/* Color Fill */}
+                                        {/* Energy Fill Level */}
                                         <div style={{
                                             position: 'absolute',
                                             bottom: 0,
                                             left: 0,
                                             width: '100%',
-                                            height: `${bassKick * 100}%`,
-                                            background: 'linear-gradient(to top, rgba(255,255,255,0.4), transparent)',
-                                            opacity: 0.6,
-                                            transition: 'height 0.05s ease-out'
+                                            height: `${Math.min(100, boostPercent * 1.5)}%`, // Scale visually
+                                            background: 'linear-gradient(to top, rgba(255,255,255,0.5), transparent)',
+                                            opacity: 0.8,
+                                            transition: 'height 0.05s ease-out',
+                                            mixBlendMode: 'overlay'
                                         }} />
+
+                                        {/* Boost Percentage Text */}
+                                        {boostPercent > 5 && (
+                                            <div style={{
+                                                position: 'absolute',
+                                                bottom: '4px',
+                                                width: '100%',
+                                                textAlign: 'center',
+                                                fontSize: '10px',
+                                                fontWeight: 800,
+                                                color: 'rgba(255,255,255,0.9)',
+                                                textShadow: '0 1px 2px black',
+                                                zIndex: 10
+                                            }}>
+                                                +{boostPercent}%
+                                            </div>
+                                        )}
+
                                         {/* White Flash Strobe on Kick */}
                                         <motion.div
-                                            animate={{ opacity: (bassKick > 0.8 && strobeVisible) ? 0.8 : 0 }}
+                                            animate={{ opacity: (audioTelemetryDSP.center > 0.8 && strobeVisible) ? 0.6 : 0 }}
                                             transition={{ duration: 0.05 }}
                                             style={{
                                                 position: 'absolute',

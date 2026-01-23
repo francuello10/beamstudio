@@ -8,7 +8,8 @@ export default defineConfig({
             rollupOptions: {
                 input: {
                     index: resolve(__dirname, 'src/main/index.js'),
-                    dmxWorker: resolve(__dirname, 'src/main/dmxWorker.js')
+                    dmxWorker: resolve(__dirname, 'src/main/dmxWorker.js'),
+                    serialWorker: resolve(__dirname, 'src/main/serialWorker.js')
                 }
             }
         },

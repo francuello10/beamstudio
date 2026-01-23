@@ -50,14 +50,22 @@ const KNOWN_DMX_VENDORS = {
     '1A86': 'CH340 Clone',
 }
 
-// Available USB DMX drivers
-const USB_DRIVERS = [
-    { id: 'd2xx', name: 'FTDI D2XX Direct', desc: 'Direct USB communication (Ultra-low latency)' },
-]
+// Available USB DMX drivers - STRICT ISOLATION BY OS
+function getAvailableDrivers() {
+    if (process.platform === 'win32') {
+        return [
+            { id: 'd2xx', name: 'FTDI D2XX Direct', desc: 'Direct USB communication (Ultra-low latency) [WINDOWS ONLY]' }
+        ]
+    }
+    // Linux / Mac (Kernel Drivers)
+    return [
+        { id: 'serialport', name: 'Enttec Open DMX (Kernel)', desc: 'Linux Kernel Driver (Ultra-low latency via /dev/ttyUSB0)' }
+    ]
+}
 
 // Driver state - Singleton pattern with connection promise
 let dmxMode = 'artnet'  // 'artnet' | 'usb'
-let currentUsbDriver = 'd2xx'  // Default to D2XX (High Precision)
+let currentUsbDriver = process.platform === 'win32' ? 'd2xx' : 'serialport' // Default based on OS
 let nativeDevicePath = ''
 let dmxDriver = null
 let connectionPromise = null  // Tracks pending connection to prevent race conditions
@@ -105,29 +113,50 @@ async function closeExistingDriver() {
 dmxDriver = createArtNetDriver()
 
 // List available ports (D2XX)
+// List available ports (Context Aware)
 async function listSerialPorts() {
-    let ports = []
+    // 1. Windows: Use D2XX
+    if (process.platform === 'win32') {
+        try {
+            const rawFTDI = await import('ftdi-d2xx')
+            const FTDI = rawFTDI.default || rawFTDI
+            const devices = await FTDI.getDeviceInfoList()
 
-    // 1. Get D2XX Devices (Preferred)
+            return devices.map(d => ({
+                path: d.serial_number,
+                manufacturer: 'FTDI (Direct D2XX)',
+                displayName: `FTDI USB DMX (${d.description || 'D2XX'}) - ${d.serial_number}`,
+                type: 'd2xx',
+                isRecommended: true
+            }))
+        } catch (e) {
+            console.error('D2XX scan failed:', e)
+            return []
+        }
+    }
+
+    // 2. Linux: Use SerialPort (Kernel)
     try {
-        const rawFTDI = await import('ftdi-d2xx')
-        const FTDI = rawFTDI.default || rawFTDI
-        const devices = await FTDI.getDeviceInfoList()
+        const { SerialPort } = require('serialport')
+        const ports = await SerialPort.list()
 
-        const d2xxPorts = devices.map(d => ({
-            path: d.serial_number,
-            manufacturer: 'FTDI (Direct D2XX)',
-            displayName: `FTDI USB DMX (${d.description || 'D2XX'}) - ${d.serial_number}`,
-            type: 'd2xx',
+        // Filter for relevant USB-DMX devices (FTDI, CH340, etc)
+        const dmxPorts = ports.filter(p =>
+            p.vendorId && Object.keys(KNOWN_DMX_VENDORS).includes(p.vendorId.toUpperCase())
+        )
+
+        return dmxPorts.map(p => ({
+            path: p.path,
+            manufacturer: KNOWN_DMX_VENDORS[p.vendorId?.toUpperCase()] || p.manufacturer || 'Generic USB',
+            displayName: `${p.path} (${p.manufacturer || 'USB DMX'})`,
+            type: 'serialport',
             isRecommended: true
         }))
 
-        ports = [...d2xxPorts]
     } catch (e) {
-        console.error('D2XX scan failed:', e)
+        console.error('SerialPort scan failed:', e)
+        return []
     }
-
-    return ports
 }
 
 // Diagnostic scan (Removed as requested, using listSerialPorts for all)
@@ -135,12 +164,14 @@ async function listSerialPorts() {
 // ============================================================================
 // FTDI D2XX Direct Driver (Worker Thread High Precision)
 // ============================================================================
+// ============================================================================
+// FTDI D2XX Direct Driver (Windows)
+// ============================================================================
 async function createD2XXDriver(devicePath) {
     if (connectionPromise) { try { await connectionPromise } catch (e) { } if (dmxDriver && dmxDriver.mode === 'd2xx') return dmxDriver }
 
     connectionPromise = (async () => {
         try {
-            // 1. Obtener dispositivos antes de lanzar el worker para asegurar un serial_number válido
             const rawFTDI = await import('ftdi-d2xx')
             const FTDI = rawFTDI.default || rawFTDI
             const devices = await FTDI.getDeviceInfoList()
@@ -153,7 +184,7 @@ async function createD2XXDriver(devicePath) {
             const targetSerial = devicePath || devices[0].serial_number
             console.log(`[DMX] Selected device serial: ${targetSerial}`)
 
-            // 2. Path al worker
+            // Path al worker
             const workerPath = join(__dirname, 'dmxWorker.js')
             console.log(`[DMX] Spawning worker at ${workerPath}`)
 
@@ -176,7 +207,7 @@ async function createD2XXDriver(devicePath) {
                         console.log('[DMX] Worker connected and transmitting')
                         resolve({
                             mode: 'd2xx',
-                            driverName: 'FTDI D2XX (Worker Thread)',
+                            driverName: 'FTDI D2XX (Windows)',
                             devicePath: targetSerial,
                             worker: worker,
                             setChannel: (ch, val) => {
@@ -216,6 +247,73 @@ async function createD2XXDriver(devicePath) {
     return connectionPromise
 }
 
+// ============================================================================
+// Linux SerialPort Driver (Kernel)
+// ============================================================================
+async function createSerialPortDriver(devicePath) {
+    if (connectionPromise) { try { await connectionPromise } catch (e) { } if (dmxDriver && dmxDriver.mode === 'serialport') return dmxDriver }
+
+    connectionPromise = (async () => {
+        try {
+            const targetPath = devicePath || '/dev/ttyUSB0'
+            console.log(`[DMX Linux] Selected device path: ${targetPath}`)
+
+            const workerPath = join(__dirname, 'serialWorker.js')
+            console.log(`[DMX Linux] Spawning worker at ${workerPath}`)
+
+            const worker = new Worker(workerPath, {
+                workerData: {
+                    sharedBuffer: dmxSharedBuffer,
+                    serialNumber: targetPath, // For serialport, serialNumber is the PATH
+                    settings: {
+                        dmxHz: dmxState.performance.dmxHz
+                    }
+                }
+            })
+
+            let isClosed = false
+
+            return new Promise((resolve, reject) => {
+                worker.on('message', (msg) => {
+                    if (msg.type === 'status' && msg.status === 'connected') {
+                        console.log('[DMX Linux] Worker connected')
+                        resolve({
+                            mode: 'serialport',
+                            driverName: 'Enttec Open DMX (Linux)',
+                            devicePath: targetPath,
+                            worker: worker,
+                            setChannel: (ch, val) => {
+                                if (ch >= 0 && ch < DMX_UNIVERSE_SIZE) {
+                                    dmxChannels[ch] = val
+                                }
+                            },
+                            transmit: () => { },
+                            close: async () => {
+                                isClosed = true
+                                worker.postMessage({ type: 'stop' })
+                                worker.terminate()
+                            }
+                        })
+                    }
+                    if (msg.type === 'error') {
+                        console.error('[DMX Linux Worker] Error:', msg.error)
+                        if (!isClosed) reject(new Error(msg.error))
+                    }
+                })
+
+                worker.on('error', (err) => reject(err))
+                worker.on('exit', (code) => { if (code !== 0) console.error(`[DMX Linux] Worker exit ${code}`) })
+            })
+
+        } catch (error) {
+            console.error('[DMX Linux] Init Failed:', error.message)
+            return null
+        } finally { connectionPromise = null }
+    })()
+    return connectionPromise
+}
+
+
 
 // Switch DMX mode
 async function switchDmxMode(mode, devicePath = null, driverType = 'd2xx') {
@@ -226,8 +324,12 @@ async function switchDmxMode(mode, devicePath = null, driverType = 'd2xx') {
 
         let newDriver = null
 
-        // Support only D2XX for USB
-        newDriver = await createD2XXDriver(path)
+        // STRICT OS CHECK
+        if (process.platform === 'win32') {
+            newDriver = await createD2XXDriver(path)
+        } else {
+            newDriver = await createSerialPortDriver(path)
+        }
 
         console.log('[DMX] New driver created:', newDriver ? newDriver.driverName : 'null')
 
@@ -235,12 +337,12 @@ async function switchDmxMode(mode, devicePath = null, driverType = 'd2xx') {
             await closeExistingDriver()
             dmxDriver = newDriver
             dmxMode = 'usb'
-            currentUsbDriver = 'd2xx'
+            currentUsbDriver = process.platform === 'win32' ? 'd2xx' : 'serialport'
             nativeDevicePath = path
             console.log(`[DMX] Driver assigned: ${dmxDriver.driverName} on ${path}`)
-            return { success: true, mode: 'usb', devicePath: path, driverType: 'd2xx' }
+            return { success: true, mode: 'usb', devicePath: path, driverType: currentUsbDriver }
         } else {
-            return { success: false, error: 'Failed to connect to FTDI device (Check if it is in use or driver missing)', mode: dmxMode }
+            return { success: false, error: 'Failed to connect to USB device (Check if it is in use or driver missing)', mode: dmxMode }
         }
     } else {
         await closeExistingDriver()
@@ -351,7 +453,31 @@ const DYNAMIC_SCENES = {
     strobe: { name: 'Strobe', desc: 'Estroboscópico', handler: (f) => f % 6 < 3 ? { r: 255, g: 255, b: 255 } : { r: 0, g: 0, b: 0 } },
     party: { name: 'Party', desc: 'Fiesta random', handler: () => { const c = [[255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 0], [255, 0, 255], [0, 255, 255]][Math.floor(Math.random() * 6)]; return { r: c[0], g: c[1], b: c[2] } } },
     sunset: { name: 'Sunset', desc: 'Atardecer cálido', handler: (f) => { const t = (Math.sin(f * 0.01) + 1) / 2; return { r: 255, g: Math.round(100 + 80 * t), b: Math.round(50 * t) } } },
-    chill: { name: 'Chill', desc: 'Relajante', handler: (f) => hslToRgb(200 + 40 * Math.sin(f * 0.01), 60, 40) }
+    chill: { name: 'Chill', desc: 'Relajante', handler: (f) => hslToRgb(200 + 40 * Math.sin(f * 0.01), 60, 40) },
+    romance: {
+        name: 'Romance',
+        desc: 'Pasion y sensualidad',
+        handler: (f) => {
+            // Unify logic with frontend: Slow, sensual cycle (Red -> Purple -> Magenta)
+            const ANIMATION_SPEED = 0.5 // Match constant
+            const h1 = 350; // Deep Red
+            const h2 = 280; // Purple
+            const h3 = 320; // Bright Pink
+
+            // Oscillate smoothly
+            const phase = (Math.sin(f * (1000 / 44) * 0.0005 * ANIMATION_SPEED) + 1) / 2; // f is frame count, multiply to match time roughly
+
+            let h;
+            if (phase < 0.5) {
+                h = h1 + (h2 - h1) * (phase * 2);
+            } else {
+                h = h2 + (h3 - h2) * ((phase - 0.5) * 2);
+            }
+
+            const l = 50 + Math.sin(f * 0.05) * 10;
+            return hslToRgb(h, 100, l)
+        }
+    }
 }
 
 // ============================================================================
@@ -541,20 +667,19 @@ function startDynamicScene(sceneId) {
     stopDynamicScene()
     const scene = DYNAMIC_SCENES[sceneId]
     if (!scene) return false
-    dmxState.dynamicScene = sceneId
-    dmxState.dynamicSceneFrame = 0
-
-    // Ensure DIM is set to 255 for all fixtures when starting a dynamic scene
-    fixtures.forEach((f) => {
-        const base = f.startChannel - 1
-        dmxState.channels[base + CHANNEL_MAP.DIM] = 255
-    })
+    // @ai-constraints "Cold Start" Fix: If DIM is 0 (from Reset), default to 255 so the scene is visible.
+    // The user can then lower the fader to adjust, but we avoid starting in pitch black.
+    const isCold = fixtures.every(f => dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM] === 0)
+    if (isCold) {
+        setAllFixturesChannel('dim', 255)
+    }
 
     dynamicSceneInterval = setInterval(() => {
         const color = scene.handler(dmxState.dynamicSceneFrame)
-        // Always use DIM=255 for dynamic scenes to ensure visibility
-        fixtures.forEach((_, i) => {
-            setFixtureColor(i, color.r, color.g, color.b, 255)
+        // @ai-constraints Use current Master Dimmer value
+        fixtures.forEach((f, i) => {
+            const currentDim = dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM] || 0
+            setFixtureColor(i, color.r, color.g, color.b, currentDim)
         })
         dmxState.dynamicSceneFrame++
     }, 1000 / 44)
@@ -650,7 +775,7 @@ function setupIPC() {
         return await scanForNonVCPDevices()
     })
 
-    ipcMain.handle('dmx:getUsbDrivers', () => USB_DRIVERS)
+    ipcMain.handle('dmx:getUsbDrivers', () => getAvailableDrivers())
 
     ipcMain.handle('dmx:setMode', async (_, { mode, devicePath, driver }) => {
         const result = await switchDmxMode(mode, devicePath, driver)
@@ -786,6 +911,7 @@ function setupIPC() {
     // Set Program - TOGGLE behavior
     ipcMain.handle('dmx:setProgram', (_, { program, speed }) => {
         stopDynamicScene()
+        dmxState.dynamicRendererActive = false // Force clear dynamic/flag mode
 
         // If same program, toggle OFF (reset to 0)
         if (dmxState.activeProgram === program) {
@@ -954,7 +1080,7 @@ function setupIPC() {
 
     ipcMain.handle('dmx:setDynamicRendererActive', (_, active) => {
         dmxState.dynamicRendererActive = active
-        if (!active) resetAll()
+        // if (!active) resetAll() // Don't reset, allow persistence
         return { success: true, active }
     })
 
@@ -986,10 +1112,11 @@ function setupIPC() {
         stopDynamicScene()
         dmxState.activeProgram = null
         dmxState.ambilightActive = true
-        // Set DIM to 255 for all fixtures to ensure lights are visible
-        fixtures.forEach((f) => {
-            dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM] = 255
-        })
+
+        // Cold start fix: If Dimmer is 0, set to 255 to ensure visibility
+        const isCold = fixtures.every(f => dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM] === 0)
+        if (isCold) setAllFixturesChannel('dim', 255)
+
         return { success: true, sourceId }
     })
     ipcMain.handle('ambilight:stop', () => { dmxState.ambilightActive = false; resetAll(); return { success: true } })
@@ -1007,11 +1134,12 @@ function setupIPC() {
         })
 
         lastAmbiColors = colors
-        // @ai-constraints Use DIM=255 minimum to ensure lights are visible
+        lastAmbiColors = colors
+        // @ai-constraints Respect Master Dimmer (Grand Master)
         colors.forEach((c, i) => {
             const f = fixtures[i]
-            const currentDim = dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM] || 255
-            setFixtureColor(i, c.r, c.g, c.b, Math.max(currentDim, 255))
+            const currentDim = dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM] || 0
+            setFixtureColor(i, c.r, c.g, c.b, currentDim)
         })
         return { success: true, colors: dmxState.fixtureColors }
     })
@@ -1024,7 +1152,8 @@ function setupIPC() {
 
         const adaptiveSmooth = (cur, target) => {
             const diff = (Math.abs(cur.r - (target?.r || 0)) + Math.abs(cur.g - (target?.g || 0)) + Math.abs(cur.b - (target?.b || 0))) / 3
-            const f = diff > 30 ? 0.8 : 0.2
+            // @ai-constraints Snappier response for audio transients (diff > 20)
+            const f = diff > 20 ? 0.95 : 0.3
             return {
                 r: Math.round(cur.r + ((target?.r || 0) - cur.r) * f),
                 g: Math.round(cur.g + ((target?.g || 0) - cur.g) * f),
@@ -1038,11 +1167,16 @@ function setupIPC() {
         })
 
         lastAmbiColors = colors
-        // @ai-constraints Use DIM=255 minimum to ensure lights are visible during ambilight mode
+        lastAmbiColors = colors
+        // @ai-constraints Use currentDim to respect Master Slider (Grand Master behavior)
         colors.forEach((c, i) => {
             const f = fixtures[i]
-            const currentDim = dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM] || 255
-            setFixtureColor(i, c.r, c.g, c.b, Math.max(currentDim, 255))
+            const currentDim = dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM] || 0
+            // If currentDim is 0, we should probably output 0, but if it's undefined (startup), default to 255?
+            // Actually, dmxState is initialized to 0. 
+            // When Audio starts, we set it to 255.
+            // If user lowers it, we should use that value.
+            setFixtureColor(i, c.r, c.g, c.b, currentDim)
         })
     })
 
@@ -1051,10 +1185,11 @@ function setupIPC() {
         stopDynamicScene()
         dmxState.activeProgram = null
         dmxState.audioReactiveActive = true
-        // Set DIM to 255 for all fixtures to ensure lights are visible
-        fixtures.forEach((f) => {
-            dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM] = 255
-        })
+
+        // Cold start fix: If Dimmer is 0, set to 255 to ensure visibility
+        const isCold = fixtures.every(f => dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM] === 0)
+        if (isCold) setAllFixturesChannel('dim', 255)
+
         return { success: true }
     })
     ipcMain.handle('audio:stop', () => { dmxState.audioReactiveActive = false; resetAll(); return { success: true } })
@@ -1076,8 +1211,11 @@ function setupIPC() {
         const g = Math.min(255, Math.round(midExp * 200 + bassExp * 80))
         const b = Math.min(255, Math.round(highExp * 200 + midExp * 100))
 
-        const dim = Math.min(255, Math.round(128 + (volume || 0.5) * 127))
-        setAllFixturesColor(r, g, b, dim)
+        // Use current Master Dimmer value instead of overriding with volume
+        fixtures.forEach((f, i) => {
+            const currentDim = dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM] || 0
+            setFixtureColor(i, r, g, b, currentDim)
+        })
         return { success: true, colors: dmxState.fixtureColors }
     })
 
@@ -1224,4 +1362,12 @@ app.whenReady().then(async () => {
 })
 
 app.on('window-all-closed', () => { stopDMXLoop(); stopDynamicScene(); if (process.platform !== 'darwin') app.quit() })
-app.on('before-quit', () => { stopDMXLoop(); stopDynamicScene(); for (let i = 0; i < 512; i++) dmxDriver.setChannel(i, 0); dmxDriver.transmit() })
+app.on('before-quit', () => {
+    stopDMXLoop();
+    stopDynamicScene();
+    if (dmxDriver) {
+        for (let i = 0; i < 512; i++) dmxDriver.setChannel(i, 0);
+        dmxDriver.transmit()
+        if (dmxDriver.close) dmxDriver.close()
+    }
+})

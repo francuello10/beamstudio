@@ -77,10 +77,68 @@ const Header = React.memo(({ onReset, onMeet, onFlash }) => {
                 <span className="sync-text">{pendingRequests > 0 ? 'SYNCING DMX' : 'STABLE'}</span>
             </div>
 
-            <div className="window-controls">
-                <button className="win-btn minimize" onClick={() => windowOps?.minimize()}><Minus size={14} /></button>
-                <button className="win-btn maximize" onClick={() => windowOps?.toggleMaximize()}><Square size={12} /></button>
-                <button className="win-btn close" onClick={() => windowOps?.close()}><X size={14} /></button>
+            <div className="window-controls" style={{ display: 'flex', gap: '0', height: '100%', WebkitAppRegion: 'no-drag' }}>
+                <button
+                    className="win-btn minimize"
+                    onClick={() => windowOps?.minimize()}
+                    style={{
+                        width: '46px',
+                        height: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#ffffff',
+                        cursor: 'pointer',
+                        transition: 'background 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.target.style.background = 'rgba(255, 255, 255, 0.1)'}
+                    onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                >
+                    <Minus size={14} />
+                </button>
+                <button
+                    className="win-btn maximize"
+                    onClick={() => windowOps?.toggleMaximize()}
+                    style={{
+                        width: '46px',
+                        height: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#ffffff',
+                        cursor: 'pointer',
+                        transition: 'background 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.target.style.background = 'rgba(255, 255, 255, 0.1)'}
+                    onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                >
+                    <Square size={12} />
+                </button>
+                <button
+                    className="win-btn close"
+                    onClick={() => windowOps?.close()}
+                    style={{
+                        width: '46px',
+                        height: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#ffffff',
+                        cursor: 'pointer',
+                        transition: 'background 0.2s',
+                        borderTopRightRadius: '8px' // If rounded corner needed
+                    }}
+                    onMouseEnter={(e) => e.target.style.background = '#e81123'}
+                    onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                >
+                    <X size={14} />
+                </button>
             </div>
         </header>
     )

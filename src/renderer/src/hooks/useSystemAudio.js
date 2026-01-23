@@ -85,25 +85,21 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
     // === MAIN ENGINE ===
     const start = useCallback(async () => {
         try {
-            // 1. Get Primary Screen Source
-            const sources = await window.ambilight?.getSources()
-            if (!sources?.length) throw new Error('No sources found')
-            const primarySource = sources[0]
-            console.log('[Audio DSP] Capturing:', primarySource.name)
+            // 1. Capture Audio Stream (Standard Input)
+            // Fix: Decoupled from Ambilight/Screen Capture to prevent Screen Picker popup.
+            // User can route System Audio via OS settings (e.g. PulseAudio Monitor, Virtual Cable).
+            console.log('[Audio DSP] Requesting Audio Input...')
 
-            // 2. Capture Stream (1x1 pixel, audio loopback)
             const stream = await navigator.mediaDevices.getUserMedia({
-                audio: { mandatory: { chromeMediaSource: 'desktop' } },
-                video: {
-                    mandatory: {
-                        chromeMediaSource: 'desktop',
-                        chromeMediaSourceId: primarySource.id,
-                        minWidth: 1, maxWidth: 1,
-                        minHeight: 1, maxHeight: 1,
-                        maxFrameRate: 1
-                    }
-                }
+                audio: {
+                    echoCancellation: false,
+                    autoGainControl: false,
+                    noiseSuppression: false,
+                    latency: 0
+                },
+                video: false
             })
+
             streamRef.current = stream
 
             // 3. Build Web Audio Graph (True Stereo)
@@ -310,7 +306,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 if (modifierModeRef.current && inputColorsRef.current && inputColorsRef.current.length >= 3) {
                     finalColors = inputColorsRef.current.map((c, i) => {
                         // Apply bass boost to center, mid/high boost to sides
-                        const factor = i === 1 ? (0.3 + bassExp * 1.5) : (0.3 + (i === 0 ? midHighL : midHighR) * 1.5)
+                        const factor = i === 1 ? (0.4 + bassExp * 3.0) : (0.4 + (i === 0 ? midHighL : midHighR) * 1.5)
                         return multiplyBrightness(c, factor)
                     })
                 }

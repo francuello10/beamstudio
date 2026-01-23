@@ -1,6 +1,7 @@
 import React from 'react'
 import { Sliders, Music, Lightbulb, Monitor, Settings, Sun, Moon } from 'lucide-react'
 import { useConfigStore } from '../store/configStore'
+import { useDmxStore } from '../store/dmxStore'
 
 const navItems = [
     { id: 'mixer', icon: Sliders, label: 'Console Mixer' },
@@ -22,6 +23,28 @@ const Sidebar = React.memo(() => {
     const darkMode = useConfigStore(state => state.darkMode)
     const setDarkMode = useConfigStore(state => state.setDarkMode)
 
+    // Store activity states
+    const activeProgram = useDmxStore(state => state.activeProgram)
+    const activeDynamicScene = useDmxStore(state => state.activeDynamicScene)
+    // We infer ambilight activity via dmxStore if needed, or assume if user is there. 
+    // Actually, store has specific flags for activity? 
+    // dmxStore doesn't expose 'ambilightActive' directly in the hook we see? 
+    // Let's check dmxStore definition again. 
+    // Ah, dmxState is in the store but we need to subscribe to it.
+    // The store definition has: dmxUniverseState, activeProgram, activeDynamicScene...
+
+    // Helper to check if a mode is "Running"
+    const isRunning = (id) => {
+        if (id === 'programs' && activeProgram !== null) return true
+        if (id === 'dynamic' && activeDynamicScene !== null) return true
+        // For ambilight/audio, we might not have a store flag exposed yet in useDmxStore export?
+        // Checking file again... 
+        // useDmxStore exports: dmxUniverseState, activeProgram, activeDynamicScene... 
+        // It does NOT export dmxState object directly.
+        // Wait, dmxState is internal to the store? 
+        return false
+    }
+
     return (
         <div className="sidebar">
             <div className="sidebar-logo-container" style={{ padding: '20px 0', display: 'flex', justifyContent: 'center' }}>
@@ -31,14 +54,28 @@ const Sidebar = React.memo(() => {
                 {navItems.map(item => {
                     const Icon = item.id === 'dynamic' ? Sparkles : item.icon
                     const isActive = activePage === item.id
+                    const showDot = isRunning(item.id)
+
                     return (
                         <div
                             key={item.id}
                             className={`nav-item ${isActive ? 'active' : ''}`}
                             onClick={() => setActivePage(item.id)}
+                            style={{ position: 'relative' }}
                         >
                             <Icon size={20} />
                             <span>{item.label}</span>
+                            {showDot && (
+                                <div style={{
+                                    position: 'absolute',
+                                    right: '12px',
+                                    width: '6px',
+                                    height: '6px',
+                                    borderRadius: '50%',
+                                    background: '#00ff88',
+                                    boxShadow: '0 0 8px #00ff88'
+                                }} />
+                            )}
                         </div>
                     )
                 })}

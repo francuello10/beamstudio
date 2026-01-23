@@ -39,5 +39,5 @@ export const QUICK_COLORS = [
 
 export const DYNAMIC_SCENE_ICONS = {
     vibe: Heart, aesthetic: Heart, rainbow: Waves, fire: Flame, ocean: Droplets,
-    aurora: Sparkles, pulse: Radio, strobe: Zap, party: PartyPopper, sunset: CloudSun, chill: Waves
+    aurora: Sparkles, pulse: Radio, strobe: Zap, party: PartyPopper, sunset: CloudSun, chill: Waves, romance: Heart
 }
