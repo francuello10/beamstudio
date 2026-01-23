@@ -499,8 +499,8 @@ const dmxState = {
     dynamicRendererActive: false, // For flags and renderer-driven scenes
     performance: {
         dmxHz: 44,   // DMX512 standard
-        uiHz: 30,    // Smoother UI sync
-        ambiFps: 30
+        uiHz: 60,    // Max UI Sync
+        ambiFps: 60  // Max Game Capture
     },
     fixtureColors: fixtures.map(() => ({ r: 0, g: 0, b: 0, blackout: false }))
 }

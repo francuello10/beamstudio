@@ -28,6 +28,12 @@ The communication pipeline incorporates a mandatory shielding layer to protect F
 - **`src/main/dmxWorker.js`**: Dedicated high-precision thread for USB communication.
 - **Timing**: Calibrated Break (**2.0ms**) and MAB (**0.2ms**) for maximum hardware stability.
 
+### ⏱️ Independent Scheduler (Renderer)
+- **`src/renderer/src/services/DmxScheduler.js`**: 
+    - Decouples UI reflows from DMX transmission.
+    - Implements **Dirty-Checking** to prevent IPC bridge saturation.
+    - Ensures non-blocking control of Master Dimmer/Speed even during high-load AI scenes.
+
 ### AI Integration
 - **Google Gemini 2.0 Flash**: Procedural scene generation with real-time compilation (`aiRuntime.js`).
 

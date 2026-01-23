@@ -14,7 +14,7 @@ const SystemPage = () => {
     const setDmxFixtures = useDmxStore(state => state.setDmxFixtures)
 
     const funcRanges = config?.funcRanges || []
-    const perf = config?.performance || { dmxHz: 40, uiHz: 20, ambiFps: 30 }
+    const perf = config?.performance || { dmxHz: 44, uiHz: 60, ambiFps: 60 }
 
     // DMX Mode state
     const [dmxMode, setDmxMode] = useState(config?.dmxMode || 'artnet')

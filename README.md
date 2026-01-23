@@ -16,6 +16,8 @@ BeamStudio v3.0 introduces industry-standard workflows and a professional semant
 *   **Hardware Shielding:** Native protection for FTDI chip stability, locking the universe capacity to 33 bytes (32+1).
 *   **Audio Telemetry DSP:** True stereo 2.1 spectral analysis with real-time visual feedback.
 *   **AI Procedural Scenes:** Generate complex lighting code on-the-fly using Google Gemini 2.0 Flash.
+*   **Reactive Flags:** Instant country-flag presets with audio-reactive brightness modulation.
+*   **Screen Ambilight:** Immersive screen mirroring with smooth color transitions.
 
 ---
 

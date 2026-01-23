@@ -20,11 +20,15 @@ export const useConfigStore = create((set) => ({
     incrementPending: () => set((state) => ({ pendingRequests: state.pendingRequests + 1 })),
     decrementPending: () => set((state) => ({ pendingRequests: Math.max(0, state.pendingRequests - 1) })),
 
-    updatePerformance: (settings) =>
+    updatePerformance: (settings) => {
+        // Sync with Backend Driver
+        window.dmx?.updatePerformance(settings)
+
         set((state) => ({
             config: state.config ? {
                 ...state.config,
                 performance: { ...state.config.performance, ...settings }
             } : null
         }))
+    }
 }))

@@ -35,8 +35,11 @@ const Sidebar = React.memo(() => {
 
     // Helper to check if a mode is "Running"
     const isRunning = (id) => {
+        const state = useDmxStore.getState()
         if (id === 'programs' && activeProgram !== null) return true
-        if (id === 'dynamic' && (activeDynamicScene !== null || useDmxStore.getState().activeFlag !== null)) return true
+        if (id === 'dynamic' && (activeDynamicScene !== null || state.activeFlag !== null)) return true
+        if (id === 'audio' && state.activeProgram === 220) return true // StickTec Sound Mode
+        if (id === 'ambilight' && state.pixelMapBuffer?.length > 0 && !activeDynamicScene && !state.activeFlag && activeProgram === null) return true
         return false
     }
 
