@@ -36,12 +36,7 @@ const Sidebar = React.memo(() => {
     // Helper to check if a mode is "Running"
     const isRunning = (id) => {
         if (id === 'programs' && activeProgram !== null) return true
-        if (id === 'dynamic' && activeDynamicScene !== null) return true
-        // For ambilight/audio, we might not have a store flag exposed yet in useDmxStore export?
-        // Checking file again... 
-        // useDmxStore exports: dmxUniverseState, activeProgram, activeDynamicScene... 
-        // It does NOT export dmxState object directly.
-        // Wait, dmxState is internal to the store? 
+        if (id === 'dynamic' && (activeDynamicScene !== null || useDmxStore.getState().activeFlag !== null)) return true
         return false
     }
 

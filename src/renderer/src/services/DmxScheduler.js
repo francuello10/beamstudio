@@ -36,13 +36,36 @@ class DmxScheduler {
     tick() {
         const state = useDmxStore.getState()
 
-        // Skip if a dynamic scene or flag is active (they handle their own colors)
-        if (state.activeDynamicScene || state.activeFlag) return
-
         const currentUniverse = state.dmxUniverseState
         const fixtures = state.dmxFixtures
+        const selectedIds = fixtures.filter(f => f.selected).map(f => f.id)
 
-        // 1. Check if values have changed (Dirty-Checking)
+        // Identify if we are in a mode where colors are handled by the backend (Main Process)
+        const isDynamicMode = !!(state.activeDynamicScene || state.activeFlag)
+
+        if (isDynamicMode) {
+            // SYNC ONLY SPECIFIC CONTROL ATTRIBUTES (No RGB to avoid flickering)
+            const controlAttrs = ['dim', 'spd', 'flash', 'func']
+            const updates = {}
+            let hasChanged = false
+
+            controlAttrs.forEach(attr => {
+                if (currentUniverse[attr] !== this.lastSentValues[attr]) {
+                    updates[attr] = currentUniverse[attr]
+                    hasChanged = true
+                }
+            })
+
+            if (hasChanged && selectedIds.length > 0) {
+                if (window.dmx?.setChannelsAsync) {
+                    window.dmx.setChannelsAsync(selectedIds, updates)
+                    this.lastSentValues = { ...this.lastSentValues, ...updates }
+                }
+            }
+            return
+        }
+
+        // 1. Check if values have changed (Dirty-Checking for Manual Mode)
         const hasChanged = Object.keys(currentUniverse).some(
             key => currentUniverse[key] !== this.lastSentValues[key]
         )
@@ -50,7 +73,6 @@ class DmxScheduler {
         if (!hasChanged) return
 
         // 2. Identify active fixtures
-        const selectedIds = fixtures.filter(f => f.selected).map(f => f.id)
         if (selectedIds.length === 0) return
 
         // 3. Send via IPC (Preload API)
