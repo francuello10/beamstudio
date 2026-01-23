@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import { HARDWARE_CONSTRAINTS } from '../shared/hardware-specs'
 
 // DMX API - StickTec 1019 P6 Mode
 const dmxAPI = {
@@ -9,18 +10,24 @@ const dmxAPI = {
     setChannels: (fixtureIds, channels) => ipcRenderer.invoke('dmx:setChannels', { fixtureIds, channels }),
     setChannel: (channel, value) => ipcRenderer.invoke('dmx:setChannel', { channel, value }),
 
-    // High Performance - Async one-way calls
+    /**
+     * High Performance - Async one-way calls
+     * @ai-constraints Usar HARDWARE_CONSTRAINTS para validación.
+     */
     setChannelAsync: (channel, value) => {
-        const val = Math.max(0, Math.min(255, value))
+        const val = Math.max(HARDWARE_CONSTRAINTS.DMX_MIN, Math.min(HARDWARE_CONSTRAINTS.DMX_MAX, value))
         ipcRenderer.send('dmx:setChannelAsync', { channel, value: val })
     },
     setChannelsAsync: (fixtureIds, channels) => {
         const validated = {}
         Object.entries(channels).forEach(([ch, val]) => {
-            validated[ch] = Math.max(0, Math.min(255, val))
+            validated[ch] = Math.max(HARDWARE_CONSTRAINTS.DMX_MIN, Math.min(HARDWARE_CONSTRAINTS.DMX_MAX, val))
         })
         ipcRenderer.send('dmx:setChannelsAsync', { fixtureIds, channels: validated })
     },
+
+    // Set per-fixture colors in a single call (for flags, etc.)
+    setPerFixtureColors: (fixtureColors) => ipcRenderer.invoke('dmx:setPerFixtureColors', { fixtureColors }),
 
     // RESET ALL - Back to 0 0 0 0 0 0 0
     reset: () => ipcRenderer.invoke('dmx:reset'),
@@ -62,6 +69,10 @@ const dmxAPI = {
     onColorsUpdated: (callback) => {
         ipcRenderer.on('dmx:colorsUpdated', (_, colors) => callback(colors))
         return () => ipcRenderer.removeAllListeners('dmx:colorsUpdated')
+    },
+    onTelemetryUpdated: (callback) => {
+        ipcRenderer.on('dmx:telemetry', (_, data) => callback(data))
+        return () => ipcRenderer.removeAllListeners('dmx:telemetry')
     }
 }
 

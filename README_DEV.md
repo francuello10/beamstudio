@@ -1,69 +1,40 @@
-# 🛠️ BeamStudio - Developer Documentation (AI/Dev Focus)
+# 🛠️ BeamStudio - Developer Documentation
 
 **Repo:** [github.com/francuello10/beamstudio](https://github.com/francuello10/beamstudio)  
 **Main Engine:** FTDI D2XX Direct Driver (Ultra-Low Latency)
-**Author:** Fran Cuello (@francuello10)
+**Atomic State Architecture:** Industry-Standard Semantic Lexicon (v3.0)
 
-Este documento proporciona una visión técnica de la arquitectura de BeamStudio, destinada a desarrolladores y asistentes de IA.
+## 🏗️ Architecture & Industry Standards
 
----
+BeamStudio v3.0 aligns with professional lighting industry standards (MA Lighting, Avolites). The codebase implements an **Atomic State** pattern where high-bandwidth telemetry and low-latency control are strictly decoupled.
 
-## 🏗️ Arquitectura y Stack Tecnológico
+### 📡 Semantic Polish (Nomenclature)
+- **`dmxUniverseState`**: Central state representing the active DMX Universe (0-511).
+- **`dmxFixtures`**: Logical patch representing physical units.
+- **`pixelMapBuffer`**: High-frequency color buffer for Ambilight and DSP effects.
+- **`audioTelemetryDSP`**: Real-time spectral analysis results.
 
-BeamStudio es una aplicación **Electron** de alto rendimiento construida con **React** y **Vite**, optimizada para el control DMX de baja latencia.
+## 🛡️ Hardware Shielding & Data Integrity
 
-### Core Tecnológico
-*   **Electron:** Shell multiplataforma.
-*   **Vite:** Herramienta de construcción y servidor de desarrollo ultra-rápido.
-*   **React 19:** Biblioteca para la interfaz de usuario.
-*   **Vanilla CSS + Glassmorphism:** Estética moderna premium sin dependencias pesadas de CSS.
-*   **ftdi-d2xx:** Driver de comunicación directa por hardware con chips FTDI (el corazón de la app).
-*   **dmxnet:** Implementación de Art-Net para compatibilidad con puentes externos (como QLC+).
+The communication pipeline incorporates a mandatory shielding layer to protect FTDI hardware:
+- **Universe Capacity**: Restricted to **33 bytes** (32 channels + 1 Start Code) as per driver constraints.
+- **Refresh rate**: Locked at **44Hz** (Standard DMX) to prevent jitter and chip saturation.
+- **Defensive JSDoc**: Core transmission functions include `@ai-constraints` to prevent AI agents from breaking hardware timings.
 
----
+## 📡 DMX Implementation & Data Flow
 
-## 📡 Implementación DMX y Flujo de Datos
+### Transmission Engine (Main Process)
+- **`src/main/index.js`**: Orchestrates the D2XX Worker and Art-Net fallback.
+- **`src/main/dmxWorker.js`**: Dedicated high-precision thread for USB communication.
+- **Timing**: Calibrated Break (**2.0ms**) and MAB (**0.2ms**) for maximum hardware stability.
 
-### Motor de Transmisión (Main Process)
-El archivo `src/main/index.js` gestiona el bucle de transmisión DMX. Hemos migrado de una comunicación serial estándar a **D2XX Direct**, lo que nos permite:
-*   Bucle de alta precisión con un **MAB (Mark After Break)** calibrado por hardware.
-*   Latencia inferior a 2ms.
-*   Uso de un buffer de 512 canales con **Cero-Copia** de memoria durante la transmisión.
+### AI Integration
+- **Google Gemini 2.0 Flash**: Procedural scene generation with real-time compilation (`aiRuntime.js`).
 
-### Integración con Google Gemini (AI)
-La generación de escenas por IA se realiza a través de un IPC handler en el proceso principal:
-*   El Renderer envía prompts vía `window.ai.generate()`.
-*   El Main Process ejecuta las llamadas a la API de `@google/generative-ai` con `apiVersion: 'v1beta'` para compatibilidad con modelos experimentales como Gemini 2.0 Flash.
-*   La respuesta JSON se parsea en el Renderer para crear escenas dinámicas o presets de color.
-
-### Flujo de Datos de Usuario
-1.  **Interacción:** El Renderer (React) llama a `window.dmx.setChannelAsync()` (unidireccional para máximo performance en faders).
-2.  **IPC Asíncrono:** Mensaje enviado al Main Process vía `ipcRenderer.send`.
-3.  **Estado Global:** El Main process actualiza el array `dmxState.channels`.
-4.  **Bucle de Sincronización:** Un intervalo de UI dedicado emite `dmx:colorsUpdated` solo cuando detecta cambios reales, optimizando el uso de la CPU.
+## 📂 Project Structure
+- `src/renderer/src/store/`: Atomic state management (Zustand).
+- `src/renderer/src/services/`: Independent transmission and AI engines.
+- `src/renderer/src/utils/hardware-specs.js`: Central hardware-driven constants.
 
 ---
-
-## 🎨 Diseño y Estética
-*   **CSS Puro:** Hemos eliminado Tailwind para reducir el overhead y tener control total sobre las variables de diseño.
-*   **Dual Theme:** Sistema de variables CSS (`:root` y `.light`) para gestionar los modos Dark y Light de forma reactiva.
-*   **Precisión Visual:** El simulador de barras LED del frontend recibe el estado directo del driver DMX para una previsualización 1:1.
-
----
-
-## 📂 Estructura del Proyecto
-*   `src/main/index.js`: Lógica del driver D2XX, Art-Net y ciclo de vida de Electron.
-*   `src/preload/index.js`: Puente de seguridad que expone las APIs de DMX al frontend.
-*   `src/renderer/src/App.jsx`: UI principal, gestión de estado global y componentes de las páginas.
-*   `src/renderer/src/index.css`: Sistema de diseño basado en variables y componentes Vanilla CSS.
-
----
-
-## 🛠️ Scripts de Desarrollo
-*   `npm run dev`: Inicia el servidor de desarrollo Vite y Electron.
-*   `npm run build`: Prepara la aplicación para producción.
-*   `npm run dist`: Genera los instaladores finales (`.exe`, `.deb`, `.AppImage`) en la carpeta `dist/`.
-
----
-
 *BeamStudio: Fusionando la estabilidad del hardware industrial con la estética web moderna.*

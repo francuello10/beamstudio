@@ -304,6 +304,46 @@ export const DYNAMIC_SCENES = {
                 hslToRgb(h + 40, 100, 50),
             ]
         }
+    },
+    ROMANCE: {
+        name: 'Romance',
+        getFrame: (t) => {
+            // Match Backend: Deep Red -> Purple -> Bright Pink
+            const time = t * 0.0005 * ANIMATION_SPEED
+            const phase = time % 3
+
+            let h, s, l
+
+            if (phase < 1) {
+                // Red -> Purple
+                const p = phase
+                const smoothP = p * p * (3 - 2 * p)
+                h = 350 - (350 - 280) * smoothP
+                s = 100
+                l = 50
+            } else if (phase < 2) {
+                // Purple -> Bright Pink
+                const p = phase - 1
+                const smoothP = p * p * (3 - 2 * p)
+                h = 280 + (320 - 280) * smoothP
+                s = 100 - 30 * smoothP
+                l = 50 + 40 * smoothP
+            } else {
+                // Bright Pink -> Red
+                const p = phase - 2
+                const smoothP = p * p * (3 - 2 * p)
+                h = 320 + (350 - 320) * smoothP
+                s = 70 + 30 * smoothP
+                l = 90 - 40 * smoothP
+            }
+
+            // Stereo offset for visual interest
+            return [
+                hslToRgb(h, s, l),
+                hslToRgb(h - 5, s, l * 0.9),
+                hslToRgb(h + 5, s, l)
+            ]
+        }
     }
 }
 

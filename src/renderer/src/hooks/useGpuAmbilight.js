@@ -7,9 +7,9 @@ import { lerpColor } from '../utils/palettes'
  * Features:
  * - GPU downscaling via OffscreenCanvas (3x1)
  * - LERP color smoothing (anti-flicker)
- * - Spatial Boost integration (audio-reactive brightness)
+ * - Spatial Boost integration (audioTelemetryDSP brightness modulation)
  */
-export const useGpuAmbilight = (sendDmxBatch, audioEnergies = null) => {
+export const useGpuAmbilight = (dispatchPixelMapUpdate, audioTelemetryDSP = null) => {
     const [capturing, setCapturing] = useState(false)
     const [isMono, setIsMono] = useState(false)
     const [boostEnabled, setBoostEnabled] = useState(false)
@@ -31,12 +31,12 @@ export const useGpuAmbilight = (sendDmxBatch, audioEnergies = null) => {
     const isMonoRef = useRef(false)
     const boostEnabledRef = useRef(false)
     const boostFactorRef = useRef(0.8)
-    const audioEnergiesRef = useRef(null)
+    const audioTelemetryDSPRef = useRef(null)
 
     useEffect(() => { isMonoRef.current = isMono }, [isMono])
     useEffect(() => { boostEnabledRef.current = boostEnabled }, [boostEnabled])
     useEffect(() => { boostFactorRef.current = boostFactor }, [boostFactor])
-    useEffect(() => { audioEnergiesRef.current = audioEnergies }, [audioEnergies])
+    useEffect(() => { audioTelemetryDSPRef.current = audioTelemetryDSP }, [audioTelemetryDSP])
 
     const videoRef = useRef(null)
     const canvasRef = useRef(null)
@@ -117,8 +117,8 @@ export const useGpuAmbilight = (sendDmxBatch, audioEnergies = null) => {
                 }
 
                 // === SPATIAL BOOST (Audio-reactive brightness) ===
-                if (boostEnabledRef.current && audioEnergiesRef.current) {
-                    const energies = audioEnergiesRef.current
+                if (boostEnabledRef.current && audioTelemetryDSPRef.current) {
+                    const energies = audioTelemetryDSPRef.current
                     const bf = boostFactorRef.current
 
                     rawColors = rawColors.map((c, i) => {
@@ -141,7 +141,7 @@ export const useGpuAmbilight = (sendDmxBatch, audioEnergies = null) => {
                 const finalColors = smoothedColors.current
 
                 setColors(finalColors)
-                sendDmxBatch(finalColors)
+                dispatchPixelMapUpdate(finalColors)
                 requestRef.current = requestAnimationFrame(process)
             }
             process()
