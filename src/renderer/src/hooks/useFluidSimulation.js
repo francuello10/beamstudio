@@ -61,6 +61,23 @@ export const FLUID_PALETTES = [
 ]
 
 // ═══════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════
+const lerp = (a, b, t) => a * (1 - t) + b * t
+const lerp3 = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)]
+
+const lerpPhysics = (p1, p2, t) => ({
+    velocityDissipation: lerp(p1.velocityDissipation, p2.velocityDissipation, t),
+    dyeDissipation: lerp(p1.dyeDissipation, p2.dyeDissipation, t),
+    splatRadius: lerp(p1.splatRadius, p2.splatRadius, t),
+    curl: lerp(p1.curl, p2.curl, t),
+    splatForce: lerp(p1.splatForce, p2.splatForce, t),
+    pressure: lerp(p1.pressure, p2.pressure, t),
+    numSplats: lerp(p1.numSplats, p2.numSplats, t),
+    splatInterval: lerp(p1.splatInterval, p2.splatInterval, t),
+})
+
+// ═══════════════════════════════════════════════════
 // GLSL SHADERS
 // ═══════════════════════════════════════════════════
 const baseVertexShader = `#version 300 es
@@ -321,8 +338,13 @@ export function useFluidSimulation(audioIntensity = 0) {
     const timerRef = useRef(null) // Fallback for background
     const lastTimeRef = useRef(0)
     const splatTimerRef = useRef(0)
-    const paletteIdxRef = useRef(0)
     const audioIntensityRef = useRef(0)
+
+    // Palette Transition State
+    const paletteIdxRef = useRef(0)
+    const prevPaletteIdxRef = useRef(0)
+    const transitionStartRef = useRef(0)
+    const TRANSITION_DURATION = 1000 // 1.0s crossfade
 
     const [running, setRunning] = useState(false)
     const [activePalette, setActivePalette] = useState(FLUID_PALETTES[0])
@@ -339,10 +361,22 @@ export function useFluidSimulation(audioIntensity = 0) {
         audioIntensityRef.current = audioIntensity
     }, [audioIntensity])
 
-    // Get current physics preset
+    // Get interpolated physics
     const getPhysics = useCallback(() => {
-        const palette = FLUID_PALETTES[paletteIdxRef.current]
-        return PHYSICS_PRESETS[palette.type] || PHYSICS_PRESETS.smooth
+        const now = performance.now()
+        const elapsed = now - transitionStartRef.current
+        const progress = Math.min(1.0, elapsed / TRANSITION_DURATION)
+
+        const targetP = FLUID_PALETTES[paletteIdxRef.current]
+        const currentPhysics = PHYSICS_PRESETS[targetP.type] || PHYSICS_PRESETS.smooth
+
+        if (progress < 1.0) {
+            const prevP = FLUID_PALETTES[prevPaletteIdxRef.current]
+            const prevPhysics = PHYSICS_PRESETS[prevP.type] || PHYSICS_PRESETS.smooth
+            return lerpPhysics(prevPhysics, currentPhysics, progress)
+        }
+
+        return currentPhysics
     }, [])
 
     // ── Initialize WebGL ──
@@ -458,19 +492,34 @@ export function useFluidSimulation(audioIntensity = 0) {
         fbos.dye.swap()
     }, [blit, getPhysics])
 
-    // ── Auto-splat ──
+    // ── Auto-splat (with Color Interpolation) ──
     const autoSplat = useCallback(() => {
-        const palette = FLUID_PALETTES[paletteIdxRef.current]
+        const now = performance.now()
+        const elapsed = now - transitionStartRef.current
+        const progress = Math.min(1.0, elapsed / TRANSITION_DURATION)
+
+        const targetP = FLUID_PALETTES[paletteIdxRef.current]
         const physics = getPhysics()
-        const colors = palette.colors
         const audio = audioIntensityRef.current
+
+        // Pick interpolated colors
+        let colorsToUse = targetP.colors
+        if (progress < 1.0) {
+            const prevP = FLUID_PALETTES[prevPaletteIdxRef.current]
+            const c1 = prevP.colors[Math.floor(Math.random() * prevP.colors.length)]
+            const c2 = targetP.colors[Math.floor(Math.random() * targetP.colors.length)]
+
+            // Interpolate new ink color
+            const blendedColor = lerp3(c1, c2, progress)
+            colorsToUse = [blendedColor]
+        }
 
         // Audio multiplier: at 0 audio = 1.0x, at full audio = 3.0x
         const audioMult = 1.0 + audio * 2.0
-        const numSplats = physics.numSplats + (audio > 0.3 ? 2 : 0)
+        const numSplats = Math.round(physics.numSplats + (audio > 0.3 ? 2 : 0))
 
         for (let i = 0; i < numSplats; i++) {
-            const color = colors[Math.floor(Math.random() * colors.length)]
+            const color = colorsToUse[Math.floor(Math.random() * colorsToUse.length)]
             const x = 0.05 + Math.random() * 0.9
             const y = 0.05 + Math.random() * 0.9
 
@@ -631,30 +680,46 @@ export function useFluidSimulation(audioIntensity = 0) {
         return zones
     }, [])
 
-    // ── Main render loop (Hybrid Visibility Aware) ──
+    const lagRef = useRef(0) // Accumulator for physics time
+
+    // ── Main render loop (Fixed Time Step + Interpolation Cap) ──
     const renderLoop = useCallback(() => {
         if (!runningRef.current) return
 
         const now = performance.now()
-        // Cap dt to prevent explosion after wake
-        const dt = Math.min((now - lastTimeRef.current) / 1000, 0.050)
+        let frameTime = (now - lastTimeRef.current) / 1000
         lastTimeRef.current = now
+
+        // Prevent spiral of death if tab was backgrounded for long
+        if (frameTime > 0.25) frameTime = 0.25
+
+        lagRef.current += frameTime
 
         const physics = getPhysics()
         const audio = audioIntensityRef.current
 
-        // Auto-splat: faster when audio is pumping
-        const interval = physics.splatInterval * (1.0 - audio * 0.5)
-        splatTimerRef.current += dt
-        if (splatTimerRef.current > interval) {
-            splatTimerRef.current = 0
-            autoSplat()
+        // Run physics at steady 60 FPS (0.016s) for smoothness
+        const FIXED_STEP = 0.016
+
+        let steps = 0
+        // SAFETY: Cap max steps per frame to prevent freezing on slow hardware
+        while (lagRef.current >= FIXED_STEP && steps < 10) {
+            // Auto-splat logic runs on physics tick
+            const interval = physics.splatInterval * (1.0 - audio * 0.5)
+            splatTimerRef.current += FIXED_STEP
+            if (splatTimerRef.current > interval) {
+                splatTimerRef.current = 0
+                autoSplat()
+            }
+
+            // Physics Step
+            step(FIXED_STEP)
+
+            lagRef.current -= FIXED_STEP
+            steps++
         }
 
-        // Physics
-        step(dt)
-
-        // Display to canvas
+        // Display to canvas (once per frame, showing latest state)
         const gl = glRef.current
         const p = programsRef.current
         const fbos = fbosRef.current
@@ -665,7 +730,7 @@ export function useFluidSimulation(audioIntensity = 0) {
             gl.uniform1i(p.display.uniforms.uTexture, 0)
             blit(null)
 
-            // Sample zones → DMX + UI feedback
+            // DMX Sample
             const colors = sampleZones()
             if (colors) {
                 sendPixelMapBuffer(colors)
@@ -673,9 +738,9 @@ export function useFluidSimulation(audioIntensity = 0) {
             }
         }
 
-        // Hybrid loop: setTimeout if hidden (keeps DMX running), raf if visible
+        // Hybrid loop with robust fallback
         if (document.hidden) {
-            // 30 FPS background target usually safe for Electron
+            // Force 30fps timing in background to save resources
             timerRef.current = setTimeout(renderLoop, 33)
         } else {
             rafRef.current = requestAnimationFrame(renderLoop)
@@ -719,7 +784,11 @@ export function useFluidSimulation(audioIntensity = 0) {
     const changePalette = useCallback((paletteId) => {
         const idx = FLUID_PALETTES.findIndex(p => p.id === paletteId)
         if (idx >= 0) {
+            // Store old for transition
+            prevPaletteIdxRef.current = paletteIdxRef.current
             paletteIdxRef.current = idx
+            transitionStartRef.current = performance.now()
+
             setActivePalette(FLUID_PALETTES[idx])
         }
     }, [])
