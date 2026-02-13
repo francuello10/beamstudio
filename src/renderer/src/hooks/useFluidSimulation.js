@@ -11,6 +11,7 @@
  *   - HDR bloom display shader (pow 1/1.2 gamma + glow)
  *   - Exposed currentColors for UI zone feedback
  *   - BACKGROUND SUPPORT: Hybrid rAF / setTimeout loop
+ *   - SMOOTH TRANSITIONS: 1.0s crossfade between palettes (Color + Physics)
  * 
  * @ai-constraints Do NOT simplify the shader pipeline.
  */
@@ -59,6 +60,23 @@ export const FLUID_PALETTES = [
     { id: 'zen', name: 'Zen Garden', type: 'smooth', colors: [[0.4, 0.8, 0.1], [0.1, 0.5, 0.2], [0.6, 0.8, 0.4], [0.2, 0.4, 0.1]] },
     { id: 'cyber', name: 'Cyber Mist', type: 'smooth', colors: [[0.0, 1.0, 0.6], [1.0, 0.0, 0.8], [0.0, 0.1, 0.3], [0.0, 0.4, 0.5]] },
 ]
+
+// ═══════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════
+const lerp = (a, b, t) => a * (1 - t) + b * t
+const lerp3 = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)]
+
+const lerpPhysics = (p1, p2, t) => ({
+    velocityDissipation: lerp(p1.velocityDissipation, p2.velocityDissipation, t),
+    dyeDissipation: lerp(p1.dyeDissipation, p2.dyeDissipation, t),
+    splatRadius: lerp(p1.splatRadius, p2.splatRadius, t),
+    curl: lerp(p1.curl, p2.curl, t),
+    splatForce: lerp(p1.splatForce, p2.splatForce, t),
+    pressure: lerp(p1.pressure, p2.pressure, t),
+    numSplats: lerp(p1.numSplats, p2.numSplats, t), // Floats are fine for probability checks? Or round? No, keep float for smooth blend if used as threshold
+    splatInterval: lerp(p1.splatInterval, p2.splatInterval, t),
+})
 
 // ═══════════════════════════════════════════════════
 // GLSL SHADERS
@@ -321,8 +339,13 @@ export function useFluidSimulation(audioIntensity = 0) {
     const timerRef = useRef(null) // Fallback for background
     const lastTimeRef = useRef(0)
     const splatTimerRef = useRef(0)
-    const paletteIdxRef = useRef(0)
     const audioIntensityRef = useRef(0)
+
+    // Palette Transition State
+    const paletteIdxRef = useRef(0)
+    const prevPaletteIdxRef = useRef(0)
+    const transitionStartRef = useRef(0)
+    const TRANSITION_DURATION = 1000 // 1.0s crossfade
 
     const [running, setRunning] = useState(false)
     const [activePalette, setActivePalette] = useState(FLUID_PALETTES[0])
@@ -339,10 +362,22 @@ export function useFluidSimulation(audioIntensity = 0) {
         audioIntensityRef.current = audioIntensity
     }, [audioIntensity])
 
-    // Get current physics preset
+    // Get interpolated physics
     const getPhysics = useCallback(() => {
-        const palette = FLUID_PALETTES[paletteIdxRef.current]
-        return PHYSICS_PRESETS[palette.type] || PHYSICS_PRESETS.smooth
+        const now = performance.now()
+        const elapsed = now - transitionStartRef.current
+        const progress = Math.min(1.0, elapsed / TRANSITION_DURATION)
+
+        const targetP = FLUID_PALETTES[paletteIdxRef.current]
+        const currentPhysics = PHYSICS_PRESETS[targetP.type] || PHYSICS_PRESETS.smooth
+
+        if (progress < 1.0) {
+            const prevP = FLUID_PALETTES[prevPaletteIdxRef.current]
+            const prevPhysics = PHYSICS_PRESETS[prevP.type] || PHYSICS_PRESETS.smooth
+            return lerpPhysics(prevPhysics, currentPhysics, progress)
+        }
+
+        return currentPhysics
     }, [])
 
     // ── Initialize WebGL ──
@@ -428,7 +463,7 @@ export function useFluidSimulation(audioIntensity = 0) {
         const fbos = fbosRef.current
         if (!gl || !p || !fbos) return
 
-        const physics = getPhysics()
+        const physics = getPhysics() // This now returns interpolated physics!
         const totalForce = physics.splatForce * forceMultiplier
         const totalRadius = physics.splatRadius * radiusMultiplier
 
@@ -458,19 +493,37 @@ export function useFluidSimulation(audioIntensity = 0) {
         fbos.dye.swap()
     }, [blit, getPhysics])
 
-    // ── Auto-splat ──
+    // ── Auto-splat (with Color Interpolation) ──
     const autoSplat = useCallback(() => {
-        const palette = FLUID_PALETTES[paletteIdxRef.current]
+        const now = performance.now()
+        const elapsed = now - transitionStartRef.current
+        const progress = Math.min(1.0, elapsed / TRANSITION_DURATION)
+
+        const targetP = FLUID_PALETTES[paletteIdxRef.current]
         const physics = getPhysics()
-        const colors = palette.colors
         const audio = audioIntensityRef.current
+
+        // Pick interpolated colors
+        let colorsToUse = targetP.colors
+        if (progress < 1.0) {
+            const prevP = FLUID_PALETTES[prevPaletteIdxRef.current]
+            // Pick rand from A
+            const c1 = prevP.colors[Math.floor(Math.random() * prevP.colors.length)]
+            // Pick rand from B
+            const c2 = targetP.colors[Math.floor(Math.random() * targetP.colors.length)]
+            // Lerp
+            // @ai-optimization: We interpolate the SOURCE dye color, so new ink morphs over time.
+            const blendedColor = lerp3(c1, c2, progress)
+            // Hack: Treat single color as array of 1 for invalid access safety? No, logic is fine.
+            colorsToUse = [blendedColor]
+        }
 
         // Audio multiplier: at 0 audio = 1.0x, at full audio = 3.0x
         const audioMult = 1.0 + audio * 2.0
-        const numSplats = physics.numSplats + (audio > 0.3 ? 2 : 0)
+        const numSplats = Math.round(physics.numSplats + (audio > 0.3 ? 2 : 0))
 
         for (let i = 0; i < numSplats; i++) {
-            const color = colors[Math.floor(Math.random() * colors.length)]
+            const color = colorsToUse[Math.floor(Math.random() * colorsToUse.length)]
             const x = 0.05 + Math.random() * 0.9
             const y = 0.05 + Math.random() * 0.9
 
@@ -491,7 +544,7 @@ export function useFluidSimulation(audioIntensity = 0) {
         const fbos = fbosRef.current
         if (!gl || !p || !fbos) return
 
-        const physics = getPhysics()
+        const physics = getPhysics() // Interpolated physics
         const simTexel = [1.0 / fbos.velocity.width, 1.0 / fbos.velocity.height]
         const dyeTexel = [1.0 / fbos.dye.width, 1.0 / fbos.dye.height]
 
@@ -719,7 +772,11 @@ export function useFluidSimulation(audioIntensity = 0) {
     const changePalette = useCallback((paletteId) => {
         const idx = FLUID_PALETTES.findIndex(p => p.id === paletteId)
         if (idx >= 0) {
-            paletteIdxRef.current = idx
+            // Store old for transition
+            prevPaletteIdxRef.current = paletteIdxRef.current // Capture current as explicit 'previous'
+            paletteIdxRef.current = idx // Set new target
+            transitionStartRef.current = performance.now() // Start transition
+
             setActivePalette(FLUID_PALETTES[idx])
         }
     }, [])
