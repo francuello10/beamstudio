@@ -124,8 +124,9 @@ export const useGpuAmbilight = (dispatchPixelMapUpdate, audioTelemetryDSP = null
 
                     rawColors = rawColors.map((c, i) => {
                         const energy = i === 0 ? energies.left : (i === 1 ? energies.center : energies.right)
-                        // v6.1: reduced multiplier — gentler audio modulation on screen colors
-                        const multiplier = 1 + (Math.sqrt(energy) * bf * 0.5)
+                        // v6.2: Center channel (Bass) gets 1.5x boost for stronger pump
+                        const channelMult = i === 1 ? 1.5 : 1.0
+                        const multiplier = 1 + (Math.sqrt(energy) * bf * 0.5 * channelMult)
                         return {
                             r: Math.min(255, Math.round(c.r * multiplier)),
                             g: Math.min(255, Math.round(c.g * multiplier)),

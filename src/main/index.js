@@ -1472,7 +1472,9 @@ function setupIPC() {
 
         return { success: true }
     })
-    ipcMain.handle('audio:stop', () => { dmxState.audioReactiveActive = false; resetAll(); return { success: true } })
+    // @ai-constraints Do NOT call resetAll() here — let lights hold their last state
+    // User must explicitly press RESET to clear. Navigation should not kill DMX output.
+    ipcMain.handle('audio:stop', () => { dmxState.audioReactiveActive = false; return { success: true } })
     /**
      * @ai-constraints Audio-reactive color formula with improved variety.
      * Uses bass/mid/high levels to create dynamic, varied colors.

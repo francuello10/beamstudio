@@ -152,7 +152,8 @@ const DynamicScenesPageV2 = () => {
     const { start: startAudio, stop: stopAudio, energyFactor, visualizerData, setModifierMode } = useSystemAudio(
         dispatchPixelMapUpdate,
         colorsForAudio,
-        setAudioTelemetryDSP
+        setAudioTelemetryDSP,
+        sensitivity / 50 // Map 0-100 to 0.0-2.0 multiplier (default 70 = 1.4x)
     )
 
     useEffect(() => {
@@ -329,6 +330,7 @@ const DynamicScenesPageV2 = () => {
                         </div>
                     </div>
 
+                    {/* AI INPUT — HIDDEN FOR RELEASE
                     <div className="ai-floating-container">
                         <div className="ai-input-pill">
                             {isGenerating ? (
@@ -358,6 +360,7 @@ const DynamicScenesPageV2 = () => {
                             Powered by Google Gemini 2.0 Flash
                         </span>
                     </div>
+                    */}
                 </div>
 
                 <div className="programs-sidebar">
@@ -375,6 +378,7 @@ const DynamicScenesPageV2 = () => {
                         fixtures={dmxFixtures}
                         masterDimmer={dmxUniverseState.dim}
                         onToggleFixture={toggleBlackout}
+                        isAudioActive={audioReactive}
                     />
 
                     {previewScene && (

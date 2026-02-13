@@ -226,6 +226,7 @@ const ConsoleMixerPage = ({ onReset }) => {
                         fixtures={dmxFixtures}
                         masterDimmer={dmxUniverseState.dim}
                         onToggleFixture={onToggleFixture}
+                        isAudioActive={audioReactive}
                     />
                 </div>
             </div>

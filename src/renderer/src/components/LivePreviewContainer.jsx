@@ -5,7 +5,7 @@ import logoImg from '../assets/logo.png'
 import { useDmxStore } from '../store/dmxStore'
 import { useAudioStore } from '../store/audioStore'
 
-const LivePreviewContainer = React.memo(({ fixtures, masterDimmer, activeProgram, overrideColors, onToggleFixture }) => {
+const LivePreviewContainer = React.memo(({ fixtures, masterDimmer, activeProgram, overrideColors, onToggleFixture, isAudioActive }) => {
     const [simFrame, setSimFrame] = useState(0)
 
     // Subscribe to stores
@@ -39,7 +39,7 @@ const LivePreviewContainer = React.memo(({ fixtures, masterDimmer, activeProgram
             <div className="preview-header" style={{ flexShrink: 0 }}>
                 <img src={logoImg} alt="BeamStudio" className="preview-logo" />
                 <span>Live Output {activeProgram ? '(Auto)' : ''}</span>
-                {audioTelemetryDSP && (audioTelemetryDSP.center > 0.05 || audioTelemetryDSP.left > 0.05) && (
+                {isAudioActive && audioTelemetryDSP && (audioTelemetryDSP.center > 0.05 || audioTelemetryDSP.left > 0.05) && (
                     <motion.span
                         animate={{ opacity: [0.4, 1, 0.4], scale: [1, 1.1, 1] }}
                         transition={{ duration: 0.5, repeat: Infinity }}

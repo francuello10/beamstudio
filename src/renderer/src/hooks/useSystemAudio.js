@@ -15,7 +15,7 @@ import { multiplyBrightness, lerpColor, GENRE_PROFILES } from '../utils/palettes
  * 7. LERP modifier: 0.28 (~250ms diffused transitions)
  * 8. LERP standalone: 0.20 (smooth genre output)
  */
-export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate = null) => {
+export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate = null, audioSensitivity = 1.0) => {
     // === STATE ===
     const [active, setActive] = useState(false)
     const [autoGenre, setAutoGenre] = useState(true)
@@ -234,14 +234,17 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                     })
                 }
 
+                // Sides: Mid/High energy (bands 4-15) — needed by BOTH Bass Pulse and Genre mode
+                const midHighL = bandsL.slice(4).reduce((a, b) => a + b, 0) / 12
+                const midHighR = bandsR.slice(4).reduce((a, b) => a + b, 0) / 12
+
                 // ═══════════════════════════════════════════════
                 // BASS PULSE MODE — Pure bass-driven ON/OFF lights
                 // ═══════════════════════════════════════════════
                 if (bassPulseModeRef.current) {
                     // Direct bass → brightness mapping
-                    // pow(0.8) = punchy, even moderate bass is visible
                     const bassBrightness = Math.pow(bassEnergy, 0.8)
-                    const ambientFloor = 0.05 // 5% glow in silence (never fully dark)
+                    const ambientFloor = 0.05
 
                     // Center (sub): warm white driven by bass
                     const centerIntensity = Math.max(ambientFloor, bassBrightness)
@@ -271,6 +274,11 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                         lerpColor(current, [leftColor, centerColor, rightColor][i], PULSE_LERP)
                     )
 
+                    // Emit telemetry so Ambilight boost and Live Preview still work
+                    const energies = { left: midHighL, center: Math.pow(bassEnergy, 1.5), right: midHighR }
+                    setAudioTelemetryDSP(energies)
+                    if (onAudioUpdate) onAudioUpdate(energies)
+
                     sendDmxBatch(smoothedOutput.current)
                     setEnergyFactor(bassBrightness)
 
@@ -286,13 +294,8 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 // v6.1 "DECO MODE" — Refined Color Engine
                 // ═══════════════════════════════════════════════
 
-                // [T4] Bass curve: pow(1.5) — sweet spot for deco
-                // bass 0.3→0.16, 0.5→0.35, 0.7→0.59, 1.0→1.0
+                // Bass smoothing for Deco mode
                 const bassSmooth = Math.pow(bassEnergy, 1.5)
-
-                // Sides: Mid/High energy (bands 4-15)
-                const midHighL = bandsL.slice(4).reduce((a, b) => a + b, 0) / 12
-                const midHighR = bandsR.slice(4).reduce((a, b) => a + b, 0) / 12
 
                 // === SPATIAL ENERGIES for Ambilight ===
                 const energies = {
@@ -400,7 +403,9 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
 
                 // === MODIFIER MODE — deco: visible, elegant, never hectic ===
                 const globalEnergy = (bassEnergy + (midHighL + midHighR) / 2) / 2
-                const boostFactor = 0.4 + globalEnergy * 0.9 // Range: 0.4-1.3x
+                // Apply User Sensitivity (0.5x to 2.0x typically)
+                // Base floor reduced to 0.2 for better contrast (was 0.4)
+                const boostFactor = 0.2 + (globalEnergy * 0.9 * audioSensitivity)
                 setEnergyFactor(boostFactor)
 
                 let targetColors = [colorL, colorC, colorR]
@@ -409,16 +414,16 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 if (modifierModeRef.current && inputColorsRef.current && inputColorsRef.current.length >= 3) {
                     targetColors = inputColorsRef.current.map((c, i) => {
                         const factor = i === 1
-                            ? (0.45 + bassSmooth * 1.1) // [T5] Center: 0.45-1.55x (floor 45%, never dark)
-                            : (0.5 + (i === 0 ? midHighL : midHighR) * 0.9) // [T6] Sides: 0.5-1.4x (subtle shimmer)
+                            ? (0.2 + bassSmooth * 1.5 * audioSensitivity) // [T5] Center: Deep lows, high peaks
+                            : (0.3 + (i === 0 ? midHighL : midHighR) * 0.8 * audioSensitivity) // [T6] Sides: Subtle shimmer
                         return multiplyBrightness(c, factor)
                     })
                 }
 
                 // === OUTPUT SMOOTHING — diffused transitions ===
-                // [T7] Modifier: 0.28 (~250ms) — diffused but responsive
-                // [T8] Standalone: 0.20 — smooth genre-colored silk
-                const LERP_SPEED = modifierModeRef.current ? 0.28 : 0.20
+                // [T7] Modifier: If active, DISABLE lerp here to avoid double-smoothing (backend has adaptiveSmooth)
+                //      or make it extremely fast (0.6) just to denoise slightly
+                const LERP_SPEED = modifierModeRef.current ? 0.6 : 0.20
                 smoothedOutput.current = smoothedOutput.current.map((current, i) =>
                     lerpColor(current, targetColors[i], LERP_SPEED)
                 )

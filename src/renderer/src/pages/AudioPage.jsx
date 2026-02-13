@@ -24,6 +24,12 @@ const AudioPage = () => {
         bassPulseMode, setBassPulseMode
     } = useSystemAudio(sendPixelMapBuffer, null, setAudioTelemetryDSP)
 
+    // Toggle dynamic renderer flag so main process routes color updates to DMX
+    React.useEffect(() => {
+        if (active) window.dmx?.setDynamicRendererActive(true)
+        return () => window.dmx?.setDynamicRendererActive(false)
+    }, [active])
+
     // Sync store with hook data
     React.useEffect(() => {
         setAudioData({ telemetry, visualizerData, audioActive: active })
@@ -178,7 +184,7 @@ const AudioPage = () => {
                                     boxShadow: autoGenre ? '0 0 10px #fff' : 'none'
                                 }} />
                                 <span style={{ fontSize: '11px', fontWeight: 700, color: '#fff', letterSpacing: '1px' }}>
-                                    AI AUTO-VIBE {autoGenre ? 'ON' : 'OFF'}
+                                    AUTO DETECT {autoGenre ? 'ON' : 'OFF'}
                                 </span>
                             </div>
                         </div>
@@ -218,7 +224,7 @@ const AudioPage = () => {
 
                         <div style={{ textAlign: 'center', marginTop: '12px' }}>
                             <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>
-                                {autoGenre ? 'AI DETECTED:' : 'MANUAL MODE:'}
+                                {autoGenre ? 'DETECTED:' : 'MANUAL MODE:'}
                             </span>
                             <span style={{ fontSize: '14px', fontWeight: 800, color: '#fff', marginLeft: '8px', letterSpacing: '2px' }}>
                                 {autoGenre ? detectedGenre : manualGenre}
@@ -265,6 +271,7 @@ const AudioPage = () => {
                     fixtures={dmxFixtures}
                     masterDimmer={dmxUniverseState.dim}
                     onToggleFixture={toggleBlackout}
+                    isAudioActive={active}
                 />
             </div>
         </div>
