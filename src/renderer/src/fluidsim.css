@@ -1,0 +1,311 @@
+/* ═══════════════════════════════════════════════════
+   Fluid Simulation Page — Premium Dark UI V3
+   ═══════════════════════════════════════════════════ */
+
+.fluidsim-page,
+.ambilight-page {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 0;
+    overflow: hidden;
+}
+
+.fluidsim-main {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.fluidsim-canvas-card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 24px !important;
+    background: rgba(0, 0, 0, 0.6) !important;
+    backdrop-filter: blur(20px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Header */
+.fluidsim-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-shrink: 0;
+}
+
+.fluidsim-title-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.fluidsim-title-group h2 {
+    margin: 0;
+    font-size: 1.4rem;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    background: linear-gradient(90deg, #fff, #aaa);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.fluidsim-icon {
+    color: var(--accent, #00d4ff);
+    filter: drop-shadow(0 0 10px var(--accent, #00d4ff));
+}
+
+.fluidsim-subtitle {
+    display: block;
+    font-size: 11px;
+    color: var(--text-secondary, rgba(255, 255, 255, 0.4));
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+}
+
+.fluidsim-controls-top {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+/* Action Button */
+.fluidsim-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    color: white;
+    background: linear-gradient(135deg, #00d4ff, #7928ca);
+    box-shadow: 0 4px 20px rgba(0, 212, 255, 0.3);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.fluidsim-action-btn:hover {
+    box-shadow: 0 8px 30px rgba(0, 212, 255, 0.5);
+    transform: translateY(-1px);
+}
+
+.fluidsim-action-btn.stop {
+    background: linear-gradient(135deg, #ff4444, #cc0000);
+    box-shadow: 0 4px 20px rgba(255, 68, 68, 0.3);
+}
+
+.fluidsim-action-btn.stop:hover {
+    box-shadow: 0 8px 30px rgba(255, 68, 68, 0.5);
+}
+
+/* Boost */
+.fluidsim-boost-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-secondary);
+}
+
+.fluidsim-boost-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.fluidsim-boost-btn.active {
+    background: #FF0055;
+    border-color: #FF0055;
+    color: white;
+    box-shadow: 0 0 15px rgba(255, 0, 85, 0.5);
+    animation: pulse-border 1s infinite alternate;
+}
+
+@keyframes pulse-border {
+    from {
+        box-shadow: 0 0 10px rgba(255, 0, 85, 0.4);
+    }
+
+    to {
+        box-shadow: 0 0 20px rgba(255, 0, 85, 0.7);
+    }
+}
+
+/* Canvas Wrapper */
+.fluidsim-canvas-wrapper {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #000;
+    box-shadow: inset 0 0 100px rgba(0, 0, 0, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.fluidsim-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    cursor: crosshair;
+    filter: contrast(1.1) brightness(1.1);
+}
+
+.fluidsim-canvas-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    color: rgba(255, 255, 255, 0.15);
+    pointer-events: none;
+}
+
+.fluidsim-canvas-overlay span {
+    font-size: 14px;
+    letter-spacing: 2px;
+    font-weight: 700;
+}
+
+/* GPU Spatial Monitor Styles */
+.extraction-monitor {
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 8px;
+    padding: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.monitor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    font-family: inherit;
+}
+
+.live-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #ff4444;
+    letter-spacing: 1px;
+}
+
+.dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #ff4444;
+    box-shadow: 0 0 8px #ff4444;
+    animation: blink 2s infinite;
+}
+
+@keyframes blink {
+    0% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.3;
+    }
+
+    100% {
+        opacity: 1;
+    }
+}
+
+.resolution-label {
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    color: #666;
+}
+
+/* Palette Bar */
+.fluidsim-palette-bar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 20px;
+    flex-shrink: 0;
+}
+
+.palette-label {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: var(--text-secondary, rgba(255, 255, 255, 0.4));
+    white-space: nowrap;
+}
+
+.palette-grid {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex: 1;
+}
+
+.palette-chip {
+    position: relative;
+    flex: 1;
+    min-width: 100px;
+    height: 42px;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    overflow: hidden;
+}
+
+.palette-chip.active {
+    border-color: white;
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+}
+
+.chip-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.palette-chip:hover .chip-content {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.palette-chip-name {
+    font-size: 10px;
+    font-weight: 800;
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+.palette-chip-type {
+    display: flex;
+    align-items: center;
+    color: rgba(255, 255, 255, 0.8);
+}

@@ -213,15 +213,9 @@ const AmbilightPage = () => {
                     </div>
                 </div>
             </div>
-            <div className="ambilight-sidebar">
-                <LivePreviewContainer
-                    fixtures={dmxFixtures}
-                    masterDimmer={dmxUniverseState.dim}
-                    onToggleFixture={toggleBlackout}
-                />
-            </div>
         </div>
     )
 }
+
 
 export default AmbilightPage

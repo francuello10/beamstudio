@@ -1,5 +1,5 @@
 import React from 'react'
-import { Sliders, Music, Lightbulb, Monitor, Settings, Sun, Moon } from 'lucide-react'
+import { Sliders, Music, Lightbulb, Monitor, Settings, Sun, Moon, Waves } from 'lucide-react'
 import { useConfigStore } from '../store/configStore'
 import { useDmxStore } from '../store/dmxStore'
 
@@ -8,6 +8,7 @@ const navItems = [
     { id: 'programs', icon: Lightbulb, label: 'Programs' },
     { id: 'dynamic', icon: Sparkles, icon_override: true, label: 'Dynamic' }, // We'll fix Sparkles import
     { id: 'audio', icon: Music, label: 'Audio' },
+    { id: 'fluidsim', icon: Waves, label: 'Fluid Sim' },
     { id: 'ambilight', icon: Monitor, label: 'Ambilight' },
     { id: 'system', icon: Settings, label: 'System' },
 ]
