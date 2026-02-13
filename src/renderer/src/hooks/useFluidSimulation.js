@@ -10,6 +10,7 @@
  *   - Audio-reactive splat force & radius multiplier  
  *   - HDR bloom display shader (pow 1/1.2 gamma + glow)
  *   - Exposed currentColors for UI zone feedback
+ *   - BACKGROUND SUPPORT: Hybrid rAF / setTimeout loop
  * 
  * @ai-constraints Do NOT simplify the shader pipeline.
  */
@@ -317,6 +318,7 @@ export function useFluidSimulation(audioIntensity = 0) {
     const fbosRef = useRef(null)
     const runningRef = useRef(false)
     const rafRef = useRef(null)
+    const timerRef = useRef(null) // Fallback for background
     const lastTimeRef = useRef(0)
     const splatTimerRef = useRef(0)
     const paletteIdxRef = useRef(0)
@@ -629,18 +631,20 @@ export function useFluidSimulation(audioIntensity = 0) {
         return zones
     }, [])
 
-    // ── Main render loop ──
-    const renderLoop = useCallback((timestamp) => {
+    // ── Main render loop (Hybrid Visibility Aware) ──
+    const renderLoop = useCallback(() => {
         if (!runningRef.current) return
 
-        const dt = Math.min((timestamp - lastTimeRef.current) / 1000, 0.033)
-        lastTimeRef.current = timestamp
+        const now = performance.now()
+        // Cap dt to prevent explosion after wake
+        const dt = Math.min((now - lastTimeRef.current) / 1000, 0.050)
+        lastTimeRef.current = now
 
         const physics = getPhysics()
         const audio = audioIntensityRef.current
 
         // Auto-splat: faster when audio is pumping
-        const interval = physics.splatInterval * (1.0 - audio * 0.5) // Audio shortens interval
+        const interval = physics.splatInterval * (1.0 - audio * 0.5)
         splatTimerRef.current += dt
         if (splatTimerRef.current > interval) {
             splatTimerRef.current = 0
@@ -669,7 +673,13 @@ export function useFluidSimulation(audioIntensity = 0) {
             }
         }
 
-        rafRef.current = requestAnimationFrame(renderLoop)
+        // Hybrid loop: setTimeout if hidden (keeps DMX running), raf if visible
+        if (document.hidden) {
+            // 30 FPS background target usually safe for Electron
+            timerRef.current = setTimeout(renderLoop, 33)
+        } else {
+            rafRef.current = requestAnimationFrame(renderLoop)
+        }
     }, [autoSplat, step, blit, sampleZones, sendPixelMapBuffer, getPhysics])
 
     // ── Start ──
@@ -679,13 +689,15 @@ export function useFluidSimulation(audioIntensity = 0) {
             if (!initGL()) return
         }
         window.dmx?.setDynamicRendererActive(true)
-        // Ensure dimmer is up
         window.dmx?.setAllFixturesChannel?.('dim', 255)
+
         runningRef.current = true
         setRunning(true)
+
         lastTimeRef.current = performance.now()
-        splatTimerRef.current = 999 // Immediate first splat
-        rafRef.current = requestAnimationFrame(renderLoop)
+        splatTimerRef.current = 999
+
+        renderLoop()
     }, [initGL, renderLoop])
 
     // ── Stop ──
@@ -695,6 +707,10 @@ export function useFluidSimulation(audioIntensity = 0) {
         if (rafRef.current) {
             cancelAnimationFrame(rafRef.current)
             rafRef.current = null
+        }
+        if (timerRef.current) {
+            clearTimeout(timerRef.current)
+            timerRef.current = null
         }
         window.dmx?.setDynamicRendererActive(false)
     }, [])
@@ -713,6 +729,7 @@ export function useFluidSimulation(audioIntensity = 0) {
         return () => {
             runningRef.current = false
             if (rafRef.current) cancelAnimationFrame(rafRef.current)
+            if (timerRef.current) clearTimeout(timerRef.current)
             window.dmx?.setDynamicRendererActive(false)
             const gl = glRef.current
             if (gl) {
@@ -729,7 +746,7 @@ export function useFluidSimulation(audioIntensity = 0) {
         running,
         activePalette,
         changePalette,
-        currentColors, // L/C/R zone feedback for UI
+        currentColors,
         splat,
     }
 }

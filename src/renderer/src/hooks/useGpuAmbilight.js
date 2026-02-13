@@ -10,6 +10,7 @@ import { lerpColor } from '../utils/palettes'
  * 2. Spatial boost applies sqrt curve — softer audio modulation
  * 3. Base brightness floor — never goes fully dark, always ambient
  * 4. Saturation boost option for richer deco colors
+ * 5. BACKGROUND SUPPORT: Hybrid rAF / setTimeout loop
  */
 export const useGpuAmbilight = (dispatchPixelMapUpdate, audioTelemetryDSP = null) => {
     const [capturing, setCapturing] = useState(false)
@@ -33,6 +34,7 @@ export const useGpuAmbilight = (dispatchPixelMapUpdate, audioTelemetryDSP = null
     const boostEnabledRef = useRef(false)
     const boostFactorRef = useRef(0.8)
     const audioTelemetryDSPRef = useRef(null)
+    const capturingRef = useRef(false) // Ref for loop exit
 
     useEffect(() => { isMonoRef.current = isMono }, [isMono])
     useEffect(() => { boostEnabledRef.current = boostEnabled }, [boostEnabled])
@@ -42,13 +44,17 @@ export const useGpuAmbilight = (dispatchPixelMapUpdate, audioTelemetryDSP = null
     const videoRef = useRef(null)
     const canvasRef = useRef(null)
     const requestRef = useRef(null)
+    const timerRef = useRef(null)
 
     const stop = () => {
+        capturingRef.current = false
         if (videoRef.current?.srcObject) {
             videoRef.current.srcObject.getTracks().forEach(t => t.stop())
             videoRef.current.srcObject = null
         }
         if (requestRef.current) cancelAnimationFrame(requestRef.current)
+        if (timerRef.current) clearTimeout(timerRef.current)
+
         setCapturing(false)
         setColors([{ r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }])
         smoothedColors.current = [{ r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }]
@@ -90,6 +96,7 @@ export const useGpuAmbilight = (dispatchPixelMapUpdate, audioTelemetryDSP = null
             }
 
             setCapturing(true)
+            capturingRef.current = true
             window.ambilight?.start(sourceId)
 
             const ctx = canvasRef.current.getContext('2d', {
@@ -99,6 +106,7 @@ export const useGpuAmbilight = (dispatchPixelMapUpdate, audioTelemetryDSP = null
             })
 
             const process = () => {
+                if (!capturingRef.current) return
                 if (!videoRef.current || videoRef.current.paused || videoRef.current.ended) return
 
                 // GPU-ACCELERATED DOWNSCALE → 3x1 pixels
@@ -146,7 +154,13 @@ export const useGpuAmbilight = (dispatchPixelMapUpdate, audioTelemetryDSP = null
 
                 setColors(finalColors)
                 dispatchPixelMapUpdate(finalColors)
-                requestRef.current = requestAnimationFrame(process)
+
+                // Hybrid loop: setTimeout if hidden (keeps DMX running), raf if visible
+                if (document.hidden) {
+                    timerRef.current = setTimeout(process, 33)
+                } else {
+                    requestRef.current = requestAnimationFrame(process)
+                }
             }
             process()
 
