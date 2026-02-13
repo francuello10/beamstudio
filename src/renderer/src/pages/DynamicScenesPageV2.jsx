@@ -7,7 +7,7 @@ import { useConfigStore } from '../store/configStore'
 import { useAudioStore } from '../store/audioStore'
 import { useSystemAudio } from '../hooks/useSystemAudio'
 import { DYNAMIC_SCENES, FLAGS } from '../utils/palettes'
-import { DYNAMIC_SCENE_ICONS } from '../utils/constants'
+import { DYNAMIC_SCENE_ICONS, BUILT_IN_SCENES } from '../utils/constants'
 import { generateLightScene } from '../services/geminiService'
 import { compileAIResponse, executeAIScene } from '../utils/aiRuntime'
 
@@ -29,7 +29,9 @@ const DynamicScenesPageV2 = () => {
     const setAudioTelemetryDSP = useAudioStore(state => state.setAudioTelemetryDSP)
     const setAudioData = useAudioStore(state => state.setAudioData)
 
-    const dynamicScenes = config?.dynamicScenes || []
+    // Force use of BUILT_IN_SCENES to ensure new V5.0 scenes are visible
+    // ignoring potentially stale config.dynamicScenes
+    const dynamicScenes = BUILT_IN_SCENES
 
     // Page Local State
     const [audioReactive, setAudioReactive] = useState(false)
@@ -125,6 +127,12 @@ const DynamicScenesPageV2 = () => {
         const updateFrame = () => {
             const colors = scene.getFrame(Date.now())
             setSceneColors(colors)
+
+            // Fix: Dispatch DMX update immediately if not using Audio engine
+            if (!audioReactive) {
+                dispatchPixelMapUpdate(colors)
+            }
+
             frameId = requestAnimationFrame(updateFrame)
         }
 

@@ -19,7 +19,7 @@ class DmxScheduler {
     start() {
         if (this.intervalId) return
 
-        console.log(`[DmxScheduler] Initializing engine with ${CORE_TIMING.THROTTLE_BUFFER_MS}ms throttle...`)
+
 
         this.intervalId = setInterval(() => {
             this.tick()

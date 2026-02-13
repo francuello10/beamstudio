@@ -147,6 +147,15 @@ export const FLAGS = {
             { r: 20, g: 30, b: 80 },    // Azul Oscuro
         ],
         description: 'Solar Corona'
+    },
+    FOCUS: {
+        name: '💡 Focus',
+        colors: [
+            { r: 255, g: 214, b: 170 }, // Warm White (2700K approx)
+            { r: 255, g: 214, b: 170 }, // Warm White
+            { r: 255, g: 214, b: 170 }, // Warm White
+        ],
+        description: 'Productivity (2700K)'
     }
 }
 
@@ -190,159 +199,315 @@ export const GENRE_PROFILES = {
     }
 }
 
-// === DYNAMIC SCENE ANIMATIONS (Slowed 0.5x) ===
+// === DYNAMIC SCENE ANIMATIONS — V6.0 Premium Collection ===
+// All scenes return [color0, color1, color2] for 3-bar per-fixture rendering
+// Time base: t = Date.now() (ms) → s = t * 0.0005 (half-speed seconds)
+
+const _wave = (t, seed) =>
+    Math.sin(t * 0.7 + seed) * 0.5 +
+    Math.sin(t * 1.3 + seed * 2.1) * 0.3 +
+    Math.sin(t * 2.1 + seed * 0.7) * 0.2
+
 export const DYNAMIC_SCENES = {
-    RAINBOW: {
-        name: 'Rainbow Wave',
-        icon: '🌈',
-        getFrame: (t) => {
-            const hue = (t * 0.25 * ANIMATION_SPEED) % 360 // Slowed
-            return [
-                hslToRgb((hue + 0) % 360, 100, 50),
-                hslToRgb((hue + 120) % 360, 100, 50),
-                hslToRgb((hue + 240) % 360, 100, 50),
-            ]
-        }
-    },
-    PULSE: {
-        name: 'Sync Pulse',
-        icon: '💓',
-        getFrame: (t) => {
-            const intensity = (Math.sin(t * 0.025 * ANIMATION_SPEED) + 1) / 2
-            const v = Math.round(intensity * 255)
-            return [{ r: v, g: 0, b: v }, { r: v, g: 0, b: v }, { r: v, g: 0, b: v }]
-        }
-    },
-    BREATHE: {
-        name: 'Calm Breathe',
-        icon: '🌬️',
-        getFrame: (t) => {
-            const intensity = (Math.sin(t * 0.01 * ANIMATION_SPEED) + 1) / 2
-            const v = Math.round(intensity * 200)
-            return [{ r: 0, g: v, b: v }, { r: 0, g: v, b: v }, { r: 0, g: v, b: v }]
-        }
-    },
-    STROBE: {
-        name: 'Hard Strobe',
-        icon: '⚡',
-        getFrame: (t) => {
-            const on = Math.floor(t / 100) % 2 === 0 // Slowed strobe
-            const v = on ? 255 : 0
-            return [{ r: v, g: v, b: v }, { r: v, g: v, b: v }, { r: v, g: v, b: v }]
-        }
-    },
-    CHASE: {
-        name: 'Chase',
-        icon: '🏃',
-        getFrame: (t) => {
-            const pos = Math.floor(t / 400) % 3 // Slowed chase
-            return [0, 1, 2].map(i => i === pos ? { r: 255, g: 100, b: 0 } : { r: 0, g: 0, b: 0 })
-        }
-    },
+    // ── AMBIENT / CHILL ──────────────────────────────────────────────────
     VIBE: {
         name: 'Vibe',
         getFrame: (t) => {
-            const h = (t * 0.05 * ANIMATION_SPEED) % 360
-            return [
-                hslToRgb(h, 70, 60),
-                hslToRgb((h + 40) % 360, 70, 60),
-                hslToRgb((h + 80) % 360, 70, 60),
-            ]
+            const s = t * 0.0005
+            return [0, 1, 2].map(i => hslToRgb((s * 15 + i * 50) % 360, 45, 72))
         }
     },
     AESTHETIC: {
         name: 'Aesthetic',
         getFrame: (t) => {
-            const h = 280 + Math.sin(t * 0.005 * ANIMATION_SPEED) * 40
-            return [
-                hslToRgb(h % 360, 80, 50),
-                hslToRgb((h + 30) % 360, 80, 50),
-                hslToRgb((h + 60) % 360, 80, 50),
-            ]
+            const s = t * 0.0005
+            return [0, 1, 2].map(i => {
+                const base = 280 + Math.sin(s * 0.3 + i * 1.2) * 50
+                const sat = 75 + Math.sin(s * 0.5 + i) * 15
+                return hslToRgb(((base % 360) + 360) % 360, sat, 55)
+            })
         }
     },
-    FIRE: {
-        name: 'Fire',
+    CHILL: {
+        name: 'Chill',
         getFrame: (t) => {
-            return [0, 1, 2].map(i => ({
-                r: 200 + Math.random() * 55,
-                g: 50 + Math.random() * 100,
-                b: 0
-            }))
+            const s = t * 0.0005
+            return [0, 1, 2].map(i => {
+                const h = 200 + Math.sin(s * 0.2 + i * 0.8) * 30
+                const l = 30 + Math.sin(s * 0.15 + i * 1.5) * 10
+                return hslToRgb(h, 60, l)
+            })
         }
     },
-    OCEAN: {
-        name: 'Ocean',
+    ZEN: {
+        name: 'Zen',
         getFrame: (t) => {
-            const h = 200 + Math.sin(t * 0.01 * ANIMATION_SPEED) * 20
-            return [
-                hslToRgb(h, 90, 40),
-                hslToRgb(h + 10, 90, 40),
-                hslToRgb(h + 20, 90, 40),
-            ]
-        }
-    },
-    AURORA: {
-        name: 'Aurora',
-        getFrame: (t) => {
-            const h1 = (140 + Math.sin(t * 0.005 * ANIMATION_SPEED) * 40) % 360
-            const h2 = (280 + Math.cos(t * 0.005 * ANIMATION_SPEED) * 40) % 360
-            return [
-                hslToRgb(h1, 100, 50),
-                hslToRgb((h1 + h2) / 2, 100, 50),
-                hslToRgb(h2, 100, 50),
-            ]
-        }
-    },
-    SUNSET: {
-        name: 'Sunset',
-        getFrame: (t) => {
-            const h = 20 + Math.sin(t * 0.005 * ANIMATION_SPEED) * 20
-            return [
-                hslToRgb(h, 100, 50),
-                hslToRgb(h + 20, 100, 50),
-                hslToRgb(h + 40, 100, 50),
-            ]
+            const s = t * 0.0005
+            return [0, 1, 2].map(i => {
+                const breath = (Math.sin(s * 0.3 + i * 0.3) + 1) / 2
+                const h = 35 + breath * 10
+                const l = 60 + breath * 15
+                return hslToRgb(h, 30, l)
+            })
         }
     },
     ROMANCE: {
         name: 'Romance',
         getFrame: (t) => {
-            // Match Backend: Deep Red -> Purple -> Bright Pink
-            const time = t * 0.0005 * ANIMATION_SPEED
-            const phase = time % 3
-
-            let h, s, l
-
-            if (phase < 1) {
-                // Red -> Purple
-                const p = phase
-                const smoothP = p * p * (3 - 2 * p)
-                h = 350 - (350 - 280) * smoothP
-                s = 100
-                l = 50
-            } else if (phase < 2) {
-                // Purple -> Bright Pink
-                const p = phase - 1
-                const smoothP = p * p * (3 - 2 * p)
-                h = 280 + (320 - 280) * smoothP
-                s = 100 - 30 * smoothP
-                l = 50 + 40 * smoothP
-            } else {
-                // Bright Pink -> Red
-                const p = phase - 2
-                const smoothP = p * p * (3 - 2 * p)
-                h = 320 + (350 - 320) * smoothP
-                s = 70 + 30 * smoothP
-                l = 90 - 40 * smoothP
-            }
-
-            // Stereo offset for visual interest
-            return [
-                hslToRgb(h, s, l),
-                hslToRgb(h - 5, s, l * 0.9),
-                hslToRgb(h + 5, s, l)
-            ]
+            const s = t * 0.0005
+            return [0, 1, 2].map(i => {
+                const phase = Math.sin(s * 0.25 + i * 0.8) * 0.5 + 0.5
+                const h = (340 + phase * 40) % 360
+                const l = 40 + Math.sin(s * 0.3 + i * 1.5) * 12
+                return hslToRgb(h, 90, l)
+            })
+        }
+    },
+    // ── NATURE ────────────────────────────────────────────────────────────
+    RAINBOW: {
+        name: 'Rainbow',
+        getFrame: (t) => {
+            const s = t * 0.0005
+            return [0, 1, 2].map(i => hslToRgb((s * 20 + i * 120) % 360, 100, 50))
+        }
+    },
+    AURORA: {
+        name: 'Aurora',
+        getFrame: (t) => {
+            const s = t * 0.0005
+            return [0, 1, 2].map(i => {
+                const w = _wave(s * 0.4, i * 1.5)
+                const h = w > 0 ? 120 + w * 40 : 280 + w * 40
+                const l = 40 + Math.sin(s * 0.3 + i * 0.7) * 15
+                return hslToRgb(((h % 360) + 360) % 360, 90, l)
+            })
+        }
+    },
+    OCEAN: {
+        name: 'Ocean',
+        getFrame: (t) => {
+            const s = t * 0.0005
+            return [0, 1, 2].map(i => {
+                const w = Math.sin(s * 0.5 + i * 1.2) * 0.5 + Math.cos(s * 0.3 - i * 0.8) * 0.3
+                const h = 200 + w * 25
+                const l = 35 + w * 12
+                return hslToRgb(h, 85, l)
+            })
+        }
+    },
+    FOREST: {
+        name: 'Forest',
+        getFrame: (t) => {
+            const s = t * 0.0005
+            return [0, 1, 2].map(i => {
+                const dapple = Math.sin(s * 0.6 + i * 2.1) * Math.cos(s * 0.3 + i * 1.3)
+                const h = 110 + dapple * 30
+                const l = 30 + (dapple + 1) * 15
+                return hslToRgb(h, 70, l)
+            })
+        }
+    },
+    SUNSET: {
+        name: 'Sunset',
+        getFrame: (t) => {
+            const s = t * 0.0005
+            return [0, 1, 2].map(i => {
+                const h = 15 + Math.sin(s * 0.2 + i * 0.6) * 20
+                const l = 50 + Math.sin(s * 0.15 + i * 1.2) * 10
+                return hslToRgb(((h % 360) + 360) % 360, 100, l)
+            })
+        }
+    },
+    CORDOBA_SKY: {
+        name: 'Córdoba Sky',
+        getFrame: (t) => {
+            const s = t * 0.0005
+            const tSlow = s * 0.08
+            return [0, 1, 2].map(i => {
+                const w = Math.sin(tSlow + i * 0.5) + Math.sin(tSlow * 0.3 + i) * 0.5
+                const n = (w + 1.5) / 3
+                const h = n < 0.5 ? 280 + (n * 2) * 80 : (n - 0.5) * 2 * 40
+                return hslToRgb(((h % 360) + 360) % 360, 100, 50)
+            })
+        }
+    },
+    TROPICAL: {
+        name: 'Tropical',
+        getFrame: (t) => {
+            const s = t * 0.0005
+            const hues = [175, 15, 45]
+            return [0, 1, 2].map(i => {
+                const idx = Math.floor((s * 0.15 + i * 0.33) % 3)
+                const blend = (s * 0.15 + i * 0.33) % 1
+                const h1 = hues[idx % 3], h2 = hues[(idx + 1) % 3]
+                const diff = h2 - h1
+                const h = h1 + (Math.abs(diff) > 180 ? diff + 360 : diff) * (blend * blend * (3 - 2 * blend))
+                return hslToRgb(((h % 360) + 360) % 360, 90, 55)
+            })
+        }
+    },
+    // ── FIRE & ENERGY ────────────────────────────────────────────────────
+    FIRE: {
+        name: 'Fire',
+        getFrame: (t) => {
+            const s = t * 0.001
+            return [0, 1, 2].map(i => {
+                const flicker = Math.sin(s * 8 + i * 3.7) * 0.3 +
+                    Math.sin(s * 13 + i * 5.1) * 0.2 +
+                    Math.sin(s * 3 + i * 1.9) * 0.5
+                const h = 10 + (flicker + 1) * 15
+                const l = 35 + (flicker + 1) * 18
+                return hslToRgb(h, 100, l)
+            })
+        }
+    },
+    LAVA: {
+        name: 'Lava',
+        getFrame: (t) => {
+            const s = t * 0.0005
+            return [0, 1, 2].map(i => {
+                const flow = Math.sin(s * 0.4 + i * 1.5) * 0.5 + Math.cos(s * 0.2 - i * 2.1) * 0.3
+                const h = 5 + (flow + 1) * 12
+                const l = 25 + (flow + 1) * 18
+                return hslToRgb(h, 100, l)
+            })
+        }
+    },
+    FIREBALL: {
+        name: 'Fireball',
+        getFrame: (t) => {
+            const s = t * 0.0005
+            const cycle = 4
+            const pos = ((s % cycle) / cycle) * 4 - 1
+            return [0, 1, 2].map(i => {
+                const dist = Math.abs(pos - i)
+                const intensity = Math.max(0, 1 - dist * 1.5)
+                return hslToRgb(60 * intensity, 100, 50 * intensity)
+            })
+        }
+    },
+    // ── MOODY / DARK ─────────────────────────────────────────────────────
+    MIDNIGHT: {
+        name: 'Midnight',
+        getFrame: (t) => {
+            const s = t * 0.0005
+            return [0, 1, 2].map(i => {
+                const glow = Math.sin(s * 0.25 + i * 2.0) * 0.5 + 0.5
+                const h = 235 + Math.sin(s * 0.1 + i * 1.3) * 15
+                const l = 8 + glow * 20
+                return hslToRgb(h, 70, l)
+            })
+        }
+    },
+    GALAXY: {
+        name: 'Galaxy',
+        getFrame: (t) => {
+            const s = t * 0.0005
+            return [0, 1, 2].map(i => {
+                const drift = Math.sin(s * 0.2 + i * 1.8) + Math.cos(s * 0.15 + i * 2.5) * 0.5
+                const n = (drift + 1.5) / 3
+                const h = n < 0.5 ? 280 - n * 2 * 40 : 240 + (n - 0.5) * 2 * 70
+                const l = 25 + Math.sin(s * 0.5 + i * 3.14) * 15
+                return hslToRgb(((h % 360) + 360) % 360, 85, l)
+            })
+        }
+    },
+    BIOLUM: {
+        name: 'Biolum',
+        getFrame: (t) => {
+            const s = t * 0.0005
+            return [0, 1, 2].map(i => {
+                const noise = Math.sin(s * 1.5 + i * 132.1) * Math.cos(s * 3.5 - i * 45.3)
+                const isSparkle = noise > 0.7
+                const h = isSparkle ? 160 : 240
+                const l = isSparkle ? 75 : 15 + (noise + 1) * 8
+                return hslToRgb(h, 100, l)
+            })
+        }
+    },
+    // ── ELECTRONIC / ENERGY ──────────────────────────────────────────────
+    NEON: {
+        name: 'Neon',
+        getFrame: (t) => {
+            const s = t * 0.0005
+            return [0, 1, 2].map(i => {
+                const swap = Math.sin(s * 0.6 + i * 2.09) * 0.5 + 0.5
+                const h = swap > 0.5 ? 330 : 210
+                const l = 50 + Math.sin(s * 1.0 + i * 1.5) * 10
+                return hslToRgb(h, 100, l)
+            })
+        }
+    },
+    PULSE: {
+        name: 'Pulse',
+        getFrame: (t) => {
+            const s = t * 0.0005
+            const beat = Math.pow((Math.sin(s * 1.5) + 1) / 2, 3)
+            return [0, 1, 2].map(i => {
+                const h = 280 + i * 20
+                const l = 10 + beat * 55
+                return hslToRgb(h, 100, l)
+            })
+        }
+    },
+    STROBE: {
+        name: 'Strobe',
+        getFrame: (t) => {
+            const frame = Math.floor(t / 23)
+            const on = frame % 6 < 3
+            const h = (frame * 30) % 360
+            return [0, 1, 2].map(i => {
+                if (!on) return { r: 0, g: 0, b: 0 }
+                return hslToRgb((h + i * 120) % 360, 100, 50)
+            })
+        }
+    },
+    PARTY: {
+        name: 'Party',
+        getFrame: (t) => {
+            const s = t * 0.001
+            return [0, 1, 2].map(i => {
+                const h = (s * 60 + Math.sin(s * 2.5 + i * 3.14) * 120 + i * 120) % 360
+                return hslToRgb(((h % 360) + 360) % 360, 100, 50)
+            })
+        }
+    },
+    RAVE: {
+        name: 'Rave',
+        getFrame: (t) => {
+            const s = t * 0.001
+            return [0, 1, 2].map(i => {
+                const h = (s * 90 + i * 120) % 360
+                const l = 45 + Math.sin(s * 6 + i * 2) * 15
+                return hslToRgb(h, 100, l)
+            })
+        }
+    },
+    // ── SPATIAL / CHASE ──────────────────────────────────────────────────
+    CYLON: {
+        name: 'Cylon',
+        getFrame: (t) => {
+            const s = t * 0.0005
+            const cycle = 3
+            const phase = (s % cycle) / cycle
+            const pos = (Math.sin(phase * Math.PI * 2) + 1)
+            return [0, 1, 2].map(i => {
+                const dist = Math.abs(pos - i)
+                const intensity = Math.pow(Math.max(0, 1 - dist), 3)
+                return { r: Math.round(255 * intensity), g: 0, b: 0 }
+            })
+        }
+    },
+    PLASMA: {
+        name: 'Plasma',
+        getFrame: (t) => {
+            const s = t * 0.0005
+            return [0, 1, 2].map(i => {
+                const v = Math.sin(s * 0.8 + i * 0.5) + Math.cos(s * 0.4 - i)
+                const h = 270 + v * 30
+                const l = Math.max(15, Math.min(70, 40 + v * 10 + Math.sin(s * 1.2 + i * 2) * 8))
+                return hslToRgb(((h % 360) + 360) % 360, 100, l)
+            })
         }
     }
 }

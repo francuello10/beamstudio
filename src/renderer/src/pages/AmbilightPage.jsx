@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Monitor, Zap, Play, Square, Check } from 'lucide-react'
+import { Monitor, Zap, Play, Square, Check, RefreshCw } from 'lucide-react'
 import LivePreviewContainer from '../components/LivePreviewContainer'
 import { useGpuAmbilight } from '../hooks/useGpuAmbilight'
 import { useSystemAudio } from '../hooks/useSystemAudio'
@@ -22,6 +22,8 @@ const AmbilightPage = () => {
     const [sources, setSources] = useState([])
     const [selectedSource, setSelectedSource] = useState(null)
     const [audioBoost, setAudioBoost] = useState(false)
+    const [captureError, setCaptureError] = useState(null)
+    const [refreshing, setRefreshing] = useState(false)
 
     // GPU Extraction Engine
     const { start: startAmbilight, stop: stopAmbilight, capturing, colors: previewColors, isMono, setIsMono } = useGpuAmbilight(sendPixelMapBuffer, audioTelemetryDSP)
@@ -33,9 +35,18 @@ const AmbilightPage = () => {
         setAudioTelemetryDSP
     )
 
-    useEffect(() => {
-        window.ambilight?.getSources().then(setSources)
-    }, [])
+    const refreshSources = async () => {
+        setRefreshing(true)
+        try {
+            const s = await window.ambilight?.getSources()
+            if (s) setSources(s)
+        } catch (e) {
+            setCaptureError('Failed to list sources')
+        }
+        setRefreshing(false)
+    }
+
+    useEffect(() => { refreshSources() }, [])
 
     const handleAudioBoostToggle = async () => {
         if (audioBoost) {
@@ -49,9 +60,25 @@ const AmbilightPage = () => {
         }
     }
 
+    const setActiveProgram = useDmxStore(state => state.setActiveProgram)
+    const setActiveDynamicScene = useDmxStore(state => state.setActiveDynamicScene)
+    const setActiveFlag = useDmxStore(state => state.setActiveFlag)
+
     const handleStart = () => {
         const id = selectedSource || sources[0]?.id
-        if (id) startAmbilight(id)
+        // Reset Logic: Ensure Ambilight has exclusive control
+        setActiveProgram(null)
+        setActiveDynamicScene(null)
+        setActiveFlag(null)
+
+        if (id) {
+            setCaptureError(null)
+            try {
+                startAmbilight(id)
+            } catch (e) {
+                setCaptureError('GPU capture failed — try a different source')
+            }
+        }
     }
 
     return (
@@ -77,6 +104,28 @@ const AmbilightPage = () => {
                                 <Zap size={14} color="#FFD700" fill="#FFD700" />
                                 <span>AMD/NVIDIA GPU</span>
                             </div>
+
+                            <button
+                                onClick={refreshSources}
+                                disabled={capturing || refreshing}
+                                title="Refresh sources"
+                                style={{
+                                    width: '42px',
+                                    height: '42px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    background: 'rgba(255,255,255,0.05)',
+                                    borderRadius: '8px',
+                                    border: '1px solid rgba(255,255,255,0.1)',
+                                    color: 'var(--text-secondary)',
+                                    cursor: capturing ? 'not-allowed' : 'pointer',
+                                    transition: 'all 0.2s',
+                                    flexShrink: 0
+                                }}
+                            >
+                                <RefreshCw size={14} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
+                            </button>
                         </div>
 
                         <div style={{ display: 'flex', gap: '12px', alignItems: 'stretch' }}>

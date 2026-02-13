@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react'
-import { Volume2, PowerOff, Play } from 'lucide-react'
+import { Volume2, PowerOff, Play, Activity, Music2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import LivePreviewContainer from '../components/LivePreviewContainer'
 import { useSystemAudio } from '../hooks/useSystemAudio'
@@ -20,7 +20,8 @@ const AudioPage = () => {
     // Core Engine
     const {
         start, stop, active, detectedGenre, autoGenre, setAutoGenre,
-        manualGenre, setManualGenre, telemetry, visualizerData
+        manualGenre, setManualGenre, telemetry, visualizerData,
+        bassPulseMode, setBassPulseMode
     } = useSystemAudio(sendPixelMapBuffer, null, setAudioTelemetryDSP)
 
     // Sync store with hook data
@@ -104,7 +105,58 @@ const AudioPage = () => {
                         </div>
                     </div>
 
-                    <div style={{ marginBottom: '16px', padding: '16px', background: 'rgba(0,0,0,0.3)', borderRadius: '16px' }}>
+                    {/* MODE SELECTOR — Genre vs Bass Pulse */}
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', justifyContent: 'center' }}>
+                        <button
+                            onClick={() => setBassPulseMode(false)}
+                            style={{
+                                flex: 1,
+                                padding: '12px 20px',
+                                borderRadius: '12px',
+                                border: !bassPulseMode ? '2px solid #fff' : '1px solid rgba(255,255,255,0.2)',
+                                background: !bassPulseMode ? 'linear-gradient(135deg, #00f260, #0575e6)' : 'var(--glass)',
+                                color: '#fff',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                letterSpacing: '1px',
+                                transition: 'all 0.3s',
+                                boxShadow: !bassPulseMode ? '0 0 20px rgba(0,242,96,0.3)' : 'none'
+                            }}
+                        >
+                            <Music2 size={14} /> GENRE MODE
+                        </button>
+                        <button
+                            onClick={() => setBassPulseMode(true)}
+                            style={{
+                                flex: 1,
+                                padding: '12px 20px',
+                                borderRadius: '12px',
+                                border: bassPulseMode ? '2px solid #fff' : '1px solid rgba(255,255,255,0.2)',
+                                background: bassPulseMode ? 'linear-gradient(135deg, #ff0080, #7928ca)' : 'var(--glass)',
+                                color: '#fff',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                letterSpacing: '1px',
+                                transition: 'all 0.3s',
+                                boxShadow: bassPulseMode ? '0 0 20px rgba(255,0,128,0.3)' : 'none'
+                            }}
+                        >
+                            <Activity size={14} /> BASS PULSE
+                        </button>
+                    </div>
+
+                    {/* GENRE PANEL — hidden when Bass Pulse is active */}
+                    <div style={{ marginBottom: '16px', padding: '16px', background: 'rgba(0,0,0,0.3)', borderRadius: '16px', opacity: bassPulseMode ? 0.3 : 1, pointerEvents: bassPulseMode ? 'none' : 'auto', transition: 'opacity 0.3s' }}>
                         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
                             <div
                                 onClick={() => setAutoGenre(!autoGenre)}

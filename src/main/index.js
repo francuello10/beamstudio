@@ -409,73 +409,345 @@ const COLOR_MACROS = {
 // Fixtures moved to dynamic loading (above)
 
 // ============================================================================
-// Dynamic Scenes (Software-based)
+// Dynamic Scenes (Software-based) — V6.0 Premium Collection
+// All scenes use perFixture for independent 3-bar control.
+// Time base: f = frame count at 44Hz → t = f / 44 (seconds)
 // ============================================================================
 
+// Organic noise from layered sine waves
+const _wave = (t, seed) =>
+    Math.sin(t * 0.7 + seed) * 0.5 +
+    Math.sin(t * 1.3 + seed * 2.1) * 0.3 +
+    Math.sin(t * 2.1 + seed * 0.7) * 0.2
+
 const DYNAMIC_SCENES = {
+    // ── AMBIENT / CHILL ──────────────────────────────────────────────────
     vibe: {
-        name: 'Vibe',
-        desc: 'Pasteles aesthetic mutando',
+        name: 'Vibe', desc: 'Dreamy pastels',
+        perFixture: true,
         handler: (f) => {
-            // Pastel colors cycling - low saturation, high lightness
-            const hue = (f * 0.5) % 360
-            const pastel = hslToRgb(hue, 50, 75) // Low saturation, high lightness = pastel
-            return pastel
+            const t = f / 44 * 0.5
+            return [0, 1, 2].map(i =>
+                hslToRgb((t * 15 + i * 50) % 360, 45, 72)
+            )
         }
     },
     aesthetic: {
-        name: 'Aesthetic',
-        desc: 'Tonos rosa/violeta/cyan',
+        name: 'Aesthetic', desc: 'Vaporwave gradient',
+        perFixture: true,
         handler: (f) => {
-            const colors = [
-                { r: 255, g: 182, b: 193 }, // Pink
-                { r: 230, g: 190, b: 255 }, // Lavender
-                { r: 175, g: 238, b: 238 }, // Pale turquoise
-                { r: 255, g: 218, b: 233 }, // Light pink
-                { r: 200, g: 162, b: 200 }, // Thistle
-                { r: 176, g: 224, b: 230 }, // Powder blue
-            ]
-            const idx = Math.floor((f * 0.02) % colors.length)
-            const nextIdx = (idx + 1) % colors.length
-            const t = ((f * 0.02) % 1)
-            return {
-                r: Math.round(colors[idx].r + (colors[nextIdx].r - colors[idx].r) * t),
-                g: Math.round(colors[idx].g + (colors[nextIdx].g - colors[idx].g) * t),
-                b: Math.round(colors[idx].b + (colors[nextIdx].b - colors[idx].b) * t)
-            }
+            const t = f / 44 * 0.5
+            return [0, 1, 2].map(i => {
+                const base = 280 + Math.sin(t * 0.3 + i * 1.2) * 50
+                const sat = 75 + Math.sin(t * 0.5 + i) * 15
+                return hslToRgb(((base % 360) + 360) % 360, sat, 55)
+            })
         }
     },
-    rainbow: { name: 'Rainbow', desc: 'Arcoíris suave', handler: (f) => hslToRgb((f * 2) % 360, 100, 50) },
-    fire: { name: 'Fire', desc: 'Efecto fuego', handler: () => ({ r: 255, g: Math.round(80 + Math.random() * 80), b: Math.round(Math.random() * 30) }) },
-    ocean: { name: 'Ocean', desc: 'Ondas oceánicas', handler: (f) => ({ r: 0, g: Math.round(100 + 50 * Math.sin(f * 0.05)), b: Math.round(200 + 55 * Math.sin(f * 0.03)) }) },
-    aurora: { name: 'Aurora', desc: 'Aurora boreal', handler: (f) => ({ r: Math.round(50 + 50 * Math.sin(f * 0.02)), g: Math.round(200 + 55 * Math.sin(f * 0.02 + 2)), b: Math.round(150 + 100 * Math.sin(f * 0.02 + 4)) }) },
-    pulse: { name: 'Pulse', desc: 'Pulso de color', handler: (f) => { const i = Math.sin(f * 0.1) * 0.5 + 0.5; return { r: Math.round(255 * i), g: 0, b: Math.round(255 * i) } } },
-    strobe: { name: 'Strobe', desc: 'Estroboscópico', handler: (f) => f % 6 < 3 ? { r: 255, g: 255, b: 255 } : { r: 0, g: 0, b: 0 } },
-    party: { name: 'Party', desc: 'Fiesta random', handler: () => { const c = [[255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 0], [255, 0, 255], [0, 255, 255]][Math.floor(Math.random() * 6)]; return { r: c[0], g: c[1], b: c[2] } } },
-    sunset: { name: 'Sunset', desc: 'Atardecer cálido', handler: (f) => { const t = (Math.sin(f * 0.01) + 1) / 2; return { r: 255, g: Math.round(100 + 80 * t), b: Math.round(50 * t) } } },
-    chill: { name: 'Chill', desc: 'Relajante', handler: (f) => hslToRgb(200 + 40 * Math.sin(f * 0.01), 60, 40) },
-    romance: {
-        name: 'Romance',
-        desc: 'Pasion y sensualidad',
+    chill: {
+        name: 'Chill', desc: 'Deep relaxing ambient',
+        perFixture: true,
         handler: (f) => {
-            // Unify logic with frontend: Slow, sensual cycle (Red -> Purple -> Magenta)
-            const ANIMATION_SPEED = 0.5 // Match constant
-            const h1 = 350; // Deep Red
-            const h2 = 280; // Purple
-            const h3 = 320; // Bright Pink
-
-            // Oscillate smoothly
-            const phase = (Math.sin(f * (1000 / 44) * 0.0005 * ANIMATION_SPEED) + 1) / 2; // f is frame count, multiply to match time roughly
-
-            let h;
-            if (phase < 0.5) {
-                h = h1 + (h2 - h1) * (phase * 2);
-            } else {
-                h = h2 + (h3 - h2) * ((phase - 0.5) * 2);
-            }
-
-            const l = 50 + Math.sin(f * 0.05) * 10;
-            return hslToRgb(h, 100, l)
+            const t = f / 44 * 0.5
+            return [0, 1, 2].map(i => {
+                const h = 200 + Math.sin(t * 0.2 + i * 0.8) * 30
+                const l = 30 + Math.sin(t * 0.15 + i * 1.5) * 10
+                return hslToRgb(h, 60, l)
+            })
+        }
+    },
+    zen: {
+        name: 'Zen', desc: 'Warm meditation',
+        perFixture: true,
+        handler: (f) => {
+            const t = f / 44 * 0.5
+            return [0, 1, 2].map(i => {
+                const breath = (Math.sin(t * 0.3 + i * 0.3) + 1) / 2
+                const h = 35 + breath * 10
+                const l = 60 + breath * 15
+                return hslToRgb(h, 30, l)
+            })
+        }
+    },
+    romance: {
+        name: 'Romance', desc: 'Sensual passion',
+        perFixture: true,
+        handler: (f) => {
+            const t = f / 44 * 0.5
+            return [0, 1, 2].map(i => {
+                const phase = Math.sin(t * 0.25 + i * 0.8) * 0.5 + 0.5
+                const h = (340 + phase * 40) % 360
+                const l = 40 + Math.sin(t * 0.3 + i * 1.5) * 12
+                return hslToRgb(h, 90, l)
+            })
+        }
+    },
+    // ── NATURE ────────────────────────────────────────────────────────────
+    rainbow: {
+        name: 'Rainbow', desc: 'Flowing spectrum',
+        perFixture: true,
+        handler: (f) => {
+            const t = f / 44 * 0.5
+            return [0, 1, 2].map(i =>
+                hslToRgb((t * 20 + i * 120) % 360, 100, 50)
+            )
+        }
+    },
+    aurora: {
+        name: 'Aurora', desc: 'Northern lights',
+        perFixture: true,
+        handler: (f) => {
+            const t = f / 44 * 0.5
+            return [0, 1, 2].map(i => {
+                const w = _wave(t * 0.4, i * 1.5)
+                const h = w > 0 ? 120 + w * 40 : 280 + w * 40
+                const l = 40 + Math.sin(t * 0.3 + i * 0.7) * 15
+                return hslToRgb(((h % 360) + 360) % 360, 90, l)
+            })
+        }
+    },
+    ocean: {
+        name: 'Ocean', desc: 'Deep sea waves',
+        perFixture: true,
+        handler: (f) => {
+            const t = f / 44 * 0.5
+            return [0, 1, 2].map(i => {
+                const w = Math.sin(t * 0.5 + i * 1.2) * 0.5 + Math.cos(t * 0.3 - i * 0.8) * 0.3
+                const h = 200 + w * 25
+                const l = 35 + w * 12
+                return hslToRgb(h, 85, l)
+            })
+        }
+    },
+    forest: {
+        name: 'Forest', desc: 'Green canopy',
+        perFixture: true,
+        handler: (f) => {
+            const t = f / 44 * 0.5
+            return [0, 1, 2].map(i => {
+                const dapple = Math.sin(t * 0.6 + i * 2.1) * Math.cos(t * 0.3 + i * 1.3)
+                const h = 110 + dapple * 30
+                const l = 30 + (dapple + 1) * 15
+                return hslToRgb(h, 70, l)
+            })
+        }
+    },
+    sunset: {
+        name: 'Sunset', desc: 'Golden hour',
+        perFixture: true,
+        handler: (f) => {
+            const t = f / 44 * 0.5
+            return [0, 1, 2].map(i => {
+                const h = 15 + Math.sin(t * 0.2 + i * 0.6) * 20
+                const l = 50 + Math.sin(t * 0.15 + i * 1.2) * 10
+                return hslToRgb(((h % 360) + 360) % 360, 100, l)
+            })
+        }
+    },
+    cordoba_sky: {
+        name: 'Córdoba Sky', desc: 'Majestic sunset',
+        perFixture: true,
+        handler: (f) => {
+            const t = f / 44 * 0.5
+            const tSlow = t * 0.08
+            return [0, 1, 2].map(i => {
+                const w = Math.sin(tSlow + i * 0.5) + Math.sin(tSlow * 0.3 + i) * 0.5
+                const n = (w + 1.5) / 3
+                const h = n < 0.5 ? 280 + (n * 2) * 80 : (n - 0.5) * 2 * 40
+                return hslToRgb(((h % 360) + 360) % 360, 100, 50)
+            })
+        }
+    },
+    tropical: {
+        name: 'Tropical', desc: 'Vivid paradise',
+        perFixture: true,
+        handler: (f) => {
+            const t = f / 44 * 0.5
+            const hues = [175, 15, 45]
+            return [0, 1, 2].map(i => {
+                const idx = Math.floor((t * 0.15 + i * 0.33) % 3)
+                const blend = (t * 0.15 + i * 0.33) % 1
+                const h1 = hues[idx % 3], h2 = hues[(idx + 1) % 3]
+                const diff = h2 - h1
+                const h = h1 + (Math.abs(diff) > 180 ? diff + 360 : diff) * (blend * blend * (3 - 2 * blend))
+                return hslToRgb(((h % 360) + 360) % 360, 90, 55)
+            })
+        }
+    },
+    // ── FIRE & ENERGY ────────────────────────────────────────────────────
+    fire: {
+        name: 'Fire', desc: 'Dancing flames',
+        perFixture: true,
+        handler: (f) => {
+            const t = f / 44
+            return [0, 1, 2].map(i => {
+                const flicker = Math.sin(t * 8 + i * 3.7) * 0.3 +
+                    Math.sin(t * 13 + i * 5.1) * 0.2 +
+                    Math.sin(t * 3 + i * 1.9) * 0.5
+                const h = 10 + (flicker + 1) * 15
+                const l = 35 + (flicker + 1) * 18
+                return hslToRgb(h, 100, l)
+            })
+        }
+    },
+    lava: {
+        name: 'Lava', desc: 'Flowing magma',
+        perFixture: true,
+        handler: (f) => {
+            const t = f / 44 * 0.5
+            return [0, 1, 2].map(i => {
+                const flow = Math.sin(t * 0.4 + i * 1.5) * 0.5 + Math.cos(t * 0.2 - i * 2.1) * 0.3
+                const h = 5 + (flow + 1) * 12
+                const l = 25 + (flow + 1) * 18
+                return hslToRgb(h, 100, l)
+            })
+        }
+    },
+    fireball: {
+        name: 'Fireball', desc: 'Chase de fuego',
+        perFixture: true,
+        handler: (f) => {
+            const t = f / 44 * 0.5
+            const cycle = 4
+            const pos = ((t % cycle) / cycle) * 4 - 1
+            return [0, 1, 2].map(i => {
+                const dist = Math.abs(pos - i)
+                const intensity = Math.max(0, 1 - dist * 1.5)
+                return hslToRgb(60 * intensity, 100, 50 * intensity)
+            })
+        }
+    },
+    // ── MOODY / DARK ─────────────────────────────────────────────────────
+    midnight: {
+        name: 'Midnight', desc: 'Deep night tones',
+        perFixture: true,
+        handler: (f) => {
+            const t = f / 44 * 0.5
+            return [0, 1, 2].map(i => {
+                const glow = Math.sin(t * 0.25 + i * 2.0) * 0.5 + 0.5
+                const h = 235 + Math.sin(t * 0.1 + i * 1.3) * 15
+                const l = 8 + glow * 20
+                return hslToRgb(h, 70, l)
+            })
+        }
+    },
+    galaxy: {
+        name: 'Galaxy', desc: 'Deep space nebula',
+        perFixture: true,
+        handler: (f) => {
+            const t = f / 44 * 0.5
+            return [0, 1, 2].map(i => {
+                const drift = Math.sin(t * 0.2 + i * 1.8) + Math.cos(t * 0.15 + i * 2.5) * 0.5
+                const n = (drift + 1.5) / 3
+                const h = n < 0.5 ? 280 - n * 2 * 40 : 240 + (n - 0.5) * 2 * 70
+                const l = 25 + Math.sin(t * 0.5 + i * 3.14) * 15
+                return hslToRgb(((h % 360) + 360) % 360, 85, l)
+            })
+        }
+    },
+    biolum: {
+        name: 'Biolum', desc: 'Bioluminescence',
+        perFixture: true,
+        handler: (f) => {
+            const t = f / 44 * 0.5
+            return [0, 1, 2].map(i => {
+                const noise = Math.sin(t * 1.5 + i * 132.1) * Math.cos(t * 3.5 - i * 45.3)
+                const isSparkle = noise > 0.7
+                const h = isSparkle ? 160 : 240
+                const l = isSparkle ? 75 : 15 + (noise + 1) * 8
+                return hslToRgb(h, 100, l)
+            })
+        }
+    },
+    // ── ELECTRONIC / ENERGY ──────────────────────────────────────────────
+    neon: {
+        name: 'Neon', desc: 'Cyberpunk glow',
+        perFixture: true,
+        handler: (f) => {
+            const t = f / 44 * 0.5
+            return [0, 1, 2].map(i => {
+                const swap = Math.sin(t * 0.6 + i * 2.09) * 0.5 + 0.5
+                const h = swap > 0.5 ? 330 : 210
+                const l = 50 + Math.sin(t * 1.0 + i * 1.5) * 10
+                return hslToRgb(h, 100, l)
+            })
+        }
+    },
+    pulse: {
+        name: 'Pulse', desc: 'Heartbeat rhythm',
+        perFixture: true,
+        handler: (f) => {
+            const t = f / 44 * 0.5
+            const beat = Math.pow((Math.sin(t * 1.5) + 1) / 2, 3)
+            return [0, 1, 2].map(i => {
+                const h = 280 + i * 20
+                const l = 10 + beat * 55
+                return hslToRgb(h, 100, l)
+            })
+        }
+    },
+    strobe: {
+        name: 'Strobe', desc: 'High energy flash',
+        perFixture: true,
+        handler: (f) => {
+            const on = f % 6 < 3
+            const h = (f * 30) % 360
+            return [0, 1, 2].map(i => {
+                if (!on) return { r: 0, g: 0, b: 0 }
+                return hslToRgb((h + i * 120) % 360, 100, 50)
+            })
+        }
+    },
+    party: {
+        name: 'Party', desc: 'Smooth party colors',
+        perFixture: true,
+        handler: (f) => {
+            const t = f / 44
+            return [0, 1, 2].map(i => {
+                const h = (t * 60 + Math.sin(t * 2.5 + i * 3.14) * 120 + i * 120) % 360
+                return hslToRgb(((h % 360) + 360) % 360, 100, 50)
+            })
+        }
+    },
+    rave: {
+        name: 'Rave', desc: 'Fast energy cycle',
+        perFixture: true,
+        handler: (f) => {
+            const t = f / 44
+            return [0, 1, 2].map(i => {
+                const h = (t * 90 + i * 120) % 360
+                const l = 45 + Math.sin(t * 6 + i * 2) * 15
+                return hslToRgb(h, 100, l)
+            })
+        }
+    },
+    // ── SPATIAL / CHASE ──────────────────────────────────────────────────
+    cylon: {
+        name: 'Cylon', desc: 'Scanner eye',
+        perFixture: true,
+        handler: (f) => {
+            const t = f / 44 * 0.5
+            const cycle = 3
+            const phase = (t % cycle) / cycle
+            const pos = (Math.sin(phase * Math.PI * 2) + 1)
+            return [0, 1, 2].map(i => {
+                const dist = Math.abs(pos - i)
+                const intensity = Math.pow(Math.max(0, 1 - dist), 3)
+                return { r: Math.round(255 * intensity), g: 0, b: 0 }
+            })
+        }
+    },
+    plasma: {
+        name: 'Plasma', desc: 'Purple energy',
+        perFixture: true,
+        handler: (f) => {
+            const t = f / 44 * 0.5
+            return [0, 1, 2].map(i => {
+                const v = Math.sin(t * 0.8 + i * 0.5) + Math.cos(t * 0.4 - i)
+                const h = 270 + v * 30
+                const l = Math.max(15, Math.min(70, 40 + v * 10 + Math.sin(t * 1.2 + i * 2) * 8))
+                return hslToRgb(((h % 360) + 360) % 360, 100, l)
+            })
         }
     }
 }
@@ -675,12 +947,21 @@ function startDynamicScene(sceneId) {
     }
 
     dynamicSceneInterval = setInterval(() => {
-        const color = scene.handler(dmxState.dynamicSceneFrame)
+        const result = scene.handler(dmxState.dynamicSceneFrame)
         // @ai-constraints Use current Master Dimmer value
-        fixtures.forEach((f, i) => {
-            const currentDim = dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM] || 0
-            setFixtureColor(i, color.r, color.g, color.b, currentDim)
-        })
+        // Support both single-color and per-fixture (array) scenes
+        if (scene.perFixture && Array.isArray(result)) {
+            fixtures.forEach((f, i) => {
+                const color = result[i] || result[result.length - 1]
+                const currentDim = dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM] || 0
+                setFixtureColor(i, color.r, color.g, color.b, currentDim)
+            })
+        } else {
+            fixtures.forEach((f, i) => {
+                const currentDim = dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM] || 0
+                setFixtureColor(i, result.r, result.g, result.b, currentDim)
+            })
+        }
         dmxState.dynamicSceneFrame++
     }, 1000 / 44)
     return true
@@ -1152,8 +1433,8 @@ function setupIPC() {
 
         const adaptiveSmooth = (cur, target) => {
             const diff = (Math.abs(cur.r - (target?.r || 0)) + Math.abs(cur.g - (target?.g || 0)) + Math.abs(cur.b - (target?.b || 0))) / 3
-            // @ai-constraints Snappier response for audio transients (diff > 20)
-            const f = diff > 20 ? 0.95 : 0.3
+            // @ai-constraints Deco tuning: blend smoothly, only large transients snap
+            const f = diff > 40 ? 0.75 : 0.25
             return {
                 r: Math.round(cur.r + ((target?.r || 0) - cur.r) * f),
                 g: Math.round(cur.g + ((target?.g || 0) - cur.g) * f),
@@ -1166,7 +1447,6 @@ function setupIPC() {
             return adaptiveSmooth(lastAmbiColors[i] || { r: 0, g: 0, b: 0 }, target)
         })
 
-        lastAmbiColors = colors
         lastAmbiColors = colors
         // @ai-constraints Use currentDim to respect Master Slider (Grand Master behavior)
         colors.forEach((c, i) => {
@@ -1265,7 +1545,7 @@ function createWindow() {
         show: false, autoHideMenuBar: true, backgroundColor: '#0a0a0a',
         frame: false, // Custom frame
         titleBarStyle: 'hidden', // Allows traffic lights on macOS, custom div on Windows/Linux
-        icon: join(__dirname, '../../src/renderer/src/assets/logo.png'),
+        icon: join(__dirname, '../../build/icon.png'),
         webPreferences: {
             preload: join(__dirname, '../preload/index.js'),
             sandbox: false,
@@ -1341,7 +1621,7 @@ ipcMain.handle('get-system-media', async () => {
 })
 
 app.whenReady().then(async () => {
-    electronApp.setAppUserModelId('com.beamstudio.dmx')
+    electronApp.setAppUserModelId('com.francuello.beamstudio')
     app.on('browser-window-created', (_, window) => optimizer.watchWindowShortcuts(window))
     setupIPC()
 

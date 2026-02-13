@@ -1,6 +1,7 @@
 import {
     Sliders, Music, Lightbulb, Monitor, Settings, Sparkles,
-    Heart, Waves, Flame, Droplets, Radio, Zap, PartyPopper, CloudSun
+    Heart, Waves, Flame, Droplets, Radio, Zap, PartyPopper, CloudSun,
+    Moon, Star, Sun, TreePine, Wind, Activity, Palette, Eye
 } from 'lucide-react'
 
 export const NAV_ITEMS = [
@@ -37,7 +38,53 @@ export const QUICK_COLORS = [
     { name: 'Warm', r: 255, g: 180, b: 100 },
 ]
 
+// V6.0 Premium Scene Collection — 25 Scenes
+export const BUILT_IN_SCENES = [
+    // ── AMBIENT / CHILL
+    { id: 'vibe', name: 'Vibe', desc: 'Dreamy pastels' },
+    { id: 'aesthetic', name: 'Aesthetic', desc: 'Vaporwave gradient' },
+    { id: 'chill', name: 'Chill', desc: 'Deep relaxing ambient' },
+    { id: 'zen', name: 'Zen', desc: 'Warm meditation' },
+    { id: 'romance', name: 'Romance', desc: 'Sensual passion' },
+    // ── NATURE
+    { id: 'rainbow', name: 'Rainbow', desc: 'Flowing spectrum' },
+    { id: 'aurora', name: 'Aurora', desc: 'Northern lights' },
+    { id: 'ocean', name: 'Ocean', desc: 'Deep sea waves' },
+    { id: 'forest', name: 'Forest', desc: 'Green canopy' },
+    { id: 'sunset', name: 'Sunset', desc: 'Golden hour' },
+    { id: 'cordoba_sky', name: 'Córdoba Sky', desc: 'Majestic sunset' },
+    { id: 'tropical', name: 'Tropical', desc: 'Vivid paradise' },
+    // ── FIRE & ENERGY
+    { id: 'fire', name: 'Fire', desc: 'Dancing flames' },
+    { id: 'lava', name: 'Lava', desc: 'Flowing magma' },
+    { id: 'fireball', name: 'Fireball', desc: 'Chase de fuego' },
+    // ── MOODY / DARK
+    { id: 'midnight', name: 'Midnight', desc: 'Deep night tones' },
+    { id: 'galaxy', name: 'Galaxy', desc: 'Deep space nebula' },
+    { id: 'biolum', name: 'Biolum', desc: 'Bioluminescence' },
+    // ── ELECTRONIC / ENERGY
+    { id: 'neon', name: 'Neon', desc: 'Cyberpunk glow' },
+    { id: 'pulse', name: 'Pulse', desc: 'Heartbeat rhythm' },
+    { id: 'strobe', name: 'Strobe', desc: 'High energy flash' },
+    { id: 'party', name: 'Party', desc: 'Smooth party colors' },
+    { id: 'rave', name: 'Rave', desc: 'Fast energy cycle' },
+    // ── SPATIAL / CHASE
+    { id: 'cylon', name: 'Cylon', desc: 'Scanner eye' },
+    { id: 'plasma', name: 'Plasma', desc: 'Purple energy' },
+]
+
 export const DYNAMIC_SCENE_ICONS = {
-    vibe: Heart, aesthetic: Heart, rainbow: Waves, fire: Flame, ocean: Droplets,
-    aurora: Sparkles, pulse: Radio, strobe: Zap, party: PartyPopper, sunset: CloudSun, chill: Waves, romance: Heart
+    // Ambient
+    vibe: Heart, aesthetic: Palette, chill: Waves, zen: Wind, romance: Heart,
+    // Nature
+    rainbow: Waves, aurora: Sparkles, ocean: Droplets, forest: TreePine,
+    sunset: CloudSun, cordoba_sky: CloudSun, tropical: Sun,
+    // Fire & Energy
+    fire: Flame, lava: Flame, fireball: Flame,
+    // Moody / Dark
+    midnight: Moon, galaxy: Star, biolum: Sparkles,
+    // Electronic
+    neon: Zap, pulse: Radio, strobe: Zap, party: PartyPopper, rave: Activity,
+    // Spatial
+    cylon: Eye, plasma: Zap,
 }

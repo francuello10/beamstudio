@@ -64,35 +64,55 @@ Time: 23:24
  * @returns {Promise<object>} - The generated scene JSON
  */
 export async function generateLightScene(userPrompt = "Surprise me") {
-  try {
-    const apiKey = localStorage.getItem('RENDERER_VITE_GEMINI_API_KEY') || ''
-    const modelName = localStorage.getItem('RENDERER_VITE_GEMINI_MODEL') || "models/gemini-1.5-flash"
+  const MAX_RETRIES = 2
+  let attempt = 0
 
-    if (!apiKey) throw new Error("Gemini API Key missing. Please configure it in System settings.")
+  while (attempt <= MAX_RETRIES) {
+    try {
+      const apiKey = localStorage.getItem('RENDERER_VITE_GEMINI_API_KEY') || ''
+      const modelName = localStorage.getItem('RENDERER_VITE_GEMINI_MODEL') || "models/gemini-1.5-flash"
 
-    // 1. Get System Media Context (from renderer bridge)
-    const media = await window.dmx?.getSystemMedia()
-    const mediaText = media ? `Now Playing: "${media.title}" by ${media.artist}` : "No music playing"
+      if (!apiKey) throw new Error("Gemini API Key missing. Please configure it in System settings.")
 
-    // 2. Build Prompt
-    const prompt = `
-        CURRENT CONTEXT:
-        ${mediaText}
-        User Request: "${userPrompt}"
-        
-        Generate a lighting scene that perfectly matches this vibe.
-        `
+      // 1. Get System Media Context (from renderer bridge)
+      const media = await window.dmx?.getSystemMedia()
+      const mediaText = media ? `Now Playing: "${media.title}" by ${media.artist}` : "No music playing"
 
-    // 3. Call Main Process via Bridge (Offloads network request to Main process to bypass CSP)
-    const responseText = await window.ai.generate(apiKey, modelName, prompt, SYSTEM_INSTRUCTION)
+      // 2. Build Prompt
+      const prompt = `
+          CURRENT CONTEXT:
+          ${mediaText}
+          User Request: "${userPrompt}"
+          
+          Generate a lighting scene that perfectly matches this vibe.
+          ${attempt > 0 ? `(ATTEMPT ${attempt + 1}: PREVIOUS RESPONSE WAS INVALID JSON. PLEASE ENSURE STRICT JSON FORMAT.)` : ''}
+          `
 
-    // 4. Parse JSON
-    const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim()
-    return JSON.parse(cleanJson)
+      // 3. Call Main Process via Bridge (Offloads network request to Main process to bypass CSP)
+      const responseText = await window.ai.generate(apiKey, modelName, prompt, SYSTEM_INSTRUCTION)
 
-  } catch (error) {
-    console.error("AI Generation Failed:", error)
-    throw error
+      // 4. Parse JSON
+      const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim()
+
+      try {
+        return JSON.parse(cleanJson)
+      } catch (parseError) {
+        console.warn(`Attempt ${attempt + 1} failed to parse JSON:`, cleanJson)
+        // Throwing here to trigger the retry catch block
+        throw new Error("Invalid JSON response from AI")
+      }
+
+    } catch (error) {
+      console.error(`AI Generation Attempt ${attempt + 1} Failed:`, error)
+      attempt++
+
+      // If we've run out of retries, throw the final error
+      if (attempt > MAX_RETRIES) {
+        throw error
+      }
+
+      // Verification: Small delay before retry? Not strictly necessary but good practice.
+    }
   }
 }
 

@@ -21,7 +21,7 @@ async function startWorker() {
         const rawFTDI = await import('ftdi-d2xx');
         const FTDI = rawFTDI.default || rawFTDI;
 
-        console.log(`[DMX Worker] Opening device: ${serialNumber}`);
+
         device = await FTDI.openDevice(serialNumber);
 
         // Configuración inicial idéntica al driver "Golden"
@@ -88,7 +88,7 @@ parentPort.on('message', (msg) => {
     }
     if (msg.type === 'updateSettings') {
         if (msg.dmxHz) dmxMs = Math.round(1000 / msg.dmxHz);
-        if (msg.transmitLength) PHYSICAL_TRANSMIT_LENGTH = msg.transmitLength;
+
     }
 });
 

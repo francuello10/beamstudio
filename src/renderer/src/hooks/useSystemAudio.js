@@ -1,22 +1,25 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { multiplyBrightness, GENRE_PROFILES } from '../utils/palettes'
+import { multiplyBrightness, lerpColor, GENRE_PROFILES } from '../utils/palettes'
 
 /**
- * useSystemAudio v5.0 - True Stereo 2.1 DSP Engine + Spatial Export
- * 
- * Features:
- * - 3 Separate AnalyserNodes (L, R, Bass)
- * - Virtual 2.1 Crossover (Bass → Center, Mids/Highs → Sides)
- * - Smart Vibe Engine (Auto Genre Detection) with LATIN/CINEMA
- * - Pro Visuals Data Export
- * - Modifier Mode (accepts inputColors and modulates brightness)
- * - NEW: audioTelemetryDSP export for Ambilight Boost
+ * useSystemAudio v6.1 — Expert Deco Tuning for Thonet & Vander Ratsel 2.1
+ *
+ * Signal Chain (8 precision tuning points):
+ * ─────────────────────────────────────────
+ * 1. L/R analyser smoothing: 0.65 (organic mids/highs)
+ * 2. Bass analyser smoothing: 0.45 (breathes, doesn't punch)
+ * 3. Peak decay: 0.96 (~300ms luxurious fade)
+ * 4. Bass curve: pow(1.5) (sweet spot: present but never hectic)
+ * 5. Modifier center: 0.45-1.55x (floor 45%, never dark)
+ * 6. Modifier sides: 0.5-1.4x (subtle shimmer)
+ * 7. LERP modifier: 0.28 (~250ms diffused transitions)
+ * 8. LERP standalone: 0.20 (smooth genre output)
  */
 export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate = null) => {
     // === STATE ===
     const [active, setActive] = useState(false)
     const [autoGenre, setAutoGenre] = useState(true)
-    const [manualGenre, setManualGenre] = useState('ELECTRO') // Manual override
+    const [manualGenre, setManualGenre] = useState('ELECTRO')
     const [detectedGenre, setDetectedGenre] = useState('UNKNOWN')
     const [telemetry, setTelemetry] = useState({
         lowEndDynamics: 0,
@@ -30,9 +33,10 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
         bass: 0
     })
     const [modifierMode, setModifierMode] = useState(false)
+    const [bassPulseMode, setBassPulseMode] = useState(false)
     const [energyFactor, setEnergyFactor] = useState(1)
 
-    // NEW V5.0: Audio telemetry DSP for Ambilight boost
+    // Audio telemetry DSP for Ambilight boost
     const [audioTelemetryDSP, setAudioTelemetryDSP] = useState({
         left: 0,
         center: 0,
@@ -46,6 +50,9 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
     useEffect(() => { inputColorsRef.current = inputColors }, [inputColors])
     useEffect(() => { modifierModeRef.current = modifierMode }, [modifierMode])
 
+    const bassPulseModeRef = useRef(bassPulseMode)
+    useEffect(() => { bassPulseModeRef.current = bassPulseMode }, [bassPulseMode])
+
     // === REFS ===
     const audioCtx = useRef(null)
     const analyserL = useRef(null)
@@ -54,7 +61,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
     const streamRef = useRef(null)
     const requestRef = useRef(null)
 
-    // Peak hold for visual decay
+    // Peak hold with slower decay (0.95 → ~250ms visible tail)
     const peakHoldL = useRef(new Array(16).fill(0))
     const peakHoldR = useRef(new Array(16).fill(0))
     const peakHoldBass = useRef(0)
@@ -62,6 +69,13 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
     // Genre detection history
     const genreHistory = useRef([])
     const lastGenreCheck = useRef(0)
+
+    // LERP smoothing buffer for output colors (silk transitions)
+    const smoothedOutput = useRef([
+        { r: 0, g: 0, b: 0 },
+        { r: 0, g: 0, b: 0 },
+        { r: 0, g: 0, b: 0 }
+    ])
 
     // === CLEANUP ===
     const stop = useCallback(() => {
@@ -79,17 +93,17 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
         setDetectedGenre('UNKNOWN')
         setVisualizerData({ left: new Array(16).fill(0), right: new Array(16).fill(0), bass: 0 })
         setAudioTelemetryDSP({ left: 0, center: 0, right: 0 })
+        smoothedOutput.current = [
+            { r: 0, g: 0, b: 0 },
+            { r: 0, g: 0, b: 0 },
+            { r: 0, g: 0, b: 0 }
+        ]
         window.audio?.stop()
     }, [])
 
     // === MAIN ENGINE ===
     const start = useCallback(async () => {
         try {
-            // 1. Capture Audio Stream (Standard Input)
-            // Fix: Decoupled from Ambilight/Screen Capture to prevent Screen Picker popup.
-            // User can route System Audio via OS settings (e.g. PulseAudio Monitor, Virtual Cable).
-            console.log('[Audio DSP] Requesting Audio Input...')
-
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: {
                     echoCancellation: false,
@@ -102,7 +116,6 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
 
             streamRef.current = stream
 
-            // 3. Build Web Audio Graph (True Stereo)
             const AudioContextClass = window.AudioContext || window.webkitAudioContext
             audioCtx.current = new AudioContextClass()
 
@@ -112,31 +125,30 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
             const splitter = audioCtx.current.createChannelSplitter(2)
             source.connect(splitter)
 
-            // LEFT Analyser (Channel 0)
+            // LEFT Analyser — organic smoothing for deco mids/highs
             analyserL.current = audioCtx.current.createAnalyser()
             analyserL.current.fftSize = 512
-            analyserL.current.smoothingTimeConstant = 0.4
+            analyserL.current.smoothingTimeConstant = 0.65 // [T1] Deco: organic, less nervous
             splitter.connect(analyserL.current, 0)
 
-            // RIGHT Analyser (Channel 1)
+            // RIGHT Analyser
             analyserR.current = audioCtx.current.createAnalyser()
             analyserR.current.fftSize = 512
-            analyserR.current.smoothingTimeConstant = 0.4
+            analyserR.current.smoothingTimeConstant = 0.65 // [T1] Match L channel
             splitter.connect(analyserR.current, 1)
 
-            // BASS Analyser (Mono Mix L+R for Subwoofer)
+            // BASS Analyser (Mono Mix L+R)
             const merger = audioCtx.current.createChannelMerger(2)
             splitter.connect(merger, 0, 0)
             splitter.connect(merger, 1, 1)
             analyserBass.current = audioCtx.current.createAnalyser()
             analyserBass.current.fftSize = 256
-            analyserBass.current.smoothingTimeConstant = 0.2 // SNAPPY for kicks
+            analyserBass.current.smoothingTimeConstant = 0.45 // [T2] Deco: bass breathes, doesn't punch
             merger.connect(analyserBass.current)
 
             setActive(true)
             window.audio?.start()
 
-            // 4. Analysis Loop
             const dataL = new Uint8Array(analyserL.current.frequencyBinCount)
             const dataR = new Uint8Array(analyserR.current.frequencyBinCount)
             const dataBass = new Uint8Array(analyserBass.current.frequencyBinCount)
@@ -163,49 +175,43 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 const bandsL = extractBands(dataL)
                 const bandsR = extractBands(dataR)
 
-                // Bass (20-150Hz) = First 3 bins of bass analyser
+                // Bass (20-150Hz) = First 3 bins
                 let bassEnergy = 0
                 for (let i = 0; i < 3; i++) bassEnergy += dataBass[i]
                 bassEnergy = bassEnergy / 3 / 255
 
-                // === PEAK HOLD & DECAY (Visual Physics) ===
-                const decayRate = 0.92
+                // === PEAK HOLD & DECAY — luxurious ~300ms fade ===
+                const decayRate = 0.96 // [T3] Deco: longer visual tail, elegant
                 for (let i = 0; i < 16; i++) {
                     peakHoldL.current[i] = Math.max(bandsL[i], peakHoldL.current[i] * decayRate)
                     peakHoldR.current[i] = Math.max(bandsR[i], peakHoldR.current[i] * decayRate)
                 }
                 peakHoldBass.current = Math.max(bassEnergy, peakHoldBass.current * decayRate)
 
-                // === STEREO WIDTH CALCULATION ===
+                // === STEREO WIDTH ===
                 let diffSum = 0
                 for (let i = 0; i < 16; i++) diffSum += Math.abs(bandsL[i] - bandsR[i])
                 const stereoWidth = diffSum / 16
 
-                // === LOW-MIDS FOR LATIN (200-800Hz ~ bands 2-6) ===
+                // === LOW-MIDS FOR LATIN ===
                 const lowMidL = bandsL.slice(2, 7).reduce((a, b) => a + b, 0) / 5
                 const lowMidR = bandsR.slice(2, 7).reduce((a, b) => a + b, 0) / 5
                 const lowMidAvg = (lowMidL + lowMidR) / 2
 
-                // === GENRE DETECTION (Every 2.5s) with LATIN/CINEMA ===
+                // === GENRE DETECTION (Every 2.5s) ===
                 const now = performance.now()
                 if (now - lastGenreCheck.current > 2500) {
                     lastGenreCheck.current = now
 
-                    // Metrics
                     const bassRMS = Math.sqrt(bassEnergy)
                     const midL = bandsL.slice(4, 10).reduce((a, b) => a + b, 0) / 6
                     const midR = bandsR.slice(4, 10).reduce((a, b) => a + b, 0) / 6
                     const midRms = (midL + midR) / 2
-
-                    // Transient detection (compare peak to average)
                     const peakMax = Math.max(...peakHoldL.current, ...peakHoldR.current)
                     const avgEnergy = (bandsL.reduce((a, b) => a + b, 0) + bandsR.reduce((a, b) => a + b, 0)) / 32
                     const transientRatio = avgEnergy > 0.01 ? peakMax / avgEnergy : 0
-
-                    // Dynamic range for CINEMA detection
                     const dynamicRange = peakMax - avgEnergy
 
-                    // Classify with new genres
                     let genre = 'CHILL'
                     if (bassRMS > 0.5 && transientRatio > 1.8) genre = 'ELECTRO'
                     else if (midRms > 0.4 && transientRatio > 1.2) genre = 'ROCK'
@@ -215,7 +221,6 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                     genreHistory.current.push(genre)
                     if (genreHistory.current.length > 5) genreHistory.current.shift()
 
-                    // Mode of last 5
                     const counts = { ELECTRO: 0, ROCK: 0, CHILL: 0, LATIN: 0, CINEMA: 0 }
                     genreHistory.current.forEach(g => counts[g]++)
                     const stable = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]
@@ -229,89 +234,196 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                     })
                 }
 
-                // === DMX OUTPUT (2.1 Virtual Crossover) ===
-                // Mids/Highs for sides (bands 4-15)
+                // ═══════════════════════════════════════════════
+                // BASS PULSE MODE — Pure bass-driven ON/OFF lights
+                // ═══════════════════════════════════════════════
+                if (bassPulseModeRef.current) {
+                    // Direct bass → brightness mapping
+                    // pow(0.8) = punchy, even moderate bass is visible
+                    const bassBrightness = Math.pow(bassEnergy, 0.8)
+                    const ambientFloor = 0.05 // 5% glow in silence (never fully dark)
+
+                    // Center (sub): warm white driven by bass
+                    const centerIntensity = Math.max(ambientFloor, bassBrightness)
+                    const centerColor = {
+                        r: Math.round(255 * centerIntensity),
+                        g: Math.round(180 * centerIntensity),
+                        b: Math.round(100 * centerIntensity)
+                    }
+
+                    // Sides (satellites): driven by respective L/R mid-high
+                    const leftIntensity = Math.max(ambientFloor, Math.pow(midHighL, 0.9))
+                    const rightIntensity = Math.max(ambientFloor, Math.pow(midHighR, 0.9))
+                    const leftColor = {
+                        r: Math.round(150 * leftIntensity),
+                        g: Math.round(120 * leftIntensity),
+                        b: Math.round(255 * leftIntensity)
+                    }
+                    const rightColor = {
+                        r: Math.round(150 * rightIntensity),
+                        g: Math.round(120 * rightIntensity),
+                        b: Math.round(255 * rightIntensity)
+                    }
+
+                    // Faster LERP for punchy bass response
+                    const PULSE_LERP = 0.4
+                    smoothedOutput.current = smoothedOutput.current.map((current, i) =>
+                        lerpColor(current, [leftColor, centerColor, rightColor][i], PULSE_LERP)
+                    )
+
+                    sendDmxBatch(smoothedOutput.current)
+                    setEnergyFactor(bassBrightness)
+
+                    setVisualizerData({
+                        left: [...peakHoldL.current],
+                        right: [...peakHoldR.current],
+                        bass: peakHoldBass.current
+                    })
+                    return // Skip genre mode entirely
+                }
+
+                // ═══════════════════════════════════════════════
+                // v6.1 "DECO MODE" — Refined Color Engine
+                // ═══════════════════════════════════════════════
+
+                // [T4] Bass curve: pow(1.5) — sweet spot for deco
+                // bass 0.3→0.16, 0.5→0.35, 0.7→0.59, 1.0→1.0
+                const bassSmooth = Math.pow(bassEnergy, 1.5)
+
+                // Sides: Mid/High energy (bands 4-15)
                 const midHighL = bandsL.slice(4).reduce((a, b) => a + b, 0) / 12
                 const midHighR = bandsR.slice(4).reduce((a, b) => a + b, 0) / 12
 
-                // EXPONENTIAL BASS for more punch
-                const bassExp = Math.pow(bassEnergy, 2.5)
-                const kickFlash = bassEnergy > 0.8 // Kick detected!
-
-                // === UPDATE SPATIAL ENERGIES FOR AMBILIGHT ===
+                // === SPATIAL ENERGIES for Ambilight ===
                 const energies = {
                     left: midHighL,
-                    center: bassEnergy,
+                    center: bassSmooth,
                     right: midHighR
                 }
                 setAudioTelemetryDSP(energies)
                 if (onAudioUpdate) onAudioUpdate(energies)
 
-                // Color mapping based on genre (auto or manual)
+                // === COLOR MAPPING — Premium Deco Tones ===
                 let colorL, colorC, colorR
                 const currentGenre = autoGenre ? detectedGenre : manualGenre
-                const profile = GENRE_PROFILES[currentGenre] || GENRE_PROFILES.CHILL
 
                 if (currentGenre === 'ELECTRO') {
-                    // Hard strobe: White flash on bass peaks
-                    if (kickFlash) {
-                        colorC = { r: 255, g: 255, b: 255 } // KICK FLASH
-                    } else {
-                        colorC = { r: Math.round(bassExp * 255), g: 0, b: Math.round(bassExp * 100) }
+                    // Warm magenta/amber — bass glows warm, sides glow cool
+                    const bassGlow = bassSmooth * 0.85 // cap intensity
+                    colorC = {
+                        r: Math.round(200 * bassGlow + 40),
+                        g: Math.round(80 * bassGlow + 15),
+                        b: Math.round(120 * bassGlow + 30)
                     }
-                    colorL = { r: Math.round(midHighL * 255), g: 0, b: Math.round(midHighL * 150) }
-                    colorR = { r: Math.round(midHighR * 255), g: 0, b: Math.round(midHighR * 150) }
+                    colorL = {
+                        r: Math.round(midHighL * 180 + 20),
+                        g: Math.round(midHighL * 50 + 10),
+                        b: Math.round(midHighL * 200 + 30)
+                    }
+                    colorR = {
+                        r: Math.round(midHighR * 180 + 20),
+                        g: Math.round(midHighR * 50 + 10),
+                        b: Math.round(midHighR * 200 + 30)
+                    }
                 } else if (currentGenre === 'ROCK') {
-                    // Organic warm tones with kick boost
-                    const baseR = Math.round(bassExp * 255)
-                    const baseG = Math.round(bassExp * 100)
-                    if (kickFlash) {
-                        colorC = { r: Math.min(255, baseR + 100), g: Math.min(255, baseG + 100), b: 50 }
-                    } else {
-                        colorC = { r: baseR, g: baseG, b: 0 }
+                    // Warm amber/gold — organic, never harsh
+                    colorC = {
+                        r: Math.round(220 * bassSmooth + 20),
+                        g: Math.round(130 * bassSmooth + 15),
+                        b: Math.round(20 * bassSmooth + 5)
                     }
-                    colorL = { r: Math.round(midHighL * 200), g: Math.round(midHighL * 100), b: 0 }
-                    colorR = { r: Math.round(midHighR * 200), g: Math.round(midHighR * 100), b: 0 }
+                    colorL = {
+                        r: Math.round(midHighL * 180 + 15),
+                        g: Math.round(midHighL * 100 + 10),
+                        b: Math.round(midHighL * 20)
+                    }
+                    colorR = {
+                        r: Math.round(midHighR * 180 + 15),
+                        g: Math.round(midHighR * 100 + 10),
+                        b: Math.round(midHighR * 20)
+                    }
                 } else if (currentGenre === 'LATIN') {
-                    // Warm mid-focused (low-mids drive the color)
+                    // Warm coral/peach — mid-frequency driven
+                    const profile = GENRE_PROFILES.LATIN
                     const warmFactor = lowMidAvg * profile.midWeight
-                    colorC = { r: Math.round(warmFactor * 255), g: Math.round(warmFactor * 150), b: Math.round(bassExp * 50) }
-                    colorL = { r: Math.round(lowMidL * 200), g: Math.round(lowMidL * 120), b: 0 }
-                    colorR = { r: Math.round(lowMidR * 200), g: Math.round(lowMidR * 120), b: 0 }
-                } else if (currentGenre === 'CINEMA') {
-                    // Extreme dynamics - punchy bass, dramatic
-                    const cinemaBase = bassExp * profile.bassWeight
-                    if (kickFlash) {
-                        colorC = { r: 255, g: 200, b: 100 } // Explosion flash
-                    } else {
-                        colorC = { r: Math.round(cinemaBase * 200), g: Math.round(cinemaBase * 100), b: Math.round(cinemaBase * 255) }
+                    colorC = {
+                        r: Math.round(warmFactor * 220 + 25),
+                        g: Math.round(warmFactor * 120 + 15),
+                        b: Math.round(bassSmooth * 40 + 10)
                     }
-                    colorL = { r: Math.round(midHighL * 150), g: Math.round(midHighL * 80), b: Math.round(midHighL * 255) }
-                    colorR = { r: Math.round(midHighR * 150), g: Math.round(midHighR * 80), b: Math.round(midHighR * 255) }
+                    colorL = {
+                        r: Math.round(lowMidL * 180 + 15),
+                        g: Math.round(lowMidL * 100 + 10),
+                        b: Math.round(lowMidL * 30)
+                    }
+                    colorR = {
+                        r: Math.round(lowMidR * 180 + 15),
+                        g: Math.round(lowMidR * 100 + 10),
+                        b: Math.round(lowMidR * 30)
+                    }
+                } else if (currentGenre === 'CINEMA') {
+                    // Deep indigo/rose — dramatic but elegant
+                    const cinemaBase = bassSmooth * 0.8
+                    colorC = {
+                        r: Math.round(cinemaBase * 160 + 20),
+                        g: Math.round(cinemaBase * 60 + 10),
+                        b: Math.round(cinemaBase * 200 + 30)
+                    }
+                    colorL = {
+                        r: Math.round(midHighL * 120 + 15),
+                        g: Math.round(midHighL * 50 + 10),
+                        b: Math.round(midHighL * 200 + 25)
+                    }
+                    colorR = {
+                        r: Math.round(midHighR * 120 + 15),
+                        g: Math.round(midHighR * 50 + 10),
+                        b: Math.round(midHighR * 200 + 25)
+                    }
                 } else {
-                    // CHILL: Cool tones, smooth but still reactive
-                    colorC = { r: 0, g: Math.round(bassExp * 80), b: Math.round(bassExp * 200) }
-                    colorL = { r: 0, g: Math.round(midHighL * 100), b: Math.round(midHighL * 200) }
-                    colorR = { r: 0, g: Math.round(midHighR * 100), b: Math.round(midHighR * 200) }
+                    // CHILL: Deep teal/ocean — serene ambient
+                    colorC = {
+                        r: Math.round(bassSmooth * 30 + 5),
+                        g: Math.round(bassSmooth * 100 + 20),
+                        b: Math.round(bassSmooth * 160 + 30)
+                    }
+                    colorL = {
+                        r: Math.round(midHighL * 20 + 5),
+                        g: Math.round(midHighL * 120 + 15),
+                        b: Math.round(midHighL * 170 + 25)
+                    }
+                    colorR = {
+                        r: Math.round(midHighR * 20 + 5),
+                        g: Math.round(midHighR * 120 + 15),
+                        b: Math.round(midHighR * 170 + 25)
+                    }
                 }
 
-                // === MODIFIER MODE: Apply audio energy to external colors ===
+                // === MODIFIER MODE — deco: visible, elegant, never hectic ===
                 const globalEnergy = (bassEnergy + (midHighL + midHighR) / 2) / 2
-                const boostFactor = 0.3 + globalEnergy * 1.2 // Range: 0.3 to 1.5 (overdrive on peaks)
+                const boostFactor = 0.4 + globalEnergy * 0.9 // Range: 0.4-1.3x
                 setEnergyFactor(boostFactor)
 
-                let finalColors = [colorL, colorC, colorR]
+                let targetColors = [colorL, colorC, colorR]
 
-                // If modifierMode is ON and we have inputColors, modulate those instead
+                // [T5/T6] Modulate scene colors — sub pumps center, satellites shimmer sides
                 if (modifierModeRef.current && inputColorsRef.current && inputColorsRef.current.length >= 3) {
-                    finalColors = inputColorsRef.current.map((c, i) => {
-                        // Apply bass boost to center, mid/high boost to sides
-                        const factor = i === 1 ? (0.4 + bassExp * 3.0) : (0.4 + (i === 0 ? midHighL : midHighR) * 1.5)
+                    targetColors = inputColorsRef.current.map((c, i) => {
+                        const factor = i === 1
+                            ? (0.45 + bassSmooth * 1.1) // [T5] Center: 0.45-1.55x (floor 45%, never dark)
+                            : (0.5 + (i === 0 ? midHighL : midHighR) * 0.9) // [T6] Sides: 0.5-1.4x (subtle shimmer)
                         return multiplyBrightness(c, factor)
                     })
                 }
 
-                sendDmxBatch(finalColors)
+                // === OUTPUT SMOOTHING — diffused transitions ===
+                // [T7] Modifier: 0.28 (~250ms) — diffused but responsive
+                // [T8] Standalone: 0.20 — smooth genre-colored silk
+                const LERP_SPEED = modifierModeRef.current ? 0.28 : 0.20
+                smoothedOutput.current = smoothedOutput.current.map((current, i) =>
+                    lerpColor(current, targetColors[i], LERP_SPEED)
+                )
+
+                sendDmxBatch(smoothedOutput.current)
 
                 // === UPDATE VISUALIZER DATA ===
                 setVisualizerData({
@@ -319,10 +431,10 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                     right: [...peakHoldR.current],
                     bass: peakHoldBass.current
                 })
-
             }
-            // Use setInterval instead of rAF - keeps running when minimized
-            requestRef.current = setInterval(analyze, 16) // ~60fps
+
+            // ~60fps loop
+            requestRef.current = setInterval(analyze, 16)
 
             stream.getAudioTracks()[0].onended = stop
         } catch (err) {
@@ -335,17 +447,12 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
     useEffect(() => () => stop(), [stop])
 
     return {
-        // Controls
         start, stop, active,
-        // Genre
         detectedGenre, autoGenre, setAutoGenre, manualGenre, setManualGenre,
-        // Modifier Mode
-        modifierMode, setModifierMode, energyFactor,
-        // NEW V5.0: Spatial energies for Ambilight
+        modifierMode, setModifierMode, bassPulseMode, setBassPulseMode,
+        energyFactor,
         audioTelemetryDSP,
-        // Telemetry
         telemetry,
-        // Visualizer
         visualizerData
     }
 }

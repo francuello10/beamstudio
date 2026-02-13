@@ -1,7 +1,7 @@
 {
   "name": "beamstudio",
   "version": "1.0.0",
-  "description": "Advanced DMX Light Controller via Art-Net",
+  "description": "Advanced DMX Light Controller — Art-Net, USB Direct, Ambilight, Audio Reactive",
   "main": "./out/main/index.js",
   "author": "Fran Cuello <francuello.1999@gmail.com> (https://github.com/francuello10)",
   "homepage": "https://github.com/francuello10/beamstudio",
@@ -37,6 +37,7 @@
   "build": {
     "appId": "com.francuello.beamstudio",
     "productName": "BeamStudio",
+    "copyright": "Copyright © 2026 Fran Cuello",
     "directories": {
       "output": "dist",
       "buildResources": "resources"
@@ -56,13 +57,24 @@
     },
     "win": {
       "target": "nsis",
-      "icon": "build/icon.png"
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "shortcutName": "BeamStudio"
-    }
+      "shortcutName": "BeamStudio",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "deleteAppDataOnUninstall": false
+    },
+    "extraResources": [
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      }
+    ]
   }
 }
