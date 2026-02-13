@@ -340,11 +340,17 @@ export function useFluidSimulation() {
     const timerRef = useRef(null) // Fallback for background
     const lastTimeRef = useRef(0)
     const splatTimerRef = useRef(0)
-    const paletteIdxRef = useRef(0)
-    const audioIntensityRef = useRef(0)
 
+    // Centralized Audio Data Props
     const [running, setRunning] = useState(false)
     const [activePalette, setActivePalette] = useState(FLUID_PALETTES[0])
+    const paletteIdxRef = useRef(0)
+
+    // Transition State (Kept for smoothness)
+    const prevPaletteIdxRef = useRef(0)
+    const transitionStartRef = useRef(0)
+    const TRANSITION_DURATION = 1000
+
     const [currentColors, setCurrentColors] = useState([
         { r: 0, g: 0, b: 0 },
         { r: 0, g: 0, b: 0 },
@@ -489,29 +495,48 @@ export function useFluidSimulation() {
         fbos.dye.swap()
     }, [blit, getPhysics])
 
-    // ── Auto-splat ──
-    const autoSplat = useCallback(() => {
-        const palette = FLUID_PALETTES[paletteIdxRef.current]
+    // ── Audio Impulse Logic (Centralized) ──
+    const processAudioImpulses = useCallback((dt) => {
         const physics = getPhysics()
-        const colors = palette.colors
-        const audio = audioIntensityRef.current
+        const currentMode = useAudioStore.getState().audioMode
+        const spatial = useAudioStore.getState().spatialResponse
+        const spectral = useAudioStore.getState().spectralResponse
 
-        // Audio multiplier: at 0 audio = 1.0x, at full audio = 3.0x
-        const audioMult = 1.0 + audio * 2.0
-        const numSplats = physics.numSplats + (audio > 0.3 ? 2 : 0)
-
-        for (let i = 0; i < numSplats; i++) {
-            const color = colors[Math.floor(Math.random() * colors.length)]
-            const x = 0.05 + Math.random() * 0.9
-            const y = 0.05 + Math.random() * 0.9
-
-            // Organic circular + traveling motion
-            const angle = Math.random() * Math.PI * 2
-            const speed = (0.8 + Math.random() * 2.5) * audioMult
-            const dx = Math.cos(angle) * speed
-            const dy = Math.sin(angle) * speed
-
-            splat(x, y, dx, dy, color, audioMult, audioMult)
+        if (currentMode === 'STEREO') {
+            // STEREO MODE: 3 Discrete Impulse Zones
+            if (spatial.center > 0.1) {
+                if (Math.random() < spatial.center * 0.4) {
+                    const color = activePalette.colors[Math.floor(Math.random() * activePalette.colors.length)]
+                    splat(0.5 + (Math.random() - 0.5) * 0.2, 0.1, 0, 4.0 * spatial.center, color, 2.0 * spatial.center, 1.5)
+                }
+            }
+            if (spatial.left > 0.1 && Math.random() < spatial.left * 0.3) {
+                const color = activePalette.colors[0]
+                splat(0.15, 0.3 + Math.random() * 0.4, 2.0 * spatial.left, 0, color, 1.0 * spatial.left, 0.8)
+            }
+            if (spatial.right > 0.1 && Math.random() < spatial.right * 0.3) {
+                const color = activePalette.colors[1]
+                splat(0.85, 0.3 + Math.random() * 0.4, -2.0 * spatial.right, 0, color, 1.0 * spatial.right, 0.8)
+            }
+        } else if (currentMode === 'EQ') {
+            // EQ MODE: Spectral Fountains
+            spectral.forEach((amp, i) => {
+                if (amp > 0.05 && Math.random() < amp * 0.2) {
+                    const x = 0.1 + (i / 15) * 0.8
+                    const forceY = 2.0 + (amp * 10.0)
+                    const radius = 0.5 + (amp * 1.0)
+                    const color = activePalette.colors[i % activePalette.colors.length]
+                    splat(x, 0.05, 0, forceY, color, forceY * 0.2, radius * 0.5)
+                }
+            })
+        } else {
+            // OFF / AMBIENT
+            splatTimerRef.current += dt
+            if (splatTimerRef.current > physics.splatInterval) {
+                splatTimerRef.current = 0
+                const color = activePalette.colors[Math.floor(Math.random() * activePalette.colors.length)]
+                splat(Math.random(), Math.random(), (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, color, 1.0, 1.0)
+            }
         }
     }, [splat, getPhysics, activePalette])
 
@@ -668,16 +693,9 @@ export function useFluidSimulation() {
         const dt = Math.min((now - lastTimeRef.current) / 1000, 0.050)
         lastTimeRef.current = now
 
-        const physics = getPhysics()
-        const audio = audioIntensityRef.current
-
-        // Auto-splat: faster when audio is pumping
-        const interval = physics.splatInterval * (1.0 - audio * 0.5)
-        splatTimerRef.current += dt
-        if (splatTimerRef.current > interval) {
-            splatTimerRef.current = 0
-            autoSplat()
-        }
+        // Run physics step
+        processAudioImpulses(dt)
+        step(dt)
 
         // Physics
         step(dt)
@@ -747,7 +765,9 @@ export function useFluidSimulation() {
     const changePalette = useCallback((paletteId) => {
         const idx = FLUID_PALETTES.findIndex(p => p.id === paletteId)
         if (idx >= 0) {
+            prevPaletteIdxRef.current = paletteIdxRef.current
             paletteIdxRef.current = idx
+            transitionStartRef.current = performance.now()
             setActivePalette(FLUID_PALETTES[idx])
         }
     }, [])
