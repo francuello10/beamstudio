@@ -74,6 +74,40 @@
     align-items: center;
 }
 
+/* Audio Mode Group (Segmented Control) */
+.audio-mode-group {
+    display: flex;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 4px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mode-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.5);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    letter-spacing: 0.5px;
+}
+
+.mode-btn:hover {
+    color: white;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.mode-btn.active {
+    background: #FF0055;
+    /* Neon Pink/Red accent */
+    color: white;
+    box-shadow: 0 2px 8px rgba(255, 0, 85, 0.4);
+}
+
 /* Action Button */
 .fluidsim-action-btn {
     display: flex;
@@ -308,4 +342,68 @@
     display: flex;
     align-items: center;
     color: rgba(255, 255, 255, 0.8);
+}
+
+/* Toggle Switch */
+.bgr-toggle {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
+}
+
+.bgr-toggle:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.bgr-toggle.active {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.toggle-slider {
+    width: 36px;
+    height: 20px;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 10px;
+    position: relative;
+    transition: all 0.2s;
+}
+
+.bgr-toggle.active .toggle-slider {
+    background: #00d4ff;
+    /* Accent color */
+}
+
+.toggle-slider::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    background: white;
+    border-radius: 50%;
+    transition: all 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.bgr-toggle.active .toggle-slider::after {
+    transform: translateX(16px);
+}
+
+.bgr-toggle span {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    letter-spacing: 1px;
+}
+
+.bgr-toggle.active span {
+    color: white;
 }

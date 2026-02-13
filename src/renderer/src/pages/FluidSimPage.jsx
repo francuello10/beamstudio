@@ -19,21 +19,22 @@ const FluidSimPage = () => {
     const setActiveFlag = useDmxStore(state => state.setActiveFlag)
 
     const setAudioTelemetryDSP = useAudioStore(state => state.setAudioTelemetryDSP)
+    const audioMode = useAudioStore(state => state.audioMode)
+    const spatialResponse = useAudioStore(state => state.spatialResponse)
 
     // Audio Engine
-    const [audioBoost, setAudioBoost] = useState(false)
-    const { start: startAudio, stop: stopAudio, setModifierMode, energyFactor } = useSystemAudio(
+    const { start: startAudio, stop: stopAudio, energyFactor } = useSystemAudio(
         () => { }, // We don't need direct pixel map buffer here, fluid engine handles it
         null,
         setAudioTelemetryDSP
     )
 
-    // Fluid Engine (driven by audio intensity)
+    // Fluid Engine
     const {
         canvasRef, start: startFluid, stop: stopFluid,
         running, activePalette, changePalette, splat,
         currentColors // now exposed for UI feedback
-    } = useFluidSimulation(audioBoost ? energyFactor : 0)
+    } = useFluidSimulation()
 
     // Toggle dynamic renderer for DMX routing
     useEffect(() => {
@@ -41,33 +42,35 @@ const FluidSimPage = () => {
         return () => window.dmx?.setDynamicRendererActive(false)
     }, [running])
 
-    const handleAudioBoostToggle = async () => {
-        if (audioBoost) {
-            setAudioBoost(false)
-            setModifierMode(false)
+    // Audio Mode Handler
+    const handleModeChange = useCallback(async (mode) => {
+        const store = useAudioStore.getState()
+        store.setAudioMode(mode)
+
+        if (mode === 'OFF') {
             stopAudio()
-        } else {
-            setAudioBoost(true)
-            setModifierMode(true)
+        } else if (running) {
+            // Only start audio if the engine is running
             await startAudio()
         }
-    }
+    }, [startAudio, stopAudio, running])
 
-    const handleStart = () => {
+    const handleStart = async () => {
         // Clear other modes
         setActiveProgram(null)
         setActiveDynamicScene(null)
         setActiveFlag(null)
         startFluid()
+
+        // Resume audio if mode was active
+        if (audioMode !== 'OFF') {
+            await startAudio()
+        }
     }
 
     const handleStop = () => {
         stopFluid()
-        if (audioBoost) {
-            setAudioBoost(false)
-            setModifierMode(false)
-            stopAudio()
-        }
+        stopAudio()
     }
 
     // Mouse interaction
@@ -100,15 +103,18 @@ const FluidSimPage = () => {
                         </div>
 
                         <div className="fluidsim-controls-top">
-                            {running && (
-                                <div
-                                    className={`fluidsim-boost-btn ${audioBoost ? 'active' : ''}`}
-                                    onClick={handleAudioBoostToggle}
-                                >
-                                    <Activity size={14} />
-                                    <span>AUDIO REACT {audioBoost && `x${energyFactor.toFixed(1)}`}</span>
-                                </div>
-                            )}
+                            <div className="audio-mode-group">
+                                {['OFF', 'STEREO', 'EQ'].map(mode => (
+                                    <button
+                                        key={mode}
+                                        onClick={() => handleModeChange(mode)}
+                                        className={`mode-btn ${audioMode === mode ? 'active' : ''}`}
+                                    >
+                                        {mode}
+                                    </button>
+                                ))}
+                            </div>
+
                             <motion.button
                                 className={`fluidsim-action-btn ${running ? 'stop' : ''}`}
                                 onClick={running ? handleStop : handleStart}
@@ -139,18 +145,27 @@ const FluidSimPage = () => {
                                 <span>INITIALIZE GPU FLUID DYNAMICS</span>
                             </div>
                         )}
+
+
                     </div>
 
                     {/* GPU Spatial Monitor (Replacing old Zone Monitor) */}
                     <div className="extraction-monitor" style={{ marginTop: '20px' }}>
                         <div className="monitor-header">
                             <span className="live-indicator"><div className="dot"></div> GPU SPATIAL MONITOR</span>
-                            <span className="resolution-label">3x1 WebGL Downsample</span>
+                            <span className="resolution-label">3x1 WebGL Downsample • 60Hz Telemetry</span>
                         </div>
                         <div className="monitor-canvas-wrapper" style={{ display: 'flex', gap: '4px', background: '#000', padding: '10px', height: '100px', position: 'relative', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
                             {currentColors.map((c, i) => {
-                                const energyLabels = ['L', 'C', 'R']
-                                const boostPercent = audioBoost ? Math.round(energyFactor * 100 - 100) : 0
+                                const energyLabels = ['LEFT', 'CENTER', 'RIGHT']
+
+                                let energy = 0
+                                if (audioMode !== 'OFF') {
+                                    if (i === 0) energy = spatialResponse.left
+                                    if (i === 1) energy = spatialResponse.center
+                                    if (i === 2) energy = spatialResponse.right
+                                }
+                                // For visual feedback, show colors and overlay energy bar
 
                                 return (
                                     <div key={i} style={{
@@ -162,16 +177,16 @@ const FluidSimPage = () => {
                                         position: 'relative',
                                         overflow: 'hidden'
                                     }}>
-                                        {audioBoost && (
+                                        {audioMode !== 'OFF' && (
                                             <div style={{
                                                 position: 'absolute',
                                                 bottom: 0,
                                                 left: 0,
                                                 right: 0,
-                                                height: `${Math.min(100, boostPercent)}%`,
-                                                background: 'rgba(255,255,255,0.25)',
-                                                transition: 'height 0.1s ease',
-                                                borderRadius: '0 0 4px 4px'
+                                                height: `${Math.min(100, energy * 100)}%`,
+                                                background: 'linear-gradient(to top, rgba(255,255,255,0.4), rgba(255,255,255,0.0))',
+                                                transition: 'height 0.05s linear',
+                                                borderTop: '2px solid rgba(255,255,255,0.8)'
                                             }} />
                                         )}
                                         <div style={{
@@ -179,10 +194,11 @@ const FluidSimPage = () => {
                                             top: '50%',
                                             left: '50%',
                                             transform: 'translate(-50%, -50%)',
-                                            fontSize: '14px',
+                                            fontSize: '12px',
                                             fontWeight: 700,
-                                            color: 'rgba(255,255,255,0.6)',
-                                            textShadow: '0 1px 3px rgba(0,0,0,0.5)'
+                                            color: 'rgba(255,255,255,0.8)',
+                                            textShadow: '0 1px 4px rgba(0,0,0,0.8)',
+                                            zIndex: 2
                                         }}>
                                             {energyLabels[i]}
                                         </div>

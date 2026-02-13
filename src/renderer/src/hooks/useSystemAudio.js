@@ -188,6 +188,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                     peakHoldR.current[i] = Math.max(bandsR[i], peakHoldR.current[i] * decayRate)
                 }
                 peakHoldBass.current = Math.max(bassEnergy, peakHoldBass.current * decayRate)
+                const bassSmooth = peakHoldBass.current
 
                 // === STEREO WIDTH ===
                 let diffSum = 0
@@ -286,18 +287,34 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 }
 
                 // ═══════════════════════════════════════════════
-                // v6.1 "DECO MODE" — Refined Color Engine
+                // v7.0 CENTRALIZED AUDIO INTELLIGENCE
                 // ═══════════════════════════════════════════════
 
-                const bassSmooth = Math.pow(bassEnergy, 1.5)
-
-                const energies = {
-                    left: midHighL,
-                    center: bassSmooth,
-                    right: midHighR
+                // 1. SPATIAL ANALYSIS (Bass=Center, Mids=Stereo)
+                const spatial = {
+                    left: Math.min(1.0, midHighL * 1.2),    // Boost mids for visibility
+                    center: Math.min(1.0, bassSmooth * 1.0), // Bass anchor
+                    right: Math.min(1.0, midHighR * 1.2)
                 }
+
+                // 2. SPECTRAL ANALYSIS (16-band EQ)
+                // Merge L+R for a unified visualizer rail
+                const spectral = new Array(16)
+                for (let i = 0; i < 16; i++) {
+                    const val = (bandsL[i] + bandsR[i]) / 2
+                    spectral[i] = Math.min(1.0, val * 1.5) // Norm & boost
+                }
+
+                // 3. ATOMIC UPDATE
+                useAudioStore.getState().updateAudioAnalysis(spatial, spectral)
+
+                // Legacy Internal State (keep for now to not break old consumers immediately if any)
                 setAudioTelemetryDSP(energies)
                 if (onAudioUpdate) onAudioUpdate(energies)
+
+                // ═══════════════════════════════════════════════
+                // v6.1 "DECO MODE" — Refined Color Engine
+                // ═══════════════════════════════════════════════
 
                 let colorL, colorC, colorR
                 const currentGenre = autoGenre ? detectedGenre : manualGenre

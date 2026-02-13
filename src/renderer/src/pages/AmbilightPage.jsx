@@ -6,6 +6,7 @@ import { useGpuAmbilight } from '../hooks/useGpuAmbilight'
 import { useSystemAudio } from '../hooks/useSystemAudio'
 import { useDmxStore } from '../store/dmxStore'
 import { useAudioStore } from '../store/audioStore'
+import '../fluidsim.css'
 
 const AmbilightPage = () => {
     // Stores
@@ -28,10 +29,10 @@ const AmbilightPage = () => {
     // GPU Extraction Engine
     const { start: startAmbilight, stop: stopAmbilight, capturing, colors: previewColors, isMono, setIsMono } = useGpuAmbilight(sendPixelMapBuffer, audioTelemetryDSP)
 
-    // Audio Boost Engine
-    const { start: startAudio, stop: stopAudio, setModifierMode, energyFactor } = useSystemAudio(
-        sendPixelMapBuffer,
-        previewColors,
+    // Audio Boost Engine (Analysis Only)
+    const { start: startAudio, stop: stopAudio, energyFactor } = useSystemAudio(
+        () => { }, // No direct DMX control, Ambilight hook handles it
+        null,
         setAudioTelemetryDSP
     )
 
@@ -48,14 +49,15 @@ const AmbilightPage = () => {
 
     useEffect(() => { refreshSources() }, [])
 
-    const handleAudioBoostToggle = async () => {
-        if (audioBoost) {
-            setAudioBoost(false)
-            setModifierMode(false)
+    const audioMode = useAudioStore(state => state.audioMode)
+
+    const handleModeChange = async (mode) => {
+        const store = useAudioStore.getState()
+        store.setAudioMode(mode)
+
+        if (mode === 'OFF') {
             stopAudio()
-        } else {
-            setAudioBoost(true)
-            setModifierMode(true)
+        } else if (capturing) {
             await startAudio()
         }
     }
@@ -64,9 +66,8 @@ const AmbilightPage = () => {
     const setActiveDynamicScene = useDmxStore(state => state.setActiveDynamicScene)
     const setActiveFlag = useDmxStore(state => state.setActiveFlag)
 
-    const handleStart = () => {
+    const handleStart = async () => {
         const id = selectedSource || sources[0]?.id
-        // Reset Logic: Ensure Ambilight has exclusive control
         setActiveProgram(null)
         setActiveDynamicScene(null)
         setActiveFlag(null)
@@ -75,10 +76,16 @@ const AmbilightPage = () => {
             setCaptureError(null)
             try {
                 startAmbilight(id)
+                if (audioMode !== 'OFF') await startAudio()
             } catch (e) {
                 setCaptureError('GPU capture failed — try a different source')
             }
         }
+    }
+
+    const handleStop = () => {
+        stopAmbilight()
+        stopAudio()
     }
 
     return (
@@ -134,24 +141,21 @@ const AmbilightPage = () => {
                                 <span>MONO</span>
                             </div>
 
-                            <div
-                                className={`bgr-toggle ${audioBoost ? 'active' : ''}`}
-                                onClick={handleAudioBoostToggle}
-                                title="Modulate brightness with audio"
-                                style={{
-                                    height: '48px',
-                                    padding: '0 16px',
-                                    background: audioBoost ? 'linear-gradient(135deg, #ff0080, #7928ca)' : undefined,
-                                    borderColor: audioBoost ? 'transparent' : undefined
-                                }}
-                            >
-                                <div className="toggle-slider"></div>
-                                <span>BOOST {audioBoost && `x${energyFactor.toFixed(1)}`}</span>
+                            <div className="audio-mode-group">
+                                {['OFF', 'STEREO', 'EQ'].map(mode => (
+                                    <button
+                                        key={mode}
+                                        onClick={() => handleModeChange(mode)}
+                                        className={`mode-btn ${audioMode === mode ? 'active' : ''}`}
+                                    >
+                                        {mode}
+                                    </button>
+                                ))}
                             </div>
 
                             <motion.button
                                 className={`action-button ${capturing ? 'stop' : 'active'}`}
-                                onClick={capturing ? stopAmbilight : handleStart}
+                                onClick={capturing ? handleStop : handleStart}
                                 whileHover={{ scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
                                 style={{ flex: 1, margin: 0, height: '48px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}

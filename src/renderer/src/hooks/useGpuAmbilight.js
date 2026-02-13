@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { lerpColor } from '../utils/palettes'
+import { useAudioStore } from '../store/audioStore'
 
 /**
  * useGpuAmbilight v6.0 — Ultra-smooth GPU Screen Sync ("Deco Edition")
@@ -12,11 +13,15 @@ import { lerpColor } from '../utils/palettes'
  * 4. Saturation boost option for richer deco colors
  * 5. BACKGROUND SUPPORT: Hybrid rAF / setTimeout loop
  */
-export const useGpuAmbilight = (dispatchPixelMapUpdate, audioTelemetryDSP = null) => {
+export const useGpuAmbilight = (dispatchPixelMapUpdate) => {
+    // Centralized Audio Data
+    const audioMode = useAudioStore(state => state.audioMode)
+    const spatial = useAudioStore(state => state.spatialResponse)
+    const spectral = useAudioStore(state => state.spectralResponse)
     const [capturing, setCapturing] = useState(false)
     const [isMono, setIsMono] = useState(false)
-    const [boostEnabled, setBoostEnabled] = useState(false)
-    const [boostFactor, setBoostFactor] = useState(0.8)
+
+    // Removed local boost state in favor of store state
     const [colors, setColors] = useState([
         { r: 0, g: 0, b: 0 },
         { r: 0, g: 0, b: 0 },
@@ -31,15 +36,10 @@ export const useGpuAmbilight = (dispatchPixelMapUpdate, audioTelemetryDSP = null
     ])
 
     const isMonoRef = useRef(false)
-    const boostEnabledRef = useRef(false)
-    const boostFactorRef = useRef(0.8)
-    const audioTelemetryDSPRef = useRef(null)
+    const boostFactorRef = useRef(1.2) // Increased default boost
     const capturingRef = useRef(false) // Ref for loop exit
 
     useEffect(() => { isMonoRef.current = isMono }, [isMono])
-    useEffect(() => { boostEnabledRef.current = boostEnabled }, [boostEnabled])
-    useEffect(() => { boostFactorRef.current = boostFactor }, [boostFactor])
-    useEffect(() => { audioTelemetryDSPRef.current = audioTelemetryDSP }, [audioTelemetryDSP])
 
     const videoRef = useRef(null)
     const canvasRef = useRef(null)
@@ -125,20 +125,42 @@ export const useGpuAmbilight = (dispatchPixelMapUpdate, audioTelemetryDSP = null
                     ]
                 }
 
-                // === SPATIAL BOOST (Audio-reactive brightness) ===
-                if (boostEnabledRef.current && audioTelemetryDSPRef.current) {
-                    const energies = audioTelemetryDSPRef.current
+                // === SPATIAL BOOST (Centralized Audio Intelligence) ===
+                if (useAudioStore.getState().audioMode !== 'OFF') {
+                    // Pull fresh data from store (no ref needed, store state is external to closure issue)
+                    const currentMode = useAudioStore.getState().audioMode
+                    const spatialData = useAudioStore.getState().spatialResponse
+                    const spectralData = useAudioStore.getState().spectralResponse
                     const bf = boostFactorRef.current
 
+                    let multipliers = [1.0, 1.0, 1.0]
+
+                    if (currentMode === 'STEREO') {
+                        // Mapping: L -> L, Center -> Bass, R -> R
+                        multipliers[0] = 1.0 + (spatialData.left * bf * 0.8)
+                        multipliers[1] = 1.0 + (spatialData.center * bf * 1.5) // Bass Kick
+                        multipliers[2] = 1.0 + (spatialData.right * bf * 0.8)
+                    } else if (currentMode === 'EQ') {
+                        // Mapping: 16 bands -> 3 zones
+                        // Left: Low Mids (Bands 2-6)
+                        const lowMids = spectralData.slice(2, 6).reduce((a, b) => a + b, 0) / 4
+                        // Center: Bass (Bands 0-1) + Vocals (Bands 7-10)
+                        const bassVocals = (spectralData[0] + spectralData[1] + spectralData.slice(7, 10).reduce((a, b) => a + b, 0) / 3) / 2
+                        // Right: Highs (Bands 11-15)
+                        const highs = spectralData.slice(11).reduce((a, b) => a + b, 0) / 5
+
+                        multipliers[0] = 1.0 + (lowMids * bf)
+                        multipliers[1] = 1.0 + (bassVocals * bf)
+                        multipliers[2] = 1.0 + (highs * bf)
+                    }
+
+                    // Apply
                     rawColors = rawColors.map((c, i) => {
-                        const energy = i === 0 ? energies.left : (i === 1 ? energies.center : energies.right)
-                        // v6.2: Center channel (Bass) gets 1.5x boost for stronger pump
-                        const channelMult = i === 1 ? 1.5 : 1.0
-                        const multiplier = 1 + (Math.sqrt(energy) * bf * 0.5 * channelMult)
+                        const m = multipliers[i]
                         return {
-                            r: Math.min(255, Math.round(c.r * multiplier)),
-                            g: Math.min(255, Math.round(c.g * multiplier)),
-                            b: Math.min(255, Math.round(c.b * multiplier))
+                            r: Math.min(255, Math.round(c.r * m)),
+                            g: Math.min(255, Math.round(c.g * m)),
+                            b: Math.min(255, Math.round(c.b * m))
                         }
                     })
                 }
@@ -177,8 +199,6 @@ export const useGpuAmbilight = (dispatchPixelMapUpdate, audioTelemetryDSP = null
 
     return {
         start, stop, capturing, colors,
-        isMono, setIsMono,
-        boostEnabled, setBoostEnabled,
-        boostFactor, setBoostFactor
+        isMono, setIsMono
     }
 }

@@ -26,6 +26,11 @@ export const useAudioStore = create((set) => ({
     audioActive: false,
     energyFactor: 1,
 
+    // Centralized Audio Intelligence (v7)
+    audioMode: 'STEREO', // 'STEREO' | 'EQ' | 'OFF'
+    spatialResponse: { left: 0, center: 0, right: 0 }, // Normalized 0-1
+    spectralResponse: new Array(16).fill(0),          // Normalized 0-1
+
     // Actions
     setAudioTelemetryDSP: (audioTelemetryDSP) => set({ audioTelemetryDSP }),
 
@@ -35,5 +40,12 @@ export const useAudioStore = create((set) => ({
     })),
 
     setAudioActive: (audioActive) => set({ audioActive }),
-    setEnergyFactor: (energyFactor) => set({ energyFactor })
+    setEnergyFactor: (energyFactor) => set({ energyFactor }),
+
+    // New Actions
+    setAudioMode: (audioMode) => set({ audioMode }),
+    updateAudioAnalysis: (spatial, spectral) => set({
+        spatialResponse: spatial,
+        spectralResponse: spectral
+    })
 }))

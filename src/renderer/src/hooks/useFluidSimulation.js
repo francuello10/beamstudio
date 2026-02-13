@@ -16,6 +16,7 @@
  */
 import { useRef, useCallback, useState, useEffect } from 'react'
 import { useDmxStore } from '../store/dmxStore'
+import { useAudioStore } from '../store/audioStore'
 
 // ═══════════════════════════════════════════════════
 // PHYSICS PRESETS
@@ -328,7 +329,7 @@ function createFBO(gl, w, h, internalFormat, format, type, filter) {
 // ═══════════════════════════════════════════════════
 // MAIN HOOK
 // ═══════════════════════════════════════════════════
-export function useFluidSimulation(audioIntensity = 0) {
+export function useFluidSimulation() {
     const canvasRef = useRef(null)
     const glRef = useRef(null)
     const programsRef = useRef(null)
@@ -338,7 +339,12 @@ export function useFluidSimulation(audioIntensity = 0) {
     const timerRef = useRef(null) // Fallback for background
     const lastTimeRef = useRef(0)
     const splatTimerRef = useRef(0)
-    const audioIntensityRef = useRef(0)
+
+    // Centralized Audio Data Props
+    const audioMode = useAudioStore(state => state.audioMode)
+    const spatial = useAudioStore(state => state.spatialResponse)
+    const spectral = useAudioStore(state => state.spectralResponse)
+    const energyFactor = useAudioStore(state => state.energyFactor)
 
     // Palette Transition State
     const paletteIdxRef = useRef(0)
@@ -356,10 +362,10 @@ export function useFluidSimulation(audioIntensity = 0) {
 
     const sendPixelMapBuffer = useDmxStore(state => state.sendPixelMapBuffer)
 
-    // Keep audioIntensity ref in sync
-    useEffect(() => {
-        audioIntensityRef.current = audioIntensity
-    }, [audioIntensity])
+    // Keep audioIntensity ref in sync -> REMOVED
+    // useEffect(() => {
+    //     audioIntensityRef.current = audioIntensity
+    // }, [audioIntensity])
 
     // Get interpolated physics
     const getPhysics = useCallback(() => {
@@ -492,46 +498,75 @@ export function useFluidSimulation(audioIntensity = 0) {
         fbos.dye.swap()
     }, [blit, getPhysics])
 
-    // ── Auto-splat (with Color Interpolation) ──
-    const autoSplat = useCallback(() => {
-        const now = performance.now()
-        const elapsed = now - transitionStartRef.current
-        const progress = Math.min(1.0, elapsed / TRANSITION_DURATION)
-
-        const targetP = FLUID_PALETTES[paletteIdxRef.current]
+    // ── Auto-splat (replaced by Centralized Impulse Logic) ──
+    const processAudioImpulses = useCallback((dt) => {
         const physics = getPhysics()
-        const audio = audioIntensityRef.current
+        const currentMode = useAudioStore.getState().audioMode
+        const spatial = useAudioStore.getState().spatialResponse
+        const spectral = useAudioStore.getState().spectralResponse
 
-        // Pick interpolated colors
-        let colorsToUse = targetP.colors
-        if (progress < 1.0) {
-            const prevP = FLUID_PALETTES[prevPaletteIdxRef.current]
-            const c1 = prevP.colors[Math.floor(Math.random() * prevP.colors.length)]
-            const c2 = targetP.colors[Math.floor(Math.random() * targetP.colors.length)]
+        // Global intensity scaler
+        const sensitivity = 1.0 // Could be a prop or store value
 
-            // Interpolate new ink color
-            const blendedColor = lerp3(c1, c2, progress)
-            colorsToUse = [blendedColor]
+        if (currentMode === 'STEREO') {
+            // STEREO MODE: 3 Discrete Impulse Zones
+
+            // 1. Center (Bass) - Heavy, slow, large
+            if (spatial.center > 0.1) {
+                // Probabilistic split to avoid machine-gun effect
+                if (Math.random() < spatial.center * 0.4) {
+                    const color = activePalette.colors[Math.floor(Math.random() * activePalette.colors.length)]
+                    // Center X varied slightly, Bottom Y
+                    splat(0.5 + (Math.random() - 0.5) * 0.2, 0.1, 0, 4.0 * spatial.center, color, 2.0 * spatial.center, 1.5)
+                }
+            }
+
+            // 2. Sides (Mid/High) - Fast, small, snappy
+            if (spatial.left > 0.1 && Math.random() < spatial.left * 0.3) {
+                const color = activePalette.colors[0] // Primary color
+                splat(0.15, 0.3 + Math.random() * 0.4, 2.0 * spatial.left, 0, color, 1.0 * spatial.left, 0.8)
+            }
+            if (spatial.right > 0.1 && Math.random() < spatial.right * 0.3) {
+                const color = activePalette.colors[1] // Secondary color
+                splat(0.85, 0.3 + Math.random() * 0.4, -2.0 * spatial.right, 0, color, 1.0 * spatial.right, 0.8)
+            }
+
+        } else if (currentMode === 'EQ') {
+            // EQ MODE: 16-band Spectral Fountains
+            // Only update every few frames to save perf? No, limit by probability
+            spectral.forEach((amp, i) => {
+                if (amp > 0.05) {
+                    // Position X distributed 0.1 to 0.9
+                    const x = 0.1 + (i / 15) * 0.8
+                    const y = 0.05
+
+                    // Higher bands = faster, smaller
+                    const forceY = 2.0 + (amp * 10.0)
+                    const radius = 0.5 + (amp * 1.0)
+
+                    // Rain check
+                    if (Math.random() < amp * 0.2) {
+                        const color = activePalette.colors[i % activePalette.colors.length]
+                        splat(x, y, 0, forceY, color, forceY * 0.2, radius * 0.5)
+                    }
+                }
+            })
+        } else {
+            // OFF / AMBIENT: Gentle random splats
+            splatTimerRef.current += dt
+            const interval = physics.splatInterval
+            if (splatTimerRef.current > interval) {
+                splatTimerRef.current = 0
+                // Standard auto-splat logic...
+                const color = activePalette.colors[Math.floor(Math.random() * activePalette.colors.length)]
+                const x = Math.random()
+                const y = Math.random()
+                const dx = (Math.random() - 0.5) * 2
+                const dy = (Math.random() - 0.5) * 2
+                splat(x, y, dx, dy, color, 1.0, 1.0)
+            }
         }
-
-        // Audio multiplier: at 0 audio = 1.0x, at full audio = 3.0x
-        const audioMult = 1.0 + audio * 2.0
-        const numSplats = Math.round(physics.numSplats + (audio > 0.3 ? 2 : 0))
-
-        for (let i = 0; i < numSplats; i++) {
-            const color = colorsToUse[Math.floor(Math.random() * colorsToUse.length)]
-            const x = 0.05 + Math.random() * 0.9
-            const y = 0.05 + Math.random() * 0.9
-
-            // Organic circular + traveling motion
-            const angle = Math.random() * Math.PI * 2
-            const speed = (0.8 + Math.random() * 2.5) * audioMult
-            const dx = Math.cos(angle) * speed
-            const dy = Math.sin(angle) * speed
-
-            splat(x, y, dx, dy, color, audioMult, audioMult)
-        }
-    }, [splat, getPhysics])
+    }, [splat, getPhysics, activePalette])
 
     // ── Physics step ──
     const step = useCallback((dt) => {
@@ -696,7 +731,7 @@ export function useFluidSimulation(audioIntensity = 0) {
         lagRef.current += frameTime
 
         const physics = getPhysics()
-        const audio = audioIntensityRef.current
+        // const audio = audioIntensityRef.current // Removed
 
         // Run physics at steady 60 FPS (0.016s) for smoothness
         const FIXED_STEP = 0.016
@@ -704,13 +739,8 @@ export function useFluidSimulation(audioIntensity = 0) {
         let steps = 0
         // SAFETY: Cap max steps per frame to prevent freezing on slow hardware
         while (lagRef.current >= FIXED_STEP && steps < 10) {
-            // Auto-splat logic runs on physics tick
-            const interval = physics.splatInterval * (1.0 - audio * 0.5)
-            splatTimerRef.current += FIXED_STEP
-            if (splatTimerRef.current > interval) {
-                splatTimerRef.current = 0
-                autoSplat()
-            }
+            // New Audio Impulse Logic
+            processAudioImpulses(FIXED_STEP)
 
             // Physics Step
             step(FIXED_STEP)
@@ -745,7 +775,7 @@ export function useFluidSimulation(audioIntensity = 0) {
         } else {
             rafRef.current = requestAnimationFrame(renderLoop)
         }
-    }, [autoSplat, step, blit, sampleZones, sendPixelMapBuffer, getPhysics])
+    }, [processAudioImpulses, step, blit, sampleZones, sendPixelMapBuffer, getPhysics])
 
     // ── Start ──
     const start = useCallback(() => {
