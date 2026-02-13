@@ -10,7 +10,8 @@
  *   - Audio-reactive splat force & radius multiplier  
  *   - HDR bloom display shader (pow 1/1.2 gamma + glow)
  *   - Exposed currentColors for UI zone feedback
- *   - BACKGROUND SUPPORT: Hybrid rAF / setTimeout loop
+ *   - BACKGROUND SUPPORT: Sub-stepped physics loop (anti-static)
+ *   - SMOOTH TRANSITIONS: 1.0s crossfade between palettes (Color + Physics)
  * 
  * @ai-constraints Do NOT simplify the shader pipeline.
  */
@@ -220,7 +221,7 @@ void main () {
 }
 `
 
-// HDR Bloom display shader — gamma correction + glow for values > 1.0
+// HDR Bloom display shader
 const displayShader = `#version 300 es
 precision highp float;
 in vec2 vUv;
@@ -339,18 +340,8 @@ export function useFluidSimulation() {
     const timerRef = useRef(null) // Fallback for background
     const lastTimeRef = useRef(0)
     const splatTimerRef = useRef(0)
-
-    // Centralized Audio Data Props
-    const audioMode = useAudioStore(state => state.audioMode)
-    const spatial = useAudioStore(state => state.spatialResponse)
-    const spectral = useAudioStore(state => state.spectralResponse)
-    const energyFactor = useAudioStore(state => state.energyFactor)
-
-    // Palette Transition State
     const paletteIdxRef = useRef(0)
-    const prevPaletteIdxRef = useRef(0)
-    const transitionStartRef = useRef(0)
-    const TRANSITION_DURATION = 1000 // 1.0s crossfade
+    const audioIntensityRef = useRef(0)
 
     const [running, setRunning] = useState(false)
     const [activePalette, setActivePalette] = useState(FLUID_PALETTES[0])
@@ -498,73 +489,29 @@ export function useFluidSimulation() {
         fbos.dye.swap()
     }, [blit, getPhysics])
 
-    // ── Auto-splat (replaced by Centralized Impulse Logic) ──
-    const processAudioImpulses = useCallback((dt) => {
+    // ── Auto-splat ──
+    const autoSplat = useCallback(() => {
+        const palette = FLUID_PALETTES[paletteIdxRef.current]
         const physics = getPhysics()
-        const currentMode = useAudioStore.getState().audioMode
-        const spatial = useAudioStore.getState().spatialResponse
-        const spectral = useAudioStore.getState().spectralResponse
+        const colors = palette.colors
+        const audio = audioIntensityRef.current
 
-        // Global intensity scaler
-        const sensitivity = 1.0 // Could be a prop or store value
+        // Audio multiplier: at 0 audio = 1.0x, at full audio = 3.0x
+        const audioMult = 1.0 + audio * 2.0
+        const numSplats = physics.numSplats + (audio > 0.3 ? 2 : 0)
 
-        if (currentMode === 'STEREO') {
-            // STEREO MODE: 3 Discrete Impulse Zones
+        for (let i = 0; i < numSplats; i++) {
+            const color = colors[Math.floor(Math.random() * colors.length)]
+            const x = 0.05 + Math.random() * 0.9
+            const y = 0.05 + Math.random() * 0.9
 
-            // 1. Center (Bass) - Heavy, slow, large
-            if (spatial.center > 0.1) {
-                // Probabilistic split to avoid machine-gun effect
-                if (Math.random() < spatial.center * 0.4) {
-                    const color = activePalette.colors[Math.floor(Math.random() * activePalette.colors.length)]
-                    // Center X varied slightly, Bottom Y
-                    splat(0.5 + (Math.random() - 0.5) * 0.2, 0.1, 0, 4.0 * spatial.center, color, 2.0 * spatial.center, 1.5)
-                }
-            }
+            // Organic circular + traveling motion
+            const angle = Math.random() * Math.PI * 2
+            const speed = (0.8 + Math.random() * 2.5) * audioMult
+            const dx = Math.cos(angle) * speed
+            const dy = Math.sin(angle) * speed
 
-            // 2. Sides (Mid/High) - Fast, small, snappy
-            if (spatial.left > 0.1 && Math.random() < spatial.left * 0.3) {
-                const color = activePalette.colors[0] // Primary color
-                splat(0.15, 0.3 + Math.random() * 0.4, 2.0 * spatial.left, 0, color, 1.0 * spatial.left, 0.8)
-            }
-            if (spatial.right > 0.1 && Math.random() < spatial.right * 0.3) {
-                const color = activePalette.colors[1] // Secondary color
-                splat(0.85, 0.3 + Math.random() * 0.4, -2.0 * spatial.right, 0, color, 1.0 * spatial.right, 0.8)
-            }
-
-        } else if (currentMode === 'EQ') {
-            // EQ MODE: 16-band Spectral Fountains
-            // Only update every few frames to save perf? No, limit by probability
-            spectral.forEach((amp, i) => {
-                if (amp > 0.05) {
-                    // Position X distributed 0.1 to 0.9
-                    const x = 0.1 + (i / 15) * 0.8
-                    const y = 0.05
-
-                    // Higher bands = faster, smaller
-                    const forceY = 2.0 + (amp * 10.0)
-                    const radius = 0.5 + (amp * 1.0)
-
-                    // Rain check
-                    if (Math.random() < amp * 0.2) {
-                        const color = activePalette.colors[i % activePalette.colors.length]
-                        splat(x, y, 0, forceY, color, forceY * 0.2, radius * 0.5)
-                    }
-                }
-            })
-        } else {
-            // OFF / AMBIENT: Gentle random splats
-            splatTimerRef.current += dt
-            const interval = physics.splatInterval
-            if (splatTimerRef.current > interval) {
-                splatTimerRef.current = 0
-                // Standard auto-splat logic...
-                const color = activePalette.colors[Math.floor(Math.random() * activePalette.colors.length)]
-                const x = Math.random()
-                const y = Math.random()
-                const dx = (Math.random() - 0.5) * 2
-                const dy = (Math.random() - 0.5) * 2
-                splat(x, y, dx, dy, color, 1.0, 1.0)
-            }
+            splat(x, y, dx, dy, color, audioMult, audioMult)
         }
     }, [splat, getPhysics, activePalette])
 
@@ -618,7 +565,7 @@ export function useFluidSimulation() {
         blit(fbos.pressure.write)
         fbos.pressure.swap()
 
-        // 5. Pressure solve (more iterations = sharper)
+        // 5. Pressure solve
         gl.useProgram(p.pressure.program)
         gl.uniform2f(p.pressure.uniforms.texelSize, simTexel[0], simTexel[1])
         gl.activeTexture(gl.TEXTURE1)
@@ -683,7 +630,6 @@ export function useFluidSimulation() {
 
         const zones = []
         for (let z = 0; z < 3; z++) {
-            // Sample a center strip from each zone
             const stripX = Math.floor(z * zoneW + zoneW * 0.3)
             const stripW = Math.floor(zoneW * 0.4)
             const stripH = Math.floor(h * 0.6)
@@ -700,7 +646,6 @@ export function useFluidSimulation() {
             }
             if (count > 0) { r /= count; g /= count; b /= count }
 
-            // Apply same gamma as display shader for consistency
             r = Math.pow(Math.max(r, 0), 1.0 / 1.1)
             g = Math.pow(Math.max(g, 0), 1.0 / 1.1)
             b = Math.pow(Math.max(b, 0), 1.0 / 1.1)
@@ -711,45 +656,33 @@ export function useFluidSimulation() {
                 b: Math.min(255, Math.max(0, Math.round(b * 255)))
             })
         }
-
         return zones
     }, [])
 
-    const lagRef = useRef(0) // Accumulator for physics time
-
-    // ── Main render loop (Fixed Time Step + Interpolation Cap) ──
+    // ── Main render loop (Hybrid Visibility Aware) ──
     const renderLoop = useCallback(() => {
         if (!runningRef.current) return
 
         const now = performance.now()
-        let frameTime = (now - lastTimeRef.current) / 1000
+        // Cap dt to prevent explosion after wake
+        const dt = Math.min((now - lastTimeRef.current) / 1000, 0.050)
         lastTimeRef.current = now
 
-        // Prevent spiral of death if tab was backgrounded for long
-        if (frameTime > 0.25) frameTime = 0.25
-
-        lagRef.current += frameTime
-
         const physics = getPhysics()
-        // const audio = audioIntensityRef.current // Removed
+        const audio = audioIntensityRef.current
 
-        // Run physics at steady 60 FPS (0.016s) for smoothness
-        const FIXED_STEP = 0.016
-
-        let steps = 0
-        // SAFETY: Cap max steps per frame to prevent freezing on slow hardware
-        while (lagRef.current >= FIXED_STEP && steps < 10) {
-            // New Audio Impulse Logic
-            processAudioImpulses(FIXED_STEP)
-
-            // Physics Step
-            step(FIXED_STEP)
-
-            lagRef.current -= FIXED_STEP
-            steps++
+        // Auto-splat: faster when audio is pumping
+        const interval = physics.splatInterval * (1.0 - audio * 0.5)
+        splatTimerRef.current += dt
+        if (splatTimerRef.current > interval) {
+            splatTimerRef.current = 0
+            autoSplat()
         }
 
-        // Display to canvas (once per frame, showing latest state)
+        // Physics
+        step(dt)
+
+        // Display to canvas
         const gl = glRef.current
         const p = programsRef.current
         const fbos = fbosRef.current
@@ -770,7 +703,7 @@ export function useFluidSimulation() {
 
         // Hybrid loop with robust fallback
         if (document.hidden) {
-            // Force 30fps timing in background to save resources
+            // 30 FPS background target usually safe for Electron
             timerRef.current = setTimeout(renderLoop, 33)
         } else {
             rafRef.current = requestAnimationFrame(renderLoop)
@@ -814,11 +747,7 @@ export function useFluidSimulation() {
     const changePalette = useCallback((paletteId) => {
         const idx = FLUID_PALETTES.findIndex(p => p.id === paletteId)
         if (idx >= 0) {
-            // Store old for transition
-            prevPaletteIdxRef.current = paletteIdxRef.current
             paletteIdxRef.current = idx
-            transitionStartRef.current = performance.now()
-
             setActivePalette(FLUID_PALETTES[idx])
         }
     }, [])
