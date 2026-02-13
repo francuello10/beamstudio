@@ -2,6 +2,7 @@
 
 [![GitHub Repo](https://img.shields.io/badge/GitHub-Repo-blue?logo=github)](https://github.com/francuello10/beamstudio)
 [![DMX Precision](https://img.shields.io/badge/DMX-Ultra--Precision-red)](https://github.com/francuello10/beamstudio)
+[![Background Mode](https://img.shields.io/badge/Background-Anti--Freeze-green)](https://github.com/francuello10/beamstudio)
 
 **BeamStudio** is a next-generation high-fidelity interface for professional DMX512 control. Re-engineered with an **Atomic State Architecture**, it transforms standard hardware into a precision lighting instrument.
 
@@ -13,11 +14,12 @@ BeamStudio v3.0 introduces industry-standard workflows and a professional semant
 
 *   **Console Mixer (GrandMaster):** Professional-grade attribute control with built-in Fixture Patch management.
 *   **Atomic State Architecture:** Ultra-low latency state management (<2ms) designed for high-bandwidth telemetry.
+*   **Background Execution (Anti-Freeze):** Hybrid rendering engine ensures **Audio Reactive** and **Fluid/Ambilight** modes continue running smoothly even when the app is minimized (Freestyler-style).
 *   **Hardware Shielding:** Native protection for FTDI chip stability, locking the universe capacity to 33 bytes (32+1).
-*   **Audio Telemetry DSP:** True stereo 2.1 spectral analysis with **Bass Pulse** and tunable sensitivity.
+*   **Audio Telemetry DSP (Gen 6.1):** True stereo 2.1 spectral analysis with **Deco Mode** tuning for high-end audio systems (Thonet & Vander).
 *   **AI Procedural Scenes:** Generate complex lighting code on-the-fly using Google Gemini 2.0 Flash.
-*   **Reactive Flags:** Instant country-flag presets with audio-reactive brightness modulation.
-*   **Screen Ambilight 2.1:** Immersive screen mirroring with center-channel bass boost for 2.1 setups.
+*   **Fluid Simulation (Gen 5.0):** Navier-Stokes WebGL2 engine with "Neon Overdrive" physics presets and HDR Bloom.
+*   **Screen Ambilight (Gen 6.0):** Immersive screen mirroring with "Silk Lerp" transitions and center-channel bass boost.
 
 ---
 

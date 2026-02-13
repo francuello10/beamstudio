@@ -21,6 +21,14 @@ The communication pipeline incorporates a mandatory shielding layer to protect F
 - **Refresh rate**: Locked at **44Hz** (Standard DMX) to prevent jitter and chip saturation.
 - **Defensive JSDoc**: Core transmission functions include `@ai-constraints` to prevent AI agents from breaking hardware timings.
 
+## 🏃 Background Execution Engine (Anti-Freeze)
+
+To ensure DMX continuity when the application is minimized (e.g. while using other software), BeamStudio implements a **Hybrid Render Loop** in all active hooks (`useFluidSimulation`, `useGpuAmbilight`, `useSystemAudio`):
+
+- **Foreground (Visible):** Uses `requestAnimationFrame` (60fps) for maximum fluidity.
+- **Background (Hidden):** Automatically detects `document.hidden` and switches to a recursion-based **`setTimeout` Loop** (~30fps).
+- **Driver Layer:** `backgroundThrottling: false` is enforced in Electron's Main Process to keep the D2XX Worker alive.
+
 ## 📡 DMX Implementation & Data Flow
 
 ### Transmission Engine (Main Process)
@@ -32,7 +40,14 @@ The communication pipeline incorporates a mandatory shielding layer to protect F
 - **`src/renderer/src/services/DmxScheduler.js`**: 
     - Decouples UI reflows from DMX transmission.
     - Implements **Dirty-Checking** to prevent IPC bridge saturation.
-    - Ensures non-blocking control of Master Dimmer/Speed even during high-load AI scenes.
+
+### 🎵 Audio DSP Engine (v6.1)
+- **Thonet & Vander Tuning**: calibrated for 2.1 systems.
+- **Signal Chain**:
+    1.  **Splitter**: Separates L/R and Mono Bass.
+    2.  **Smoothing**: 0.65 (Mids/Highs) / 0.45 (Bass).
+    3.  **Decay**: 0.96 (~300ms tail) for "Luxurious" fade.
+    4.  **Deco Mode**: Intelligent color mapping based on detected Genre (Electro/Rock/Latin/Cinema).
 
 ### AI Integration
 - **Google Gemini 2.0 Flash**: Procedural scene generation with real-time compilation (`aiRuntime.js`).
