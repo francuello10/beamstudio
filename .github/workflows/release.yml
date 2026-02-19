@@ -135,10 +135,11 @@ jobs:
           echo "Release exists, uploading files..."
           echo "Looking for files in artifacts directory..."
           
-          # Find and upload each file type
-          for file in $(find artifacts -type f \( -name "*.deb" -o -name "*.AppImage" -o -name "*.exe" \) 2>/dev/null); do
+          # Find and upload each file type (handle spaces in filenames correctly)
+          find artifacts -type f \( -name "*.deb" -o -name "*.AppImage" -o -name "*.exe" \) -print0 | while IFS= read -r -d '' file; do
             if [ -f "$file" ]; then
-              echo "Uploading: $file ($(du -h "$file" | cut -f1))"
+              size=$(du -h "$file" | cut -f1)
+              echo "Uploading: $file ($size)"
               gh release upload ${{ github.ref_name }} "$file" --clobber
               echo "✅ Uploaded: $(basename "$file")"
             fi
