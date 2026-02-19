@@ -97,7 +97,7 @@ const SystemPage = () => {
                     <img src={logoImg} alt="BeamStudio" className="branding-logo" />
                     <h1>BeamStudio</h1>
                     <p>DMX Lighting Controller</p>
-                    <span className="version">v1.1.0-refactor</span>
+                    <span className="version">v1.0.0</span>
                 </div>
 
                 <div className="glass-card ai-config-card">

@@ -7,6 +7,7 @@ import { performance } from 'perf_hooks'
 import { readFileSync } from 'fs'
 
 import { Worker } from 'worker_threads'
+import logger from './logger'
 
 // Load dynamic fixtures
 const FIXTURES_PATH = join(app.getPath('userData'), 'fixtures.json')
@@ -99,11 +100,11 @@ function createArtNetDriver() {
 
 async function closeExistingDriver() {
     if (dmxDriver && typeof dmxDriver.close === 'function') {
-        console.log('[DMX] Closing existing driver:', dmxDriver.mode)
+        logger.log('[DMX] Closing existing driver:', dmxDriver.mode)
         try {
             await dmxDriver.close()
         } catch (e) {
-            console.log('Driver close warning:', e.message)
+            logger.warn('Driver close warning:', e.message)
         }
         dmxDriver = null
     }
@@ -130,7 +131,7 @@ async function listSerialPorts() {
                 isRecommended: true
             }))
         } catch (e) {
-            console.error('D2XX scan failed:', e)
+            logger.error('D2XX scan failed:', e)
             return []
         }
     }
@@ -154,7 +155,7 @@ async function listSerialPorts() {
         }))
 
     } catch (e) {
-        console.error('SerialPort scan failed:', e)
+        logger.error('SerialPort scan failed:', e)
         return []
     }
 }
@@ -177,16 +178,16 @@ async function createD2XXDriver(devicePath) {
             const devices = await FTDI.getDeviceInfoList()
 
             if (devices.length === 0) {
-                console.warn('[DMX] No FTDI devices found during init')
+                logger.warn('[DMX] No FTDI devices found during init')
                 return null
             }
 
             const targetSerial = devicePath || devices[0].serial_number
-            console.log(`[DMX] Selected device serial: ${targetSerial}`)
+            logger.log(`[DMX] Selected device serial: ${targetSerial}`)
 
             // Path al worker
             const workerPath = join(__dirname, 'dmxWorker.js')
-            console.log(`[DMX] Spawning worker at ${workerPath}`)
+            logger.log(`[DMX] Spawning worker at ${workerPath}`)
 
             const worker = new Worker(workerPath, {
                 workerData: {
@@ -204,7 +205,7 @@ async function createD2XXDriver(devicePath) {
             return new Promise((resolve, reject) => {
                 worker.on('message', (msg) => {
                     if (msg.type === 'status' && msg.status === 'connected') {
-                        console.log('[DMX] Worker connected and transmitting')
+                        logger.log('[DMX] Worker connected and transmitting')
                         resolve({
                             mode: 'd2xx',
                             driverName: 'FTDI D2XX (Windows)',
@@ -224,23 +225,23 @@ async function createD2XXDriver(devicePath) {
                         })
                     }
                     if (msg.type === 'error') {
-                        console.error('[DMX Worker] Error:', msg.error)
+                        logger.error('[DMX Worker] Error:', msg.error)
                         if (!isClosed) reject(new Error(msg.error))
                     }
                 })
 
                 worker.on('error', (err) => {
-                    console.error('[DMX Worker] Critical Error:', err)
+                    logger.error('[DMX Worker] Critical Error:', err)
                     if (!isClosed) reject(err)
                 })
 
                 worker.on('exit', (code) => {
-                    if (code !== 0 && !isClosed) console.error(`[DMX Worker] Stopped with exit code ${code}`)
+                    if (code !== 0 && !isClosed) logger.error(`[DMX Worker] Stopped with exit code ${code}`)
                 })
             })
 
         } catch (error) {
-            console.error('[DMX] D2XX Worker Init Failed:', error.message)
+            logger.error('[DMX] D2XX Worker Init Failed:', error.message)
             return null
         } finally { connectionPromise = null }
     })()
@@ -256,10 +257,10 @@ async function createSerialPortDriver(devicePath) {
     connectionPromise = (async () => {
         try {
             const targetPath = devicePath || '/dev/ttyUSB0'
-            console.log(`[DMX Linux] Selected device path: ${targetPath}`)
+            logger.log(`[DMX Linux] Selected device path: ${targetPath}`)
 
             const workerPath = join(__dirname, 'serialWorker.js')
-            console.log(`[DMX Linux] Spawning worker at ${workerPath}`)
+            logger.log(`[DMX Linux] Spawning worker at ${workerPath}`)
 
             const worker = new Worker(workerPath, {
                 workerData: {
@@ -276,7 +277,7 @@ async function createSerialPortDriver(devicePath) {
             return new Promise((resolve, reject) => {
                 worker.on('message', (msg) => {
                     if (msg.type === 'status' && msg.status === 'connected') {
-                        console.log('[DMX Linux] Worker connected')
+                        logger.log('[DMX Linux] Worker connected')
                         resolve({
                             mode: 'serialport',
                             driverName: 'Enttec Open DMX (Linux)',
@@ -296,17 +297,17 @@ async function createSerialPortDriver(devicePath) {
                         })
                     }
                     if (msg.type === 'error') {
-                        console.error('[DMX Linux Worker] Error:', msg.error)
+                        logger.error('[DMX Linux Worker] Error:', msg.error)
                         if (!isClosed) reject(new Error(msg.error))
                     }
                 })
 
                 worker.on('error', (err) => reject(err))
-                worker.on('exit', (code) => { if (code !== 0) console.error(`[DMX Linux] Worker exit ${code}`) })
+                worker.on('exit', (code) => { if (code !== 0) logger.error(`[DMX Linux] Worker exit ${code}`) })
             })
 
         } catch (error) {
-            console.error('[DMX Linux] Init Failed:', error.message)
+            logger.error('[DMX Linux] Init Failed:', error.message)
             return null
         } finally { connectionPromise = null }
     })()
@@ -317,7 +318,7 @@ async function createSerialPortDriver(devicePath) {
 
 // Switch DMX mode
 async function switchDmxMode(mode, devicePath = null, driverType = 'd2xx') {
-    console.log(`[DMX] Switching to mode: ${mode}, path: ${devicePath}, driver: ${driverType}`)
+    logger.log(`[DMX] Switching to mode: ${mode}, path: ${devicePath}, driver: ${driverType}`)
 
     if (mode === 'usb' || mode === 'native') {
         const path = devicePath || nativeDevicePath
@@ -331,7 +332,7 @@ async function switchDmxMode(mode, devicePath = null, driverType = 'd2xx') {
             newDriver = await createSerialPortDriver(path)
         }
 
-        console.log('[DMX] New driver created:', newDriver ? newDriver.driverName : 'null')
+        logger.log('[DMX] New driver created:', newDriver ? newDriver.driverName : 'null')
 
         if (newDriver) {
             await closeExistingDriver()
@@ -339,7 +340,7 @@ async function switchDmxMode(mode, devicePath = null, driverType = 'd2xx') {
             dmxMode = 'usb'
             currentUsbDriver = process.platform === 'win32' ? 'd2xx' : 'serialport'
             nativeDevicePath = path
-            console.log(`[DMX] Driver assigned: ${dmxDriver.driverName} on ${path}`)
+            logger.log(`[DMX] Driver assigned: ${dmxDriver.driverName} on ${path}`)
             return { success: true, mode: 'usb', devicePath: path, driverType: currentUsbDriver }
         } else {
             return { success: false, error: 'Failed to connect to USB device (Check if it is in use or driver missing)', mode: dmxMode }
@@ -979,27 +980,27 @@ function stopDynamicScene() {
 function setupIPC() {
     ipcMain.handle('ai:generate', async (_, { apiKey, model, prompt, systemInstruction }) => {
         try {
-            console.log(`[AI] Starting generation request...`)
+            logger.log(`[AI] Starting generation request...`)
             const genAI = new GoogleGenerativeAI(apiKey)
             const modelId = model.includes('/') ? model : `models/${model}`
-            console.log(`[AI] Model: ${modelId} (v1beta)`)
+            logger.log(`[AI] Model: ${modelId} (v1beta)`)
 
             const genModel = genAI.getGenerativeModel(
                 { model: modelId, systemInstruction },
                 { apiVersion: 'v1beta' }
             )
 
-            console.log(`[AI] Sending prompt to Gemini...`)
+            logger.log(`[AI] Sending prompt to Gemini...`)
             const result = await genModel.generateContent(prompt)
 
-            console.log(`[AI] Response received. Extracting text...`)
+            logger.log(`[AI] Response received. Extracting text...`)
             const response = await result.response
             const text = response.text()
 
-            console.log(`[AI] Generation successful! (${text.length} chars)`)
+            logger.log(`[AI] Generation successful! (${text.length} chars)`)
             return text
         } catch (error) {
-            console.error('[AI] Generation failed:', error)
+            logger.error('[AI] Generation failed:', error)
             throw error
         }
     })
@@ -1008,7 +1009,7 @@ function setupIPC() {
         try {
             const genAI = new GoogleGenerativeAI(apiKey)
             const modelId = model.includes('/') ? model : `models/${model}`
-            console.log(`[AI] Testing connection with model: ${modelId} (v1beta)`)
+            logger.log(`[AI] Testing connection with model: ${modelId} (v1beta)`)
 
             const genModel = genAI.getGenerativeModel(
                 { model: modelId },
@@ -1017,7 +1018,7 @@ function setupIPC() {
             const result = await genModel.generateContent("Respond with only the word OK.")
             return result.response.text().trim()
         } catch (error) {
-            console.error('[AI] Test failed:', error.message)
+            logger.error('[AI] Test failed:', error.message)
             throw error
         }
     })
@@ -1053,7 +1054,8 @@ function setupIPC() {
     })
 
     ipcMain.handle('dmx:scanD2XX', async () => {
-        return await scanForNonVCPDevices()
+        // scanD2XX is now handled by listPorts which detects both VCP and D2XX devices
+        return await listSerialPorts()
     })
 
     ipcMain.handle('dmx:getUsbDrivers', () => getAvailableDrivers())
@@ -1383,7 +1385,7 @@ function setupIPC() {
             const sources = await desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 320, height: 180 } })
             return sources.map(s => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL() }))
         } catch (error) {
-            console.error('Ambilight: Failed to get sources (Check Wayland/PipeWire permissions):', error)
+            logger.error('Ambilight: Failed to get sources (Check Wayland/PipeWire permissions):', error)
             return []
         }
     })
@@ -1629,13 +1631,13 @@ app.whenReady().then(async () => {
 
     // Auto-connect to D2XX by default (fall back to Art-Net)
     try {
-        console.log('[DMX] Auto-connecting to D2XX...')
+        logger.log('[DMX] Auto-connecting to D2XX...')
         const result = await switchDmxMode('usb', null, 'd2xx')
         if (!result.success) {
-            console.log('[DMX] D2XX not found, using Art-Net fallback')
+            logger.log('[DMX] D2XX not found, using Art-Net fallback')
         }
     } catch (e) {
-        console.log('[DMX] D2XX auto-connect failed:', e.message)
+        logger.log('[DMX] D2XX auto-connect failed:', e.message)
     }
 
     startDMXLoop()

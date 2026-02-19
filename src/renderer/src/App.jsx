@@ -23,12 +23,78 @@ import './dynamic.css'
 class ErrorBoundary extends Component {
     constructor(props) {
         super(props)
-        this.state = { hasError: false }
+        this.state = { hasError: false, error: null, errorInfo: null }
     }
-    static getDerivedStateFromError(error) { return { hasError: true } }
-    componentDidCatch(error, errorInfo) { console.error("Uncaught error:", error, errorInfo) }
+    static getDerivedStateFromError(error) { 
+        return { hasError: true, error }
+    }
+    componentDidCatch(error, errorInfo) { 
+        console.error("Uncaught error:", error, errorInfo)
+        this.setState({ errorInfo })
+    }
+    handleReset = () => {
+        this.setState({ hasError: false, error: null, errorInfo: null })
+    }
     render() {
-        if (this.state.hasError) return <div className="error-screen"><h1>Something went wrong.</h1></div>
+        if (this.state.hasError) {
+            const isDev = process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost'
+            return (
+                <div className="error-screen" style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: '100vh',
+                    background: 'var(--bg-primary, #0a0a0a)',
+                    color: 'var(--text-primary, #fff)',
+                    padding: '2rem',
+                    textAlign: 'center'
+                }}>
+                    <h1 style={{ fontSize: '2rem', marginBottom: '1rem', color: '#ff0080' }}>⚠️ Error en BeamStudio</h1>
+                    <p style={{ marginBottom: '2rem', opacity: 0.8 }}>
+                        Ha ocurrido un error inesperado. Por favor, intenta recargar la aplicación.
+                    </p>
+                    <button 
+                        onClick={this.handleReset}
+                        style={{
+                            padding: '12px 24px',
+                            background: '#ff0080',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            fontSize: '1rem',
+                            fontWeight: 'bold',
+                            marginBottom: '1rem'
+                        }}
+                    >
+                        Reintentar
+                    </button>
+                    {isDev && this.state.error && (
+                        <details style={{ 
+                            marginTop: '2rem', 
+                            textAlign: 'left', 
+                            maxWidth: '600px',
+                            background: 'rgba(255,255,255,0.05)',
+                            padding: '1rem',
+                            borderRadius: '8px',
+                            fontSize: '0.85rem'
+                        }}>
+                            <summary style={{ cursor: 'pointer', marginBottom: '0.5rem' }}>Detalles del error (solo en desarrollo)</summary>
+                            <pre style={{ 
+                                overflow: 'auto', 
+                                whiteSpace: 'pre-wrap',
+                                wordBreak: 'break-word',
+                                color: '#ff6b6b'
+                            }}>
+                                {this.state.error.toString()}
+                                {this.state.errorInfo?.componentStack}
+                            </pre>
+                        </details>
+                    )}
+                </div>
+            )
+        }
         return this.props.children
     }
 }

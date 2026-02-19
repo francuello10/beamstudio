@@ -7,6 +7,16 @@ const { parentPort, workerData } = require('worker_threads');
 const { SerialPort } = require('serialport');
 const { performance } = require('perf_hooks');
 
+// Inline logger (to avoid path issues in asar packaging)
+const isDevelopment = process.env.NODE_ENV !== 'production' || process.env.ELECTRON_IS_DEV === '1';
+const logger = {
+    log: (...args) => { if (isDevelopment) console.log(...args) },
+    warn: (...args) => { if (isDevelopment) console.warn(...args) },
+    error: (...args) => { console.error(...args) }, // Always log errors
+    info: (...args) => { if (isDevelopment) console.info(...args) },
+    debug: (...args) => { if (isDevelopment) console.debug(...args) }
+};
+
 // Import Hardware Constants (simulated import since we can't easily require ES modules in CJS worker without transpilation setup)
 // We duplicate the constants here to ensure self-contained stability, matching `src/shared/hardware-specs.js`
 const SERIAL_PROTOCOL = {
@@ -24,7 +34,7 @@ let dmxMs = Math.round(1000 / (settings?.dmxHz || 44));
 let isRunning = true;
 
 async function startWorker() {
-    console.log(`[DMX Serial Worker] Opening device: ${serialNumber}`);
+    logger.log(`[DMX Serial Worker] Opening device: ${serialNumber}`);
 
     const port = new SerialPort({
         path: serialNumber, // In serialport, 'path' is the device path (e.g., /dev/ttyUSB0)
@@ -41,7 +51,7 @@ async function startWorker() {
             return;
         }
 
-        console.log(`[DMX Serial Worker] Port opened successfully at 250k`);
+        logger.log(`[DMX Serial Worker] Port opened successfully at 250k`);
         parentPort.postMessage({ type: 'status', status: 'connected' });
         transmitLoop();
     });
