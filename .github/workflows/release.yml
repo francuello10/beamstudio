@@ -3,8 +3,8 @@ name: Build and Release
 on:
   push:
     tags:
-      - 'v*'  # Trigger on version tags like v1.0.0, v1.0.1, etc.
-  workflow_dispatch:  # Allow manual trigger
+      - 'v*'
+  workflow_dispatch:
 
 jobs:
   build:
@@ -88,7 +88,27 @@ jobs:
           merge-multiple: true
           if-no-files-found: warn
       
-      - name: Create or Update Release
+      - name: Setup GitHub CLI
+        run: gh auth setup-git
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Check if release exists
+        id: check_release
+        run: |
+          if gh release view ${{ github.ref_name }} &>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Release exists, will upload files only"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Release does not exist, will create it"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+      
+      - name: Create Release (if not exists)
+        if: steps.check_release.outputs.exists != 'true'
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref_name }}
@@ -97,6 +117,16 @@ jobs:
           draft: false
           prerelease: false
           fail_on_unmatched_files: false
-          overwrite: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Upload files to existing release
+        if: steps.check_release.outputs.exists == 'true'
+        run: |
+          echo "Release exists, uploading files..."
+          find artifacts -type f \( -name "*.deb" -o -name "*.AppImage" -o -name "*.exe" \) | while read file; do
+            echo "Uploading: $file"
+            gh release upload ${{ github.ref_name }} "$file" --clobber || true
+          done
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
