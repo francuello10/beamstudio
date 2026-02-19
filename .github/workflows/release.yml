@@ -29,26 +29,47 @@ jobs:
       - name: Build application
         run: npm run build
       
+      - name: Copy logger.cjs (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: cp src/main/logger.cjs out/main/logger.cjs || true
+      
+      - name: Copy logger.cjs (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: cp src/main/logger.cjs out/main/logger.cjs || true
+      
       - name: Build installers (Linux)
         if: matrix.os == 'ubuntu-latest'
+        env:
+          GH_TOKEN: ""
         run: npm run dist
       
       - name: Build installers (Windows)
         if: matrix.os == 'windows-latest'
-        run: |
-          npm run build
-          npx electron-builder --win --x64
+        env:
+          GH_TOKEN: ""
+        run: npx electron-builder --win --x64
       
-      - name: Upload artifacts
+      - name: Upload artifacts (Linux)
+        if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: installers-${{ matrix.os }}
+          name: installers-linux
           path: |
             dist/*.deb
             dist/*.AppImage
-            dist/*.exe
-            dist/*.dmg
           retention-days: 30
+          if-no-files-found: warn
+      
+      - name: Upload artifacts (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers-windows
+          path: |
+            dist/*.exe
+          retention-days: 30
+          if-no-files-found: warn
   
   release:
     needs: build
@@ -65,13 +86,17 @@ jobs:
           path: artifacts
           pattern: installers-*
           merge-multiple: true
+          if-no-files-found: warn
       
-      - name: Create Release
+      - name: Create or Update Release
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: ${{ github.ref_name }}
           files: artifacts/**/*
-          generate_release_notes: true
+          generate_release_notes: false
           draft: false
           prerelease: false
+          fail_on_unmatched_files: false
+          overwrite: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

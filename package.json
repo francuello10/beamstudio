@@ -1,17 +1,12 @@
 {
   "name": "beamstudio",
   "version": "1.0.0",
-  "description": "Advanced DMX Light Controller — Art-Net, USB Direct, Ambilight, Audio Reactive",
+  "description": "Advanced DMX Light Controller via Art-Net",
   "main": "./out/main/index.js",
-  "author": "Fran Cuello <francuello.1999@gmail.com> (https://github.com/francuello10)",
-  "homepage": "https://github.com/francuello10/beamstudio",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/francuello10/beamstudio.git"
-  },
+  "author": "Antigravity Team",
   "scripts": {
-    "dev": "electron-vite dev",
-    "build": "electron-vite build",
+    "dev": "ELECTRON_DISABLE_SANDBOX=1 electron-vite dev",
+    "build": "electron-vite build && cp src/main/logger.cjs out/main/logger.cjs",
     "dist": "npm run build && electron-builder"
   },
   "dependencies": {
@@ -25,56 +20,56 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.1.2",
-    "electron": "^33.4.11",
+    "autoprefixer": "^10.4.17",
+    "electron": "^40.0.0",
     "electron-builder": "^26.4.0",
-    "electron-vite": "^2.3.0",
+    "electron-vite": "^5.0.0",
     "framer-motion": "^12.27.0",
     "lucide-react": "^0.562.0",
+    "postcss": "^8.4.33",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "vite": "^5.4.14"
+    "tailwindcss": "^3.4.17",
+    "vite": "^7.3.1"
   },
   "build": {
-    "appId": "com.francuello.beamstudio",
+    "appId": "com.antigravity.dmx",
     "productName": "BeamStudio",
-    "copyright": "Copyright © 2026 Fran Cuello",
+    "publish": null,
     "directories": {
       "output": "dist",
-      "buildResources": "resources"
+      "buildResources": "build"
     },
     "files": [
       "out/**/*",
-      "README.md"
+      "README.md",
+      "package.json"
     ],
+    "extraMetadata": {
+      "main": "./out/main/index.js"
+    },
     "linux": {
       "target": [
         "AppImage",
         "deb"
       ],
       "category": "AudioVideo",
-      "maintainer": "Fran Cuello <francuello.1999@gmail.com>",
+      "maintainer": "Antigravity Team",
       "icon": "build/icon.png"
     },
     "win": {
       "target": "nsis",
-      "icon": "build/icon.ico",
-      "signAndEditExecutable": false
+      "icon": "build/icon.png"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "shortcutName": "BeamStudio",
-      "installerIcon": "build/icon.ico",
-      "uninstallerIcon": "build/icon.ico",
-      "installerHeaderIcon": "build/icon.ico",
-      "deleteAppDataOnUninstall": false
+      "shortcutName": "BeamStudio"
     },
-    "extraResources": [
-      {
-        "from": "build/icon.png",
-        "to": "icon.png"
-      }
+    "asarUnpack": [
+      "node_modules/serialport/**/*",
+      "node_modules/ftdi-d2xx/**/*"
     ]
   }
 }
