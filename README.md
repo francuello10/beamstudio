@@ -53,9 +53,42 @@ The system uses a standardized technical lexicon:
 
 ---
 
+## 📥 Descarga e Instalación
+
+### Instaladores Pre-compilados
+
+Los instaladores están disponibles en [GitHub Releases](https://github.com/francuello10/beamstudio/releases):
+
+**Ubuntu/Debian:**
+- `.deb` - Instalador nativo (recomendado)
+  ```bash
+  sudo dpkg -i beamstudio_1.0.0_amd64.deb
+  sudo apt-get install -f  # Si hay dependencias faltantes
+  ```
+- `.AppImage` - Ejecutable portátil
+  ```bash
+  chmod +x BeamStudio-1.0.0.AppImage
+  ./BeamStudio-1.0.0.AppImage --no-sandbox
+  ```
+
+**Windows:**
+- `.exe` - Instalador NSIS (disponible en releases)
+
+### Desarrollo
+
+Para compilar desde el código fuente:
+```bash
+git clone https://github.com/francuello10/beamstudio.git
+cd beamstudio
+npm install
+npm run build
+npm run dist
+```
+
 ## 🔗 Links
 *   **Author:** [Fran Cuello](https://github.com/francuello10)
 *   **Source:** [GitHub Repository](https://github.com/francuello10/beamstudio)
+*   **Releases:** [GitHub Releases](https://github.com/francuello10/beamstudio/releases)
 *   **Technical Docs:** [Developer README](README_DEV.md)
 
 ---
