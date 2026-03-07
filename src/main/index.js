@@ -18,9 +18,9 @@ try {
     fixtures = JSON.parse(readFileSync(FIXTURES_PATH, 'utf8'))
 } catch (e) {
     fixtures = [
-        { id: 1, name: 'Barra Izquierda', startChannel: 1, channels: 7 },
-        { id: 2, name: 'Barra Centro', startChannel: 8, channels: 7 },
-        { id: 3, name: 'Barra Derecha', startChannel: 15, channels: 7 }
+        { id: 3, name: 'Luz 3 (TV Izq)', startChannel: 15, channels: 7 },
+        { id: 1, name: 'Luz 1 (Mon Izq)', startChannel: 1, channels: 7 },
+        { id: 2, name: 'Luz 2 (Mon Der)', startChannel: 8, channels: 7 }
     ]
 }
 

@@ -1,20 +1,20 @@
 [
     {
+        "id": 3,
+        "name": "Luz 3 (TV Izq)",
+        "startChannel": 15,
+        "channels": 7
+    },
+    {
         "id": 1,
-        "name": "Barra Izquierda",
+        "name": "Luz 1 (Mon Izq)",
         "startChannel": 1,
         "channels": 7
     },
     {
         "id": 2,
-        "name": "Barra Centro",
+        "name": "Luz 2 (Mon Der)",
         "startChannel": 8,
-        "channels": 7
-    },
-    {
-        "id": 3,
-        "name": "Barra Derecha",
-        "startChannel": 15,
         "channels": 7
     }
 ]
