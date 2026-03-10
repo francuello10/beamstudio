@@ -16,11 +16,13 @@ let fixtures = []
 try {
     // Try to load from userData first (user changes), fallback to internal default
     fixtures = JSON.parse(readFileSync(FIXTURES_PATH, 'utf8'))
+    // Migración V2: Asegurar que todos los fixtures guardados tengan 'mode'. Si no, asume 'P06' (Retrocompatibilidad).
+    fixtures = fixtures.map(f => ({ ...f, mode: f.mode || 'P06' }))
 } catch (e) {
     fixtures = [
-        { id: 3, name: 'Luz 3 (TV Izq)', startChannel: 15, channels: 7 },
-        { id: 1, name: 'Luz 1 (Mon Izq)', startChannel: 1, channels: 7 },
-        { id: 2, name: 'Luz 2 (Mon Der)', startChannel: 8, channels: 7 }
+        { id: 3, name: 'Luz 3 (TV Izq)', startChannel: 15, channels: 7, mode: 'P06' },
+        { id: 1, name: 'Luz 1 (Mon Izq)', startChannel: 1, channels: 7, mode: 'P06' },
+        { id: 2, name: 'Luz 2 (Mon Der)', startChannel: 8, channels: 7, mode: 'P06' }
     ]
 }
 
@@ -354,11 +356,32 @@ async function switchDmxMode(mode, devicePath = null, driverType = 'd2xx') {
 }
 
 // ============================================================================
-// StickTec 1019 - P6 Mode (7 Channels)
+// Fixture Profiles (V2 Architecture)
+// Defines how each fixture personality responds to global software commands.
 // ============================================================================
 
-const CHANNEL_MAP = {
-    RED: 0, GREEN: 1, BLUE: 2, FUNC: 3, SPD: 4, FLASH: 5, DIM: 6
+const FIXTURE_PROFILES = {
+    'P06': { // Default 7-channel mode (RGB + Func + Speed + Flash + Dimmer)
+        name: 'P06 (7-Ch) - StickTec Full Control',
+        channels: 7,
+        segments: 1,
+        hasMasterDimmer: true,
+        map: { RED: 0, GREEN: 1, BLUE: 2, FUNC: 3, SPD: 4, FLASH: 5, DIM: 6 }
+    },
+    'P01': { // 7-channel mode (Same as P06 on some sticks)
+        name: 'P01 (7-Ch) - Alternative P06',
+        channels: 7,
+        segments: 1,
+        hasMasterDimmer: true,
+        map: { RED: 0, GREEN: 1, BLUE: 2, FUNC: 3, SPD: 4, FLASH: 5, DIM: 6 }
+    },
+    'P02': { // 4-channel mode (RGB + Dimmer Global)
+        name: 'P02 (4-Ch) - RGB + Master Dimmer',
+        channels: 4,
+        segments: 1,
+        hasMasterDimmer: true,
+        map: { RED: 0, GREEN: 1, BLUE: 2, DIM: 3 }
+    }
 }
 
 // FUNC Channel - RANGES (not individual values)
@@ -795,14 +818,19 @@ function hslToRgb(h, s, l) {
 function setFixtureColor(idx, r, g, b, dim = 255) {
     const f = fixtures[idx]
     if (!f) return
+    const profile = FIXTURE_PROFILES[f.mode] || FIXTURE_PROFILES['P06']
     const isBlackout = dmxState.fixtureColors[idx]?.blackout
 
-    if (!isBlackout) {
+    if (!isBlackout && profile.map) {
         const base = f.startChannel - 1
-        dmxState.channels[base + CHANNEL_MAP.RED] = Math.max(0, Math.min(255, r))
-        dmxState.channels[base + CHANNEL_MAP.GREEN] = Math.max(0, Math.min(255, g))
-        dmxState.channels[base + CHANNEL_MAP.BLUE] = Math.max(0, Math.min(255, b))
-        dmxState.channels[base + CHANNEL_MAP.DIM] = Math.max(0, Math.min(255, dim))
+
+        // Asignamos el color principal recuperando los indices del mapa
+        if (profile.map.RED !== undefined) dmxState.channels[base + profile.map.RED] = Math.max(0, Math.min(255, r))
+        if (profile.map.GREEN !== undefined) dmxState.channels[base + profile.map.GREEN] = Math.max(0, Math.min(255, g))
+        if (profile.map.BLUE !== undefined) dmxState.channels[base + profile.map.BLUE] = Math.max(0, Math.min(255, b))
+        if (profile.hasMasterDimmer && profile.map.DIM !== undefined) {
+            dmxState.channels[base + profile.map.DIM] = Math.max(0, Math.min(255, dim))
+        }
     }
     // We update color state anyway so UI reflects what it "would" be? 
     // Or we keep it black in UI?
@@ -823,7 +851,9 @@ function setFixtureChannel(idx, channel, value) {
     if (!f) return
     if (dmxState.fixtureColors[idx]?.blackout) return // Block updates if blackout
 
-    const offset = CHANNEL_MAP[channel.toUpperCase()]
+    const profile = FIXTURE_PROFILES[f.mode] || FIXTURE_PROFILES['P06']
+    const offset = profile.map[channel.toUpperCase()]
+
     if (offset !== undefined) {
         dmxState.channels[f.startChannel - 1 + offset] = Math.max(0, Math.min(255, value))
     }
@@ -839,7 +869,8 @@ function resetAll() {
     dmxState.activeProgram = null
     fixtures.forEach((f) => {
         const base = f.startChannel - 1
-        for (let ch = 0; ch < 7; ch++) {
+        const profile = FIXTURE_PROFILES[f.mode] || FIXTURE_PROFILES['P06']
+        for (let ch = 0; ch < profile.channels; ch++) {
             dmxState.channels[base + ch] = 0
         }
     })
@@ -1084,6 +1115,24 @@ function setupIPC() {
         return { success: true, performance: dmxState.performance }
     })
 
+    ipcMain.handle('dmx:saveFixtures', (_, newFixtures) => {
+        try {
+            fixtures = newFixtures
+            const fs = require('fs')
+            fs.writeFileSync(FIXTURES_PATH, JSON.stringify(fixtures, null, 2))
+
+            // Re-sync state arrays
+            const newFixtureColors = fixtures.map((f, i) => dmxState.fixtureColors[i] || { r: 0, g: 0, b: 0, blackout: false })
+            dmxState.fixtureColors = newFixtureColors
+
+            broadcastColors()
+            return { success: true }
+        } catch (error) {
+            logger.error('[DMX] Failed to save fixtures:', error)
+            return { success: false, error: error.message }
+        }
+    })
+
     ipcMain.handle('dmx:reset', () => {
         resetAll()
         return { success: true, colors: dmxState.fixtureColors }
@@ -1125,7 +1174,8 @@ function setupIPC() {
             // Turn OFF: Clear channels
             const f = fixtures[idx]
             const base = f.startChannel - 1
-            for (let i = 0; i < 7; i++) {
+            const profile = FIXTURE_PROFILES[f.mode] || FIXTURE_PROFILES['P06']
+            for (let i = 0; i < profile.channels; i++) {
                 dmxState.channels[base + i] = 0
             }
             // Update UI color to black (but keep blackout flag)
@@ -1277,11 +1327,14 @@ function setupIPC() {
         const flashWhite = () => {
             fixtures.forEach((f, i) => {
                 const base = f.startChannel - 1
-                dmxState.channels[base + CHANNEL_MAP.RED] = 255
-                dmxState.channels[base + CHANNEL_MAP.GREEN] = 255
-                dmxState.channels[base + CHANNEL_MAP.BLUE] = 255
-                dmxState.channels[base + CHANNEL_MAP.DIM] = 255
-                dmxState.channels[base + CHANNEL_MAP.FLASH] = 255
+                const profile = FIXTURE_PROFILES[f.mode] || FIXTURE_PROFILES['P06']
+
+                if (profile.map.RED !== undefined) dmxState.channels[base + profile.map.RED] = 255
+                if (profile.map.GREEN !== undefined) dmxState.channels[base + profile.map.GREEN] = 255
+                if (profile.map.BLUE !== undefined) dmxState.channels[base + profile.map.BLUE] = 255
+                if (profile.hasMasterDimmer && profile.map.DIM !== undefined) dmxState.channels[base + profile.map.DIM] = 255
+                if (profile.map.FLASH !== undefined) dmxState.channels[base + profile.map.FLASH] = 255
+
                 dmxState.fixtureColors[i] = { r: 255, g: 255, b: 255 }
             })
             transmitNow()
@@ -1292,11 +1345,14 @@ function setupIPC() {
         const flashOff = () => {
             fixtures.forEach((f, i) => {
                 const base = f.startChannel - 1
-                dmxState.channels[base + CHANNEL_MAP.RED] = 0
-                dmxState.channels[base + CHANNEL_MAP.GREEN] = 0
-                dmxState.channels[base + CHANNEL_MAP.BLUE] = 0
-                dmxState.channels[base + CHANNEL_MAP.DIM] = 0
-                dmxState.channels[base + CHANNEL_MAP.FLASH] = 0
+                const profile = FIXTURE_PROFILES[f.mode] || FIXTURE_PROFILES['P06']
+
+                if (profile.map.RED !== undefined) dmxState.channels[base + profile.map.RED] = 0
+                if (profile.map.GREEN !== undefined) dmxState.channels[base + profile.map.GREEN] = 0
+                if (profile.map.BLUE !== undefined) dmxState.channels[base + profile.map.BLUE] = 0
+                if (profile.hasMasterDimmer && profile.map.DIM !== undefined) dmxState.channels[base + profile.map.DIM] = 0
+                if (profile.map.FLASH !== undefined) dmxState.channels[base + profile.map.FLASH] = 0
+
                 dmxState.fixtureColors[i] = { r: 0, g: 0, b: 0 }
             })
             transmitNow()
@@ -1397,7 +1453,11 @@ function setupIPC() {
         dmxState.ambilightActive = true
 
         // Cold start fix: If Dimmer is 0, set to 255 to ensure visibility
-        const isCold = fixtures.every(f => dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM] === 0)
+        const isCold = fixtures.every(f => {
+            const profile = FIXTURE_PROFILES[f.mode] || FIXTURE_PROFILES['P06']
+            if (!profile.hasMasterDimmer || profile.map.DIM === undefined) return false
+            return dmxState.channels[f.startChannel - 1 + profile.map.DIM] === 0
+        })
         if (isCold) setAllFixturesChannel('dim', 255)
 
         return { success: true, sourceId }
@@ -1421,7 +1481,11 @@ function setupIPC() {
         // @ai-constraints Respect Master Dimmer (Grand Master)
         colors.forEach((c, i) => {
             const f = fixtures[i]
-            const currentDim = dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM] || 0
+            const profile = FIXTURE_PROFILES[f.mode] || FIXTURE_PROFILES['P06']
+            let currentDim = 255
+            if (profile.hasMasterDimmer && profile.map.DIM !== undefined) {
+                currentDim = dmxState.channels[f.startChannel - 1 + profile.map.DIM] || 0
+            }
             setFixtureColor(i, c.r, c.g, c.b, currentDim)
         })
         return { success: true, colors: dmxState.fixtureColors }
@@ -1453,7 +1517,11 @@ function setupIPC() {
         // @ai-constraints Use currentDim to respect Master Slider (Grand Master behavior)
         colors.forEach((c, i) => {
             const f = fixtures[i]
-            const currentDim = dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM] || 0
+            const profile = FIXTURE_PROFILES[f.mode] || FIXTURE_PROFILES['P06']
+            let currentDim = 255
+            if (profile.hasMasterDimmer && profile.map.DIM !== undefined) {
+                currentDim = dmxState.channels[f.startChannel - 1 + profile.map.DIM] || 0
+            }
             // If currentDim is 0, we should probably output 0, but if it's undefined (startup), default to 255?
             // Actually, dmxState is initialized to 0. 
             // When Audio starts, we set it to 255.
@@ -1469,7 +1537,11 @@ function setupIPC() {
         dmxState.audioReactiveActive = true
 
         // Cold start fix: If Dimmer is 0, set to 255 to ensure visibility
-        const isCold = fixtures.every(f => dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM] === 0)
+        const isCold = fixtures.every(f => {
+            const profile = FIXTURE_PROFILES[f.mode] || FIXTURE_PROFILES['P06']
+            if (!profile.hasMasterDimmer || profile.map.DIM === undefined) return false
+            return dmxState.channels[f.startChannel - 1 + profile.map.DIM] === 0
+        })
         if (isCold) setAllFixturesChannel('dim', 255)
 
         return { success: true }
@@ -1497,7 +1569,11 @@ function setupIPC() {
 
         // Use current Master Dimmer value instead of overriding with volume
         fixtures.forEach((f, i) => {
-            const currentDim = dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM] || 0
+            const profile = FIXTURE_PROFILES[f.mode] || FIXTURE_PROFILES['P06']
+            let currentDim = 255
+            if (profile.hasMasterDimmer && profile.map.DIM !== undefined) {
+                currentDim = dmxState.channels[f.startChannel - 1 + profile.map.DIM] || 0
+            }
             setFixtureColor(i, r, g, b, currentDim)
         })
         return { success: true, colors: dmxState.fixtureColors }
@@ -1508,14 +1584,17 @@ function setupIPC() {
         dmxState.activeProgram = null
         fixtures.forEach((f, i) => {
             const base = f.startChannel - 1
+            const profile = FIXTURE_PROFILES[f.mode] || FIXTURE_PROFILES['P06']
             const d = sceneData.fixtures?.[i] || sceneData
-            dmxState.channels[base + CHANNEL_MAP.RED] = d.red || 0
-            dmxState.channels[base + CHANNEL_MAP.GREEN] = d.green || 0
-            dmxState.channels[base + CHANNEL_MAP.BLUE] = d.blue || 0
-            dmxState.channels[base + CHANNEL_MAP.FUNC] = d.func || 0
-            dmxState.channels[base + CHANNEL_MAP.SPD] = d.spd || 0
-            dmxState.channels[base + CHANNEL_MAP.FLASH] = d.flash || 0
-            dmxState.channels[base + CHANNEL_MAP.DIM] = d.dim ?? 255
+
+            if (profile.map.RED !== undefined) dmxState.channels[base + profile.map.RED] = d.red || 0
+            if (profile.map.GREEN !== undefined) dmxState.channels[base + profile.map.GREEN] = d.green || 0
+            if (profile.map.BLUE !== undefined) dmxState.channels[base + profile.map.BLUE] = d.blue || 0
+            if (profile.map.FUNC !== undefined) dmxState.channels[base + profile.map.FUNC] = d.func || 0
+            if (profile.map.SPD !== undefined) dmxState.channels[base + profile.map.SPD] = d.spd || 0
+            if (profile.map.FLASH !== undefined) dmxState.channels[base + profile.map.FLASH] = d.flash || 0
+            if (profile.hasMasterDimmer && profile.map.DIM !== undefined) dmxState.channels[base + profile.map.DIM] = d.dim ?? 255
+
             dmxState.fixtureColors[i] = { r: d.red || 0, g: d.green || 0, b: d.blue || 0 }
         })
         broadcastColors()

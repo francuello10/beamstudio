@@ -13,13 +13,14 @@
 BeamStudio v3.0 introduces industry-standard workflows and a professional semantic lexicon:
 
 *   **Console Mixer (GrandMaster):** Professional-grade attribute control with built-in Fixture Patch management.
+*   **Fixture Profiles (V2 Architecture):** Universal support for different Fixture personalities (P06, P02, P01) with smart overlap detection.
 *   **Atomic State Architecture:** Ultra-low latency state management (<2ms) designed for high-bandwidth telemetry.
 *   **Background Execution (Anti-Freeze):** Hybrid rendering engine ensures **Audio Reactive** and **Fluid/Ambilight** modes continue running smoothly even when the app is minimized (Freestyler-style).
-*   **Hardware Shielding:** Native protection for FTDI chip stability, locking the universe capacity to 33 bytes (32+1).
-*   **Audio Telemetry DSP (Gen 6.1):** True stereo 2.1 spectral analysis with **Deco Mode** tuning for high-end audio systems (Thonet & Vander).
+*   **Hardware Shielding:** Native protection for FTDI chip stability.
+*   **Audio Telemetry DSP (Gen 6.1):** True stereo 2.1 spectral analysis.
 *   **AI Procedural Scenes:** Generate complex lighting code on-the-fly using Google Gemini 2.0 Flash.
-*   **Fluid Simulation (Gen 5.0):** Navier-Stokes WebGL2 engine with "Neon Overdrive" physics presets and HDR Bloom.
-*   **Screen Ambilight (Gen 6.0):** Immersive screen mirroring with "Silk Lerp" transitions and center-channel bass boost.
+*   **Fluid Simulation (Gen 5.0):** Navier-Stokes WebGL2 engine.
+*   **Screen Ambilight (Gen 6.0):** Immersive screen mirroring.
 
 ---
 
@@ -46,7 +47,10 @@ The system uses a standardized technical lexicon:
 ## 🛠️ Hardware Requirements
 *   **Interface:** KMTronic USB DMX512 or any FTDI D2XX-compatible hardware.
 *   **Fixtures:** StickTec 1019 (American Pro) or standard RGB DMX units.
-*   **Addressing (P6 Mode):**
+*   **Supported Personalities (Modes):**
+    *   **P06 / P01 (7-Ch):** Full Control (RGB + Macros + Flash + Dimmer)
+    *   **P02 (4-Ch):** RGB + Master Dimmer
+*   **Default Addressing (P6 Mode):**
     *   **Bar 1:** Start `d001` (Ch 1-7)
     *   **Bar 2:** Start `d008` (Ch 8-14)
     *   **Bar 3:** Start `d015` (Ch 15-21)

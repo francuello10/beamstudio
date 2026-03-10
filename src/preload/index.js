@@ -9,6 +9,7 @@ const dmxAPI = {
     getSystemMedia: () => ipcRenderer.invoke('get-system-media'),
     setChannels: (fixtureIds, channels) => ipcRenderer.invoke('dmx:setChannels', { fixtureIds, channels }),
     setChannel: (channel, value) => ipcRenderer.invoke('dmx:setChannel', { channel, value }),
+    saveFixtures: (fixtures) => ipcRenderer.invoke('dmx:saveFixtures', fixtures),
 
     /**
      * High Performance - Async one-way calls

@@ -16,6 +16,12 @@ const SystemPage = () => {
     const funcRanges = config?.funcRanges || []
     const perf = config?.performance || { dmxHz: 44, uiHz: 60, ambiFps: 60 }
 
+    const FIXTURE_PROFILES = {
+        'P06': { name: 'P06 (7-Ch) - StickTec Full Control', channels: 7 },
+        'P01': { name: 'P01 (7-Ch) - Alternative P06', channels: 7 },
+        'P02': { name: 'P02 (4-Ch) - RGB + Master Dimmer', channels: 4 }
+    }
+
     // DMX Mode state
     const [dmxMode, setDmxMode] = useState(config?.dmxMode || 'artnet')
     const [selectedPort, setSelectedPort] = useState(config?.nativeDevicePath || '')
@@ -60,8 +66,35 @@ const SystemPage = () => {
         })
     }, [])
 
+    // Auto-save fixtures when changed
+    // We use a ref to prevent saving on initial load when fixtures are merely fetched
+    const isInitialMount = React.useRef(true)
+    useEffect(() => {
+        if (isInitialMount.current) {
+            isInitialMount.current = false
+            return
+        }
+
+        // Only save if we actually have fixtures to avoid wiping them out if store is empty during load
+        if (dmxFixtures && dmxFixtures.length > 0) {
+            const timeout = setTimeout(() => {
+                window.dmx?.saveFixtures(dmxFixtures)
+            }, 500) // Debounce save
+            return () => clearTimeout(timeout)
+        }
+    }, [dmxFixtures])
+
     const handleRename = (id, newName) => {
         setDmxFixtures(dmxFixtures.map(f => f.id === id ? { ...f, name: newName } : f))
+    }
+
+    const handleModeChangeForFixture = (id, newMode) => {
+        setDmxFixtures(dmxFixtures.map(f => f.id === id ? { ...f, mode: newMode } : f))
+    }
+
+    const handleStartChannelChangeForFixture = (id, newStartChannel) => {
+        const val = parseInt(newStartChannel) || 1
+        setDmxFixtures(dmxFixtures.map(f => f.id === id ? { ...f, startChannel: Math.min(512, Math.max(1, val)) } : f))
     }
 
     const handleModeChange = async (newMode) => {
@@ -236,17 +269,74 @@ const SystemPage = () => {
                 <div className="glass-card hardware-card">
                     <h3>Fixtures Config</h3>
                     <div className="fixtures-config-list" style={{ marginTop: '10px' }}>
-                        {dmxFixtures.map(f => (
-                            <div key={f.id} className="fixture-config-row" style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '8px' }}>
-                                <img src={sticktecImg} alt="bar" style={{ width: '30px', opacity: 0.5 }} />
-                                <input
-                                    type="text"
-                                    value={f.name}
-                                    onChange={(e) => handleRename(f.id, e.target.value)}
-                                    style={{ flex: 1, background: 'transparent', border: '1px solid var(--border-color)', color: 'white', padding: '4px 8px' }}
-                                />
-                            </div>
-                        ))}
+                        {dmxFixtures.map(f => {
+                            const profile = FIXTURE_PROFILES[f.mode] || FIXTURE_PROFILES['P06']
+                            const isOverlapping = dmxFixtures.some(other => {
+                                if (other.id === f.id) return false
+                                const otherProfile = FIXTURE_PROFILES[other.mode] || FIXTURE_PROFILES['P06']
+                                const fEnd = f.startChannel + profile.channels - 1
+                                const otherEnd = other.startChannel + otherProfile.channels - 1
+                                return (f.startChannel <= otherEnd && fEnd >= other.startChannel)
+                            })
+
+                            return (
+                                <div key={f.id} className="fixture-config-row" style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'min-content 1.5fr 1fr 0.5fr',
+                                    gap: '10px',
+                                    alignItems: 'center',
+                                    marginBottom: '12px',
+                                    background: isOverlapping ? 'rgba(255, 68, 68, 0.1)' : 'rgba(255,255,255,0.03)',
+                                    padding: '8px',
+                                    borderRadius: '8px',
+                                    border: isOverlapping ? '1px solid #ff4444' : '1px solid transparent'
+                                }}>
+                                    <img src={sticktecImg} alt="bar" style={{ width: '30px', opacity: 0.5 }} />
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <label style={{ fontSize: '9px', fontWeight: 700, color: 'var(--text-secondary)' }}>NAME</label>
+                                        <input
+                                            type="text"
+                                            value={f.name}
+                                            onChange={(e) => handleRename(f.id, e.target.value)}
+                                            style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid var(--border-color)', color: 'white', padding: '6px', borderRadius: '4px', fontSize: '13px' }}
+                                        />
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <label style={{ fontSize: '9px', fontWeight: 700, color: 'var(--text-secondary)' }}>MODE ({profile.channels} CH)</label>
+                                        <select
+                                            value={f.mode || 'P06'}
+                                            onChange={(e) => handleModeChangeForFixture(f.id, e.target.value)}
+                                            className="system-select"
+                                            style={{ padding: '6px', fontSize: '13px', height: '100%' }}
+                                        >
+                                            {Object.entries(FIXTURE_PROFILES).map(([key, prof]) => (
+                                                <option key={key} value={key}>{key}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <label style={{ fontSize: '9px', fontWeight: 700, color: isOverlapping ? '#ff4444' : 'var(--text-secondary)' }}>DMX CH</label>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max="512"
+                                            value={f.startChannel}
+                                            onChange={(e) => handleStartChannelChangeForFixture(f.id, e.target.value)}
+                                            style={{
+                                                background: 'rgba(0,0,0,0.5)',
+                                                border: isOverlapping ? '1px solid #ff4444' : '1px solid var(--border-color)',
+                                                color: isOverlapping ? '#ff4444' : 'var(--accent)',
+                                                padding: '6px',
+                                                borderRadius: '4px',
+                                                fontSize: '13px',
+                                                fontWeight: 700,
+                                                textAlign: 'center'
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            )
+                        })}
                     </div>
                 </div>
             </div>
