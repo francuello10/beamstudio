@@ -197,7 +197,7 @@ async function createD2XXDriver(devicePath) {
                     serialNumber: targetSerial,
                     settings: {
                         dmxHz: dmxState.performance.dmxHz,
-                        transmitLength: 33
+                        transmitLength: 33 // Reverted to 33 for limited hardware controller
                     }
                 }
             })
@@ -269,7 +269,8 @@ async function createSerialPortDriver(devicePath) {
                     sharedBuffer: dmxSharedBuffer,
                     serialNumber: targetPath, // For serialport, serialNumber is the PATH
                     settings: {
-                        dmxHz: dmxState.performance.dmxHz
+                        dmxHz: dmxState.performance.dmxHz,
+                        transmitLength: 33 // Reverted to 33 for limited hardware controller
                     }
                 }
             })

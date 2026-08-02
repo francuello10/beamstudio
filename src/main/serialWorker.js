@@ -27,8 +27,9 @@ const SERIAL_PROTOCOL = {
 const { sharedBuffer, serialNumber, settings } = workerData;
 const dmxArray = new Uint8Array(sharedBuffer);
 
-// Static transmission buffer (33 bytes: 1 Start Code + 32 Channels)
-const txBuffer = Buffer.alloc(33, 0);
+// Static transmission buffer
+const txLen = settings?.transmitLength || 33;
+const txBuffer = Buffer.alloc(txLen, 0);
 
 let dmxMs = Math.round(1000 / (settings?.dmxHz || 44));
 let isRunning = true;
@@ -58,24 +59,32 @@ async function startWorker() {
 
     function setBreak(enable) {
         return new Promise((resolve, reject) => {
-            port.set({ brk: enable }, (err) => {
-                if (err) reject(err);
-                else resolve();
-            });
+            try {
+                port.set({ brk: enable }, (err) => {
+                    if (err) reject(err);
+                    else resolve();
+                });
+            } catch (e) {
+                reject(e);
+            }
         });
     }
 
     function writeData(buffer) {
         return new Promise((resolve, reject) => {
-            port.write(buffer, (err) => {
-                if (err) reject(err);
-                else {
-                    port.drain((drainErr) => {
-                        if (drainErr) reject(drainErr);
-                        else resolve();
-                    });
-                }
-            });
+            try {
+                port.write(buffer, (err) => {
+                    if (err) reject(err);
+                    else {
+                        port.drain((drainErr) => {
+                            if (drainErr) reject(drainErr);
+                            else resolve();
+                        });
+                    }
+                });
+            } catch (e) {
+                reject(e);
+            }
         });
     }
 
@@ -100,7 +109,7 @@ async function startWorker() {
 
             // 3. Prepare Frame (Copy from shared buffer)
             // txBuffer[0] is always 0x00 (Start Code)
-            for (let i = 0; i < 32; i++) {
+            for (let i = 0; i < txLen - 1; i++) {
                 txBuffer[i + 1] = dmxArray[i + 1];
             }
 

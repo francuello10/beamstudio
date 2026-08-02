@@ -9,8 +9,9 @@ const { performance } = require('perf_hooks');
 const { sharedBuffer, serialNumber, settings } = workerData;
 const dmxArray = new Uint8Array(sharedBuffer);
 
-// Buffer estático de transmisión (Evita GC y parpadeo)
-const txBuffer = Buffer.alloc(33, 0);
+// Buffer estático de transmisión (tamaño adaptado a 33 para hardware limitado)
+const txLen = settings?.transmitLength || 33;
+const txBuffer = Buffer.alloc(txLen, 0);
 
 let dmxMs = Math.round(1000 / (settings?.dmxHz || 44));
 let isRunning = true;
@@ -57,7 +58,7 @@ async function startWorker() {
 
                 // 4. Preparar frame (Cero concatenaciones, solo copia)
                 // SC (0x00) ya está en txBuffer[0] por Buffer.alloc
-                for (let i = 0; i < 32; i++) {
+                for (let i = 0; i < txLen - 1; i++) {
                     txBuffer[i + 1] = dmxArray[i + 1];
                 }
 
@@ -70,8 +71,14 @@ async function startWorker() {
 
             // 6. Pacing dinámico para mantener dmxHz constante
             const elapsed = performance.now() - startTime;
-            const delay = Math.max(1, dmxMs - elapsed);
-            setTimeout(transmitLoop, Math.max(5, delay)); // Mínimo 5ms para dejar respirar al thread
+            const delay = Math.max(0, dmxMs - elapsed);
+
+            // Jitter reduction para el parpadeo en Windows
+            if (delay <= 2) {
+                setImmediate(transmitLoop);
+            } else {
+                setTimeout(transmitLoop, delay - 1);
+            }
         }
 
         transmitLoop();
