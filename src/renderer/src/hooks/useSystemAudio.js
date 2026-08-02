@@ -32,9 +32,9 @@ import { useAudioStore } from '../store/audioStore'
  * Signal Chain (8 precision tuning points):
  * ─────────────────────────────────────────
  * 1. L/R analyser smoothing: 0.65 (organic mids/highs)
- * 2. Bass analyser smoothing: 0.45 (breathes, doesn't punch)
+ * 2. Bass analyser smoothing: 0.18 (fast enough to punch)
  * 3. Peak decay: 0.96 (~300ms luxurious fade)
- * 4. Bass curve: pow(1.5) (sweet spot: present but never hectic)
+ * 4. Bass output: fast bass pulse for center slot, peak hold only for meters
  * 5. Modifier center: 0.45-1.55x (floor 45%, never dark)
  * 6. Modifier sides: 0.5-1.4x (subtle shimmer)
  * 7. LERP modifier: 0.28 (~250ms diffused transitions)
@@ -98,6 +98,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
     const peakHoldL = useRef(new Array(16).fill(0))
     const peakHoldR = useRef(new Array(16).fill(0))
     const peakHoldBass = useRef(0)
+    const bassPulse = useRef(0)
 
     // Genre detection history
     const genreHistory = useRef([])
@@ -153,6 +154,8 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
         setDetectedGenre('UNKNOWN')
         setVisualizerData({ left: new Array(16).fill(0), right: new Array(16).fill(0), bass: 0 })
         setAudioTelemetryDSP({ left: 0, center: 0, right: 0 })
+        peakHoldBass.current = 0
+        bassPulse.current = 0
         smoothedOutput.current = [
             { r: 0, g: 0, b: 0 },
             { r: 0, g: 0, b: 0 },
@@ -242,7 +245,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
             splitter.connect(merger, 1, 1)
             analyserBass.current = audioCtx.current.createAnalyser()
             analyserBass.current.fftSize = 256
-            analyserBass.current.smoothingTimeConstant = 0.45 // [T2] Deco: bass breathes, doesn't punch
+            analyserBass.current.smoothingTimeConstant = 0.18 // [T2] Fast enough for visible bass kicks
             merger.connect(analyserBass.current)
 
             setActive(true)
@@ -272,7 +275,11 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                     decayRate: 0.96
                 })
                 peakHoldBass.current = peakState.peakHoldBass
-                const bassSmooth = peakState.bassSmooth
+
+                // Output bass must be rhythmic, not a slow VU hold. Peak hold is useful
+                // for meters, but it flattens the physical center light into “always on”.
+                bassPulse.current = Math.max(bassEnergy, bassPulse.current * 0.82)
+                const bassOutput = bassPulse.current
                 const stereoWidth = computeStereoWidth(bandsL, bandsR)
                 const { lowMidL, lowMidR, lowMidAvg } = computeLowMid(bandsL, bandsR)
 
@@ -299,16 +306,16 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 // Sides: Mid/High energy (bands 4-15) — needed by BOTH Bass Pulse and Genre mode
                 const { midHighL, midHighR } = computeMidHigh(bandsL, bandsR)
 
-                const spatial = buildSpatialResponse({ midHighL, bassSmooth, midHighR })
+                const spatial = buildSpatialResponse({ midHighL, bassSmooth: bassOutput, midHighR })
                 const spectral = buildSpectralResponse(bandsL, bandsR)
 
                 const energies = spatial
 
                 const highEnergy = spectral.slice(10).reduce((sum, value) => sum + value, 0) / 6
                 const midEnergy = spectral.slice(4, 10).reduce((sum, value) => sum + value, 0) / 6
-                const volume = Math.min(1.0, (bassSmooth + midHighL + midHighR) / 3)
+                const volume = Math.min(1.0, (bassOutput + midHighL + midHighR) / 3)
                 const silence = volume < 0.025
-                const clipping = Math.max(...spectral, bassSmooth, midHighL, midHighR) >= 0.98
+                const clipping = Math.max(...spectral, bassOutput, midHighL, midHighR) >= 0.98
                 const frameTelemetry = buildFrameTelemetry({
                     bassEnergy,
                     bandsL,
@@ -323,7 +330,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                     timestamp: Date.now(),
                     source: activeSourceRef.current,
                     levels: {
-                        bass: bassSmooth,
+                        bass: bassOutput,
                         mid: midEnergy,
                         high: highEnergy,
                         volume,

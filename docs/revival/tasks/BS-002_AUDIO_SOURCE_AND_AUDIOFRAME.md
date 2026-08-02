@@ -51,6 +51,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - Diecinueveavo slice activo: el mapeo 3-slot quedó explícito como Slot 2 exclusivo para bass/sub y Slots 1/3 como L/R con incidencia leve de bass.
 - Veinteavo slice activo: la UI de Audio y System muestra roles de patch para dejar claro que Slot 2 debe ser la luz física central/bass.
 - Veintiunavo slice activo: `audio:start` abre individualmente cada master dimmer que esté en 0 y `computeBassEnergy` ignora bin DC, pondera bajos musicales y clamppea el pulso para que Slot 2 responda mejor al ritmo real.
+- Veintidosavo slice activo: la salida física usa un bass pulse rápido separado del peak-hold de medidores, evitando que la luz central quede plana o siempre encendida sin reflejar kicks.
 
 ## Alcance
 
@@ -86,6 +87,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - [x] Audio UI y System > Fixtures Config muestran explícitamente los roles LEFT SIDE / BASS CENTER / RIGHT SIDE.
 - [x] Al iniciar audio boost, cada fixture con master dimmer cerrado queda visible sin pisar cambios intencionales posteriores del dimmer.
 - [x] La energía bass evita sesgo DC-only y queda clamppeada para hacer más visible el pulso low-end en Slot 2.
+- [x] Slot 2 usa pulso bass rápido para salida física; el peak-hold queda para visualización/medición y no aplana el ritmo.
 - [ ] Silencio no genera NaN, Infinity ni flashes erráticos.
 - [ ] El DSP no escribe DMX directamente salvo contrato explícito.
 - [ ] La UI no renderiza innecesariamente a 60 Hz.
