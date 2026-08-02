@@ -91,15 +91,19 @@ export const applyModifierAndSmoothing = ({
     let nextTargetColors = targetColors
 
     if (modifierMode && inputColors && inputColors.length >= 3) {
+        const boostLevel = Math.max(0.5, Math.min(2.5, audioSensitivity || 1))
         nextTargetColors = inputColors.map((color, index) => {
+            const sideEnergy = index === 0 ? audioFrame.stereo.midHighLeft : audioFrame.stereo.midHighRight
             const factor = index === 1
-                ? (0.2 + audioFrame.levels.bass * 1.5 * audioSensitivity)
-                : (0.3 + (index === 0 ? audioFrame.stereo.midHighLeft : audioFrame.stereo.midHighRight) * 0.8 * audioSensitivity)
+                ? (0.25 + Math.pow(audioFrame.levels.bass, 0.62) * 1.95 * boostLevel)
+                : (0.35 + Math.pow(sideEnergy, 0.72) * 1.15 * boostLevel)
             return multiplyBrightness(color, factor)
         })
     }
 
-    const lerpSpeed = modifierMode ? 0.6 : 0.20
+    const lerpSpeed = modifierMode
+        ? Math.min(0.9, 0.58 + Math.max(0.5, Math.min(2.5, audioSensitivity || 1)) * 0.12)
+        : 0.24
     return nextTargetColors.map((targetColor, index) =>
         lerpColor(currentColors[index], targetColor, lerpSpeed)
     )

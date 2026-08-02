@@ -34,6 +34,7 @@ export const useAudioStore = create((set) => ({
     spectralResponse: new Array(16).fill(0),          // Normalized 0-1
     audioFrame: createEmptyAudioFrame(),
     audioBaseColors: [],
+    audioBoostLevel: 1.5,
 
     // Actions
     setAudioTelemetryDSP: (audioTelemetryDSP) => set({ audioTelemetryDSP }),
@@ -46,6 +47,7 @@ export const useAudioStore = create((set) => ({
     setAudioActive: (audioActive) => set({ audioActive }),
     setEnergyFactor: (energyFactor) => set({ energyFactor }),
     setAudioBaseColors: (audioBaseColors) => set({ audioBaseColors }),
+    setAudioBoostLevel: (audioBoostLevel) => set({ audioBoostLevel: Math.max(0.5, Math.min(2.5, audioBoostLevel || 1)) }),
 
     // New Actions
     setAudioMode: (audioMode) => set({ audioMode }),

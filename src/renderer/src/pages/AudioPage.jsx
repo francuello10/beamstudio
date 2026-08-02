@@ -40,6 +40,8 @@ const AudioPage = () => {
     const audioFrame = useAudioStore(state => state.audioFrame)
     const audioBaseColors = useAudioStore(state => state.audioBaseColors)
     const setAudioBaseColors = useAudioStore(state => state.setAudioBaseColors)
+    const audioBoostLevel = useAudioStore(state => state.audioBoostLevel)
+    const setAudioBoostLevel = useAudioStore(state => state.setAudioBoostLevel)
 
     const {
         start, stop, active, detectedGenre, autoGenre, setAutoGenre,
@@ -47,7 +49,7 @@ const AudioPage = () => {
         bassPulseMode, setBassPulseMode,
         availableInputs, selectedDeviceId, setSelectedDeviceId, refreshInputs, sourceError,
         activeSource, reconnecting
-    } = useSystemAudio((colors) => sendPixelMapBuffer(colors, 'audio'), audioBaseColors, setAudioTelemetryDSP)
+    } = useSystemAudio((colors) => sendPixelMapBuffer(colors, 'audio'), audioBaseColors, setAudioTelemetryDSP, audioBoostLevel)
 
     React.useEffect(() => {
         if (active) window.dmx?.setDynamicRendererActive(true, 'audio')
@@ -155,6 +157,26 @@ Mixer/base palette → audio boost → fixture-slot DMX mapping
                             {sourceError}
                         </div>
                     )}
+
+
+                    <div style={{ ...compactCard, marginBottom: '14px', textAlign: 'left' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                            <div>
+                                <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Boost level</div>
+                                <strong>x{audioBoostLevel.toFixed(1)}</strong>
+                            </div>
+                            <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Higher = harsher pulses</span>
+                        </div>
+                        <input
+                            type="range"
+                            min="0.5"
+                            max="2.5"
+                            step="0.1"
+                            value={audioBoostLevel}
+                            onChange={(event) => setAudioBoostLevel(parseFloat(event.target.value))}
+                            style={{ width: '100%' }}
+                        />
+                    </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '14px' }}>
                         <button

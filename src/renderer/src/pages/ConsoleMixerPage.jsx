@@ -29,6 +29,8 @@ const ConsoleMixerPage = ({ onReset }) => {
     const setAudioTelemetryDSP = useAudioStore(state => state.setAudioTelemetryDSP)
     const audioTelemetryDSP = useAudioStore(state => state.audioTelemetryDSP)
     const setAudioData = useAudioStore(state => state.setAudioData)
+    const audioBoostLevel = useAudioStore(state => state.audioBoostLevel)
+    const setAudioBoostLevel = useAudioStore(state => state.setAudioBoostLevel)
 
     const config = useConfigStore(state => state.config)
     const incrementPending = useConfigStore(state => state.incrementPending)
@@ -58,8 +60,13 @@ const ConsoleMixerPage = ({ onReset }) => {
     const { start: startAudio, stop: stopAudio, energyFactor, visualizerData, setModifierMode } = useSystemAudio(
         dispatchAudioColors,
         currentManualColors, // Pass manual colors to be boosted
-        setAudioTelemetryDSP
+        setAudioTelemetryDSP,
+        audioBoostLevel
     )
+
+    const handleBoostLevelChange = useCallback((event) => {
+        setAudioBoostLevel(parseFloat(event.target.value))
+    }, [setAudioBoostLevel])
 
     // Sync Audio Data
     React.useEffect(() => {
@@ -154,6 +161,18 @@ const ConsoleMixerPage = ({ onReset }) => {
                             <Zap size={14} fill={audioReactive ? "white" : "none"} />
                             <span>AUDIO BOOST {audioReactive ? 'ON' : 'OFF'}</span>
                             {audioReactive && <span style={{ opacity: 0.7, marginLeft: '4px' }}>x{energyFactor.toFixed(1)}</span>}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '170px' }}>
+                            <span style={{ fontSize: '10px', color: 'var(--text-secondary)', fontWeight: 700 }}>BOOST x{audioBoostLevel.toFixed(1)}</span>
+                            <input
+                                type="range"
+                                min="0.5"
+                                max="2.5"
+                                step="0.1"
+                                value={audioBoostLevel}
+                                onChange={handleBoostLevelChange}
+                                style={{ width: '90px' }}
+                            />
                         </div>
                     </div>
 

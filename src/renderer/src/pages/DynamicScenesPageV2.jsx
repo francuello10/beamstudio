@@ -28,6 +28,8 @@ const DynamicScenesPageV2 = () => {
     const audioTelemetryDSP = useAudioStore(state => state.audioTelemetryDSP)
     const setAudioTelemetryDSP = useAudioStore(state => state.setAudioTelemetryDSP)
     const setAudioData = useAudioStore(state => state.setAudioData)
+    const audioBoostLevel = useAudioStore(state => state.audioBoostLevel)
+    const setAudioBoostLevel = useAudioStore(state => state.setAudioBoostLevel)
 
     // Force use of BUILT_IN_SCENES to ensure new V5.0 scenes are visible
     // ignoring potentially stale config.dynamicScenes
@@ -35,7 +37,6 @@ const DynamicScenesPageV2 = () => {
 
     // Page Local State
     const [audioReactive, setAudioReactive] = useState(false)
-    const [sensitivity, setSensitivity] = useState(70)
     const [sceneColors, setSceneColors] = useState([{ r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }])
     const [aiPrompt, setAiPrompt] = useState('')
     const [isGenerating, setIsGenerating] = useState(false)
@@ -153,7 +154,7 @@ const DynamicScenesPageV2 = () => {
         dispatchPixelMapUpdate,
         colorsForAudio,
         setAudioTelemetryDSP,
-        sensitivity / 50 // Map 0-100 to 0.0-2.0 multiplier (default 70 = 1.4x)
+        audioBoostLevel
     )
 
     useEffect(() => {
@@ -255,13 +256,13 @@ const DynamicScenesPageV2 = () => {
                         {audioReactive && (
                             <div className="glass-card" style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>SENSITIVITY</span>
+                                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>BOOST LEVEL</span>
                                     <input
-                                        type="range" min="0" max="100" value={sensitivity}
-                                        onChange={(e) => setSensitivity(parseInt(e.target.value))}
+                                        type="range" min="0.5" max="2.5" step="0.1" value={audioBoostLevel}
+                                        onChange={(e) => setAudioBoostLevel(parseFloat(e.target.value))}
                                         style={{ flex: 1 }}
                                     />
-                                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--accent)' }}>{sensitivity}%</span>
+                                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--accent)' }}>x{audioBoostLevel.toFixed(1)}</span>
                                 </div>
                                 <div style={{ display: 'flex', gap: '4px', height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden' }}>
                                     <motion.div
