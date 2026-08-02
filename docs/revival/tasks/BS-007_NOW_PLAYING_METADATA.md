@@ -1,14 +1,15 @@
 ---
 id: BS-007
 title: "Now Playing provider-neutral y spikes Spotify/Tidal"
-status: proposed
+status: in-progress
 priority: P2
 size: M
 milestone: M3
 depends_on: ["BS-002", "BS-003"]
-owner:
-branch:
+owner: Fran Cuello
+branch: main
 pr:
+started_at: 2026-08-02
 absorbs: ["old BS-011"]
 ---
 
@@ -28,6 +29,12 @@ La señal musical debe seguir siendo audio del sistema. Metadata mejora UX y aut
 - Ubuntu permite consultar reproductores compatibles mediante MPRIS/DBus.
 - Spotify ofrece APIs de playback/metadata, pero sus políticas requieren revisión para sincronización visual.
 - Tidal requiere un spike separado.
+- **Ajuste de alcance respecto al "Alcance" original (importante, leer antes de tocar audio):** el ítem "Separar metadata de `AudioFrame`" de este doc sugería que hoy la metadata de Now Playing influye indebidamente en el comportamiento audio-reactive. Se investigó antes de tocar código: `src/renderer/src/hooks/useSystemAudio.js` usa `playbackPaused` (derivado de pollear `get-system-media`/MPRIS) para congelar la salida audio-reactive cuando el usuario pausa la música, evitando que la salida quede "viva" (parpadeando/pulsando) antes de que el detector de silencio crudo lo note. Esa línea es un fix real, deliberado y muy reciente de otro agente activo en este mismo repo compartido, en los commits `b01e457` ("fix(audio): freeze output on paused music") y `8a98e23` ("fix(audio): honor paused media playback"). Revertirlo ahora deshace ese fix real, y `useSystemAudio.js` está bajo desarrollo paralelo activo (múltiples commits recientes) — tocarlo arriesga tanto una regresión real como un choque de merge.
+- Por eso, este slice **NO modifica** `src/renderer/src/hooks/useSystemAudio.js`, `src/renderer/src/audio/AudioFrame.js`, `src/renderer/src/audio/AudioAnalyzer.js`, `src/renderer/src/audio/AudioReactiveRenderer.js`, `src/renderer/src/pages/AudioPage.jsx` ni nada bajo `src/renderer/src/audio/`. El comportamiento existente de `playbackPaused` influyendo en `silence` queda exactamente igual. En cambio, "separar metadata de `AudioFrame`" se interpretó y construyó como: un contrato `NowPlaying` real e independiente, con su propio poller y su propio store, que **no** lee ni escribe nada de `useSystemAudio.js`/`AudioFrame.js` — decoupled en el sentido de "flujo de datos propio", no en el sentido de "reescribir el flujo existente".
+- Primer slice activo en `main`: contrato `NowPlaying` (`src/renderer/src/metadata/NowPlaying.js`), store dedicado (`src/renderer/src/metadata/nowPlayingStore.js`) y poller independiente (`src/renderer/src/hooks/useNowPlaying.js`), consumidos únicamente por una card de solo lectura en `SystemPage.jsx`.
+- `getLinuxMedia()` en `src/main/index.js` se extendió de forma aditiva: el format string de `playerctl metadata` ahora pide también `{{position}}`, `{{mpris:length}}` y `{{mpris:artUrl}}`, agregando `positionSec`/`durationSec`/`artUrl` al objeto devuelto sin tocar `title`/`artist`/`playbackStatus` (los únicos campos que `useSystemAudio.js` y `geminiService.js` ya consumen). Unidades verificadas empíricamente en esta máquina con un reproductor MPRIS real corriendo (playerctl v2.4.1): `{{position}}` y `{{mpris:length}}` son microsegundos (ej. `position=4096000` coincidió con `playerctl position` reportando `4.096000` segundos para el mismo track). `mpris:artUrl` devolvió una URL válida para Spotify vía playerctl en esta máquina, pero no está garantizado para todo reproductor MPRIS — por eso `artwork` en el contrato queda `null` cuando no viene un string real.
+- `window.dmx.getSystemMedia()` se mantiene intacto; se agregó un alias `window.nowPlaying.getSystemMedia()` en `src/preload/index.js` sobre el mismo canal IPC `get-system-media`, sólo para que consumidores nuevos no tengan que pasar por el namespace `dmx`.
+- Degradación: si `getSystemMedia()` devuelve `null` o la promesa rechaza, `useNowPlaying` asienta el store en `createEmptyNowPlaying()` (`state: 'no-player'`) y sigue polleando en el siguiente intervalo — nunca deja datos viejos en pantalla ni rompe el loop por un intento fallido.
 
 ## Alcance
 
@@ -41,11 +48,11 @@ La señal musical debe seguir siendo audio del sistema. Metadata mejora UX y aut
 
 ## Criterios de aceptación
 
-- [ ] Audio reactive funciona sin provider.
-- [ ] MPRIS/playerctl devuelve metadata cuando está disponible.
-- [ ] Si no hay metadata, la app degrada sin romper escenas.
-- [ ] Spotify/Tidal quedan como spikes con política documentada antes de integrar.
-- [ ] No se guardan tokens en plaintext.
+- [x] Audio reactive funciona sin provider (cierto por construcción: este slice nunca toca `useSystemAudio.js` ni el resto de `src/renderer/src/audio/`).
+- [x] MPRIS/playerctl devuelve metadata cuando está disponible (handler existente + `useNowPlaying`/`nowPlayingStore` como consumidor formal, con `title`/`artist`/`playbackStatus` sin cambios y `positionSec`/`durationSec`/`artUrl` nuevos y aditivos).
+- [x] Si no hay metadata, la app degrada sin romper escenas (estado `no-player` limpio ante `null`/rechazo; como este slice no toca DMX/escenas, no hay nada que romper).
+- [x] Spotify/Tidal quedan como spikes con política documentada antes de integrar (ver sección "Spike Spotify/Tidal" abajo).
+- [x] No se guardan tokens en plaintext (no existe ningún token en este diff — no hay OAuth implementado).
 
 ## Pruebas manuales
 
@@ -54,6 +61,28 @@ La señal musical debe seguir siendo audio del sistema. Metadata mejora UX y aut
 - [ ] YouTube en navegador.
 - [ ] VLC o reproductor MPRIS compatible.
 - [ ] Sin reproductor activo.
+
+## Spike Spotify/Tidal (documentación, sin integración)
+
+Esto es un spike time-boxed con política documentada, no una integración real. `Fuera de alcance` de este doc explícitamente excluye "OAuth completo antes de revisar políticas", así que no hay llamadas a APIs de Spotify/Tidal, ni flujo OAuth, ni almacenamiento de tokens en este diff.
+
+### Spotify
+
+- **Superficie de API**: para polling simple, `GET /me/player/currently-playing` (Spotify Web API) alcanza para título/artista/progreso/estado. Para eventos en tiempo real dentro de un contexto web reproduciendo audio, existe el Web Playback SDK, pero no aplica directo a un consumidor Electron que sólo lee metadata (no reproduce audio vía Spotify).
+- **OAuth**: para una app de escritorio Electron distribuida, el flujo correcto es **Authorization Code with PKCE** — sin client secret embebido en el binario distribuido. El flujo "Authorization Code" clásico (con secret) no es apropiado para un binario que un usuario puede descompilar/inspeccionar.
+- **Scopes mínimos**: `user-read-currently-playing` y/o `user-read-playback-state` cubren título/artista/progreso/estado de reproducción; no se necesita ningún scope de escritura/control (play/pause/seek están fuera de alcance de este feature).
+- **Políticas/ToS**: Spotify aplica rate limits sobre su Web API (cuotas por app/usuario) y tiene requisitos de developer terms sobre atribución de marca y uso de datos que no pude verificar con precisión sin acceso web en vivo en este entorno — no voy a inventar detalles específicos de política que no puedo confirmar ahora mismo. Antes de cualquier integración real, un spike dedicado debe leer los Developer Terms y Design Guidelines vigentes de Spotify directamente.
+
+### Tidal
+
+- El acceso a la API pública de Tidal está más restringido/gateado a partners que el de Spotify — no hay garantía de que hoy exista un camino de acceso equivalente al de Spotify para una app de terceros. Esto queda marcado como incertidumbre alta, no como "funcionará igual que Spotify". Un spike real de Tidal necesita primero confirmar disponibilidad pública de API vigente antes de intentar cualquier implementación.
+
+### Política de almacenamiento de tokens (para cuando se implemente OAuth real — NO implementado ahora)
+
+- Los tokens (access/refresh) de cualquier integración OAuth futura de Spotify/Tidal deben guardarse usando el módulo `safeStorage` de Electron (`safeStorage.encryptString`/`decryptString`), respaldado por el keychain del SO (DPAPI en Windows, Keychain en macOS, libsecret en Linux) — nunca como JSON plano.
+- Esto contrasta deliberadamente con cómo se persisten `fixtures.json` (`FIXTURES_PATH`, `src/main/index.js:19`) y `mapping-presets.json` (`MAPPING_PRESETS_PATH`, `src/main/index.js:39`): esos son config de app no-secreta, plaintext JSON está bien ahí. Un token OAuth no es config de app, es una credencial — plaintext JSON no sería aceptable para eso.
+- Esta sección queda como referencia concreta de política para un futuro follow-up de BS-007 que implemente OAuth real.
+- **Confirmación explícita**: no existe almacenamiento de tokens en texto plano en ningún lugar de este diff — trivialmente cierto porque no se implementó OAuth. Esto satisface el criterio de aceptación "No se guardan tokens en plaintext".
 
 ## Archivos probables
 
