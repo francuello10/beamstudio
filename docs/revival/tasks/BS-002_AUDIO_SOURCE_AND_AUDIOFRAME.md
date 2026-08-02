@@ -54,6 +54,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - Veintidosavo slice activo: la salida física usa un bass pulse rápido separado del peak-hold de medidores, evitando que la luz central quede plana o siempre encendida sin reflejar kicks.
 - Veintitresavo slice activo: Slot 2 dejó de usar flash blanco/cálido; ahora usa contraste de intensidad sobre el color base para que x2.5 se note sin convertir la luz central en blanco fijo.
 - Veinticuatroavo slice activo: Slot 2 ahora manda un overlay de DIM por audio además de RGB, sin smoothing extra en main, y restaura dimmers al apagar audio para que el bajo se vea físicamente en la barra central.
+- Veinticincoavo slice activo: BeamStudio filtra/rechaza micrófonos dentro de la app, limpia selecciones guardadas no-monitor, mantiene sólo fuentes speaker monitor/loopback y amplía el boost hasta x4 con saltos de 0.5 y respuesta cuantizada más brusca.
 
 ## Alcance
 
@@ -92,6 +93,8 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - [x] Slot 2 usa pulso bass rápido para salida física; el peak-hold queda para visualización/medición y no aplana el ritmo.
 - [x] Slot 2 usa contraste de intensidad sobre el color base, sin flash blanco fijo, para que colores saturados sigan mostrando el bajo.
 - [x] Slot 2 puede modular master DIM como overlay temporal de audio y restaura los dimmers capturados al apagar audio.
+- [x] BeamStudio no lista ni acepta micrófonos como fuente de audio reactivo; sólo usa speaker monitor/loopback desde la app.
+- [x] Boost level llega a x4 con saltos más amplios y respuesta de kick cuantizada para una sensación más brusca/inmersiva.
 - [ ] Silencio no genera NaN, Infinity ni flashes erráticos.
 - [ ] El DSP no escribe DMX directamente salvo contrato explícito.
 - [ ] La UI no renderiza innecesariamente a 60 Hz.

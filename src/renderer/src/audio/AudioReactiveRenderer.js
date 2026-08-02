@@ -5,14 +5,16 @@ const clamp01 = (value) => Math.max(0, Math.min(1, value))
 const buildCenterBassKickColor = (color, rawBass, boostLevel) => {
     // Keep Slot 2 in the selected/base hue. White accents clip too easily on DMX
     // fixtures and look like a stuck center light instead of an audio kick.
-    const threshold = Math.max(0.02, 0.16 - boostLevel * 0.035)
+    const threshold = Math.max(0.01, 0.18 - boostLevel * 0.04)
     const normalized = clamp01((rawBass - threshold) / (0.86 - threshold))
-    const curve = Math.max(0.48, 0.9 - boostLevel * 0.14)
-    const kick = Math.pow(normalized, curve)
-    const floor = clamp01(0.24 - boostLevel * 0.075)
-    const ceiling = Math.min(1, 0.72 + boostLevel * 0.12)
+    const curve = Math.max(0.32, 0.86 - boostLevel * 0.14)
+    const shapedKick = Math.pow(normalized, curve)
+    const stepCount = Math.max(3, Math.round(9 - boostLevel * 1.4))
+    const kick = shapedKick <= 0 ? 0 : Math.min(1, Math.ceil(shapedKick * stepCount) / stepCount)
+    const floor = clamp01(0.22 - boostLevel * 0.05)
+    const ceiling = 1
     const intensity = floor + kick * (ceiling - floor)
-    const dimFloor = Math.max(8, Math.round(64 - boostLevel * 18))
+    const dimFloor = Math.max(0, Math.round(52 - boostLevel * 13))
     const dim = Math.round(dimFloor + kick * (255 - dimFloor))
 
     return {
@@ -123,7 +125,7 @@ export const applyModifierAndSmoothing = ({
     let nextTargetColors = targetColors
 
     if (modifierMode && inputColors && inputColors.length >= 3) {
-        const boostLevel = Math.max(0.5, Math.min(2.5, audioSensitivity || 1))
+        const boostLevel = Math.max(0.5, Math.min(4, audioSensitivity || 1))
         nextTargetColors = inputColors.map((color, index) => {
             const rawBass = clamp01(audioFrame.levels.bass)
             const bass = Math.pow(rawBass, 0.62)
@@ -139,7 +141,7 @@ export const applyModifierAndSmoothing = ({
     }
 
     const lerpSpeed = modifierMode
-        ? Math.min(0.9, 0.58 + Math.max(0.5, Math.min(2.5, audioSensitivity || 1)) * 0.12)
+        ? Math.min(0.95, 0.58 + Math.max(0.5, Math.min(4, audioSensitivity || 1)) * 0.1)
         : 0.24
     return nextTargetColors.map((targetColor, index) => {
         const slotLerpSpeed = modifierMode && index === 1 ? 1 : lerpSpeed

@@ -47,7 +47,7 @@ export const useAudioStore = create((set) => ({
     setAudioActive: (audioActive) => set({ audioActive }),
     setEnergyFactor: (energyFactor) => set({ energyFactor }),
     setAudioBaseColors: (audioBaseColors) => set({ audioBaseColors }),
-    setAudioBoostLevel: (audioBoostLevel) => set({ audioBoostLevel: Math.max(0.5, Math.min(2.5, audioBoostLevel || 1)) }),
+    setAudioBoostLevel: (audioBoostLevel) => set({ audioBoostLevel: Math.max(0.5, Math.min(4, audioBoostLevel || 1)) }),
 
     // New Actions
     setAudioMode: (audioMode) => set({ audioMode }),

@@ -171,8 +171,8 @@ const ConsoleMixerPage = ({ onReset }) => {
                             <input
                                 type="range"
                                 min="0.5"
-                                max="2.5"
-                                step="0.1"
+                                max="4"
+                                step="0.5"
                                 value={audioBoostLevel}
                                 onChange={handleBoostLevelChange}
                                 style={{ width: '90px' }}

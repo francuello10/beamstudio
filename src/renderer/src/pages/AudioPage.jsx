@@ -123,10 +123,10 @@ Mixer/base palette → audio boost → Slot 2 bass center
                             className="system-select"
                             style={{ padding: '10px 12px' }}
                         >
-                            <option value="">Auto system monitor</option>
+                            <option value="">Auto speaker monitor</option>
                             {availableInputs.map((input) => (
                                 <option key={input.deviceId} value={input.deviceId}>
-                                    {input.isMonitor ? 'Monitor · ' : ''}{input.label}
+                                    Speaker monitor · {input.label}
                                 </option>
                             ))}
                         </select>
@@ -145,9 +145,8 @@ Mixer/base palette → audio boost → Slot 2 bass center
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center' }}>
                             <div>
                                 <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Active source</div>
-                                <strong>{reconnecting ? 'Reconnecting...' : (activeSource.label || 'Auto system monitor')}</strong>
+                                <strong>{reconnecting ? 'Reconnecting...' : (activeSource.label || 'Auto speaker monitor')}</strong>
                                 {activeSource.isMonitor ? <span style={{ color: '#8fffc2' }}> · system audio</span> : null}
-                                {activeSource.fallbackToDefault ? <span style={{ color: '#ffcc66' }}> · fallback</span> : null}
                             </div>
                             <div style={{ display: 'flex', gap: '8px' }}>
                                 <span style={{ color: audioFrame.status.silence ? '#ffcc66' : '#8fffc2', fontSize: '12px' }}>
@@ -173,13 +172,13 @@ Mixer/base palette → audio boost → Slot 2 bass center
                                 <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Boost level</div>
                                 <strong>x{audioBoostLevel.toFixed(1)}</strong>
                             </div>
-                            <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Higher = harsher pulses</span>
+                            <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Higher = wider, harsher jumps</span>
                         </div>
                         <input
                             type="range"
                             min="0.5"
-                            max="2.5"
-                            step="0.1"
+                            max="4"
+                            step="0.5"
                             value={audioBoostLevel}
                             onChange={(event) => setAudioBoostLevel(parseFloat(event.target.value))}
                             style={{ width: '100%' }}

@@ -261,7 +261,7 @@ const DynamicScenesPageV2 = () => {
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                                     <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>BOOST LEVEL</span>
                                     <input
-                                        type="range" min="0.5" max="2.5" step="0.1" value={audioBoostLevel}
+                                        type="range" min="0.5" max="4" step="0.5" value={audioBoostLevel}
                                         onChange={(e) => setAudioBoostLevel(parseFloat(e.target.value))}
                                         style={{ flex: 1 }}
                                     />

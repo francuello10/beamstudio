@@ -20,6 +20,7 @@ import {
 import {
     listAudioInputs,
     readStoredAudioInputId,
+    createSystemAudioSourceError,
     resolveActiveAudioSource,
     requestAudioInputStream,
     writeStoredAudioInputId
@@ -172,6 +173,13 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
             stop()
             setSourceError(null)
             const inputs = await refreshInputs().catch(() => [])
+            let systemSelectedDeviceId = selectedDeviceId
+
+            if (systemSelectedDeviceId && !inputs.some(input => input.deviceId === systemSelectedDeviceId)) {
+                systemSelectedDeviceId = ''
+                setSelectedDeviceIdState('')
+                writeStoredAudioInputId('')
+            }
 
             const baseAudioConstraints = {
                 echoCancellation: false,
@@ -187,7 +195,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 requestedDeviceId,
                 discoveredMonitorAfterPermission
             } = await requestAudioInputStream({
-                selectedDeviceId,
+                selectedDeviceId: systemSelectedDeviceId,
                 inputs,
                 constraints: baseAudioConstraints
             }).catch(async (err) => {
@@ -195,9 +203,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
             })
 
             if (fallbackToDefault && requestedDeviceId) {
-                setSourceError(selectedDeviceId
-                    ? 'Selected audio input is unavailable. BeamStudio fell back to the default input.'
-                    : 'Preferred monitor input is unavailable. BeamStudio did not fall back to the microphone.')
+                setSourceError('System monitor input became unavailable. BeamStudio did not fall back to the microphone.')
             }
 
             streamRef.current = stream
@@ -206,16 +212,19 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 stream,
                 refreshedInputs,
                 requestedDeviceId,
-                selectedDeviceId,
+                selectedDeviceId: systemSelectedDeviceId,
                 preferredInput,
                 fallbackToDefault
             })
+            if (!activeSourceRef.current.isMonitor) {
+                stream.getTracks().forEach(track => track.stop())
+                throw createSystemAudioSourceError('Active input is not a system monitor/loopback source. BeamStudio ignored it instead of using a microphone.')
+            }
+
             setActiveSource(activeSourceRef.current)
 
-            if (!selectedDeviceId && discoveredMonitorAfterPermission) {
+            if (!systemSelectedDeviceId && discoveredMonitorAfterPermission) {
                 setSourceError(null)
-            } else if (!selectedDeviceId && !activeSourceRef.current.isMonitor) {
-                setSourceError('No system monitor/loopback input was detected. BeamStudio is listening to the default input, which may be the computer microphone.')
             }
 
             const AudioContextClass = window.AudioContext || window.webkitAudioContext
@@ -436,12 +445,12 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
             console.error('[Audio DSP] Failed:', err)
             stop()
             if (err?.name === 'NotAllowedError') {
-                setSourceError('Audio capture permission was denied. Allow microphone / monitor access and try again.')
+                setSourceError('Audio capture permission was denied. Allow speaker monitor/loopback access and try again.')
                 return
             }
 
             if (err?.name === 'SystemAudioSourceNotFoundError') {
-                setSourceError('No system monitor/loopback input was detected. BeamStudio will not use the computer microphone in Auto mode. Select a monitor/loopback device or expose one from PipeWire/PulseAudio.')
+                setSourceError('No speaker monitor/loopback input was detected. BeamStudio ignored microphones and did not change your operating system.')
                 return
             }
 
@@ -450,7 +459,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 return
             }
 
-            setSourceError('Audio detection failed to start. BeamStudio only auto-captures monitor/loopback system audio, not the computer microphone.')
+            setSourceError('Audio detection failed to start. BeamStudio only captures speaker monitor/loopback audio, never the computer microphone.')
         }
     }, [refreshInputs, selectedDeviceId, sendDmxBatch, stop, autoGenre, detectedGenre, manualGenre, onAudioUpdate, audioSensitivity])
 
