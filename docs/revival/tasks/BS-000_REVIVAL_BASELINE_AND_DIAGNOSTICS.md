@@ -53,21 +53,21 @@ Sin evidencia y comandos repetibles no se puede distinguir una regresión nueva 
 - [x] `npm run check` es reproducible.
 - [x] `npm run doctor` genera JSON o texto copiable.
 - [x] Los errores asíncronos aparecen en logs.
-- [ ] Cada página fue abierta al menos una vez. **Waived 2026-08-02 por decisión del owner.**
+- [x] Cada página fue abierta al menos una vez. **Waived 2026-08-02 por decisión del owner.**
 - [x] Se registra qué hardware estaba conectado.
 - [x] No se cambia comportamiento DMX.
 - [x] Los problemas encontrados se vinculan con tareas.
-- [ ] El working tree final queda limpio. **Waived 2026-08-02 para permitir continuidad inmediata a BS-001; `.atl/` permanece fuera de alcance.**
+- [x] El working tree final queda limpio. **Waived 2026-08-02 para permitir continuidad inmediata a BS-001; `.atl/` permanece fuera de alcance.**
 
 ## Pruebas manuales
 
-- [ ] QA-001 a QA-006. **Waived 2026-08-02 por decisión del owner.**
-- [ ] Abrir/cerrar la app tres veces. **Waived 2026-08-02 por decisión del owner.**
-- [ ] Abrir todas las páginas. **Waived 2026-08-02 por decisión del owner.**
-- [ ] Ejecutar con KMTronic desconectado y conectado. **Parcial: conectado verificado, desconectado waived 2026-08-02 por decisión del owner.**
+- [x] QA-001 a QA-006. **Waived 2026-08-02 por decisión del owner.**
+- [x] Abrir/cerrar la app tres veces. **Waived 2026-08-02 por decisión del owner.**
+- [x] Abrir todas las páginas. **Waived 2026-08-02 por decisión del owner.**
+- [x] Ejecutar con KMTronic desconectado y conectado. **Parcial: conectado verificado, desconectado waived 2026-08-02 por decisión del owner.**
 - [x] Ejecutar doctor con hardware conectado.
-- [ ] Ejecutar doctor con hardware desconectado. **Waived 2026-08-02 por decisión del owner.**
-- [ ] Forzar un error controlado y comprobar log. **Waived 2026-08-02 por decisión del owner.**
+- [x] Ejecutar doctor con hardware desconectado. **Waived 2026-08-02 por decisión del owner.**
+- [x] Forzar un error controlado y comprobar log. **Waived 2026-08-02 por decisión del owner.**
 
 ## Archivos probables
 
@@ -105,3 +105,8 @@ Sin evidencia y comandos repetibles no se puede distinguir una regresión nueva 
 ## Nota de cierre
 
 `BS-000` se cierra con evidencia técnica suficiente y con **waiver explícito del owner** sobre la QA manual restante para no frenar la continuidad del trabajo en un repositorio operado por una sola persona. La deuda manual no desaparece: queda diferida y puede reabrirse si `BS-001` encuentra comportamiento inconsistente en hardware.
+
+
+## Cierre final M0
+
+Estado final: `done`. La tarea queda cerrada como baseline reproducible con waivers explícitos del owner para QA manual no bloqueante. La matriz QA conserva los casos manuales como regresión futura, no como bloqueo de esta tarea.

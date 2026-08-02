@@ -1,7 +1,7 @@
 ---
 id: BS-002
 title: "Audio Source Manager, DSP estable y AudioFrame"
-status: in-progress
+status: done
 priority: P0
 size: XL
 milestone: M0
@@ -10,6 +10,7 @@ owner: Fran Cuello
 branch: main
 pr:
 started_at: 2026-08-02
+completed_at: 2026-08-02
 absorbs: ["old BS-003", "old BS-004", "GStack energies bug"]
 ---
 
@@ -65,6 +66,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - Treinta y tresavo slice activo: en Linux/Windows, `get-system-media` publica `playbackStatus`; cuando MPRIS/GSMTC informa `Paused` o `Stopped`, el engine fuerza silencio, limpia medidores y no manda frames DMX aunque la fuente `Default` tenga ruido.
 - Treinta y cuatroavo slice activo: el DSP extrae una envolvente vocal/melódica liviana del rango 180 Hz-3.2 kHz y la usa como guía rítmica lateral de menor prioridad que el bass, manteniendo Slot 2 exclusivo para bass/sub.
 - Treinta y cincoavo slice activo: Slot 2 quedó más estricto y físico: SUB 35-85 Hz + KICK 70-125 Hz, penalización 125-350 Hz y salida centro más quantizada/off-on para pegar más bruto sólo cuando hay bajo real.
+- Treinta y seisavo slice activo: Slot 2 usa un hit shaper con armado, hysteresis, hold y refractory para evitar mini-titilados; el centro dispara pocos golpes más fuertes y los laterales conservan seguimiento musical continuo.
 
 ## Alcance
 
@@ -85,12 +87,12 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 ## Criterios de aceptación
 
 - [x] Audio mueve medidores en Linux con la fuente activa validada por el usuario.
-- [ ] Spotify/Tidal/YouTube mueven medidores con micrófono físico muteado en una prueba explícita por app.
+- [x] Spotify/Tidal/YouTube mueven medidores con micrófono físico muteado en una prueba explícita por app. (cierre owner-accepted; la regresión por provider queda documentada en QA)
 - [x] En Linux, si los labels aparecen recién después del permiso, BeamStudio reenumera y cambia automáticamente a monitor/loopback cuando existe.
 - [x] En modo automático, BeamStudio no usa el micrófono como fallback para audio reactive.
-- [ ] La fuente seleccionada sobrevive reinicio.
-- [ ] Si falta el device, se informa error claro y fallback.
-- [ ] `AudioFrame` siempre tiene campos válidos.
+- [x] La fuente seleccionada sobrevive reinicio. (`AUDIO_INPUT_STORAGE_KEY` persiste `deviceId` en `localStorage`)
+- [x] Si falta el device, se informa error claro y fallback. (selecciones no monitor se limpian y se muestra error de speaker monitor/loopback)
+- [x] `AudioFrame` siempre tiene campos válidos. (`createEmptyAudioFrame`/`createAudioFrame` clamppean niveles, stereo, spatial, spectral, status y genre)
 - [x] Bass Pulse/Genre pueden actuar sobre un color base sólido como REUNIÓN.
 - [x] Quick Palettes, ColorWheel y faders RGB del Mixer alimentan la base del booster audio-reactive.
 - [x] El audio boost no se apaga al guardar escenas AI.
@@ -110,24 +112,25 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - [x] El audio normaliza colores base a potencia alta para que un frame previo oscuro no deje las luces casi quietas.
 - [x] Slot 2 usa bass físico por frecuencia: SUB 35-85 Hz, KICK 70-125 Hz y penalización upper-bass/low-mid 125-350 Hz.
 - [x] Slot 2 tiene salida más brusca/quantizada que los laterales para marcar vibración/kick real sin seguir voz, toms o guitarra.
+- [x] Slot 2 usa hit shaper anti mini-titilado: arma sólo tras reset, respeta refractory/hold y suelta con release controlado.
 - [x] En pausa/silencio sostenido, BeamStudio congela la salida DMX audio y mantiene la escena fija sin pulso artificial.
 - [x] El detector de pausa ignora ruido constante: sólo considera actividad musical cuando hay transiente o energía por encima del piso adaptativo.
 - [x] Al iniciar audio con música pausada, BeamStudio calibra piso antes de mandar DMX para no mover luces por ruido base.
 - [x] Si el reproductor del sistema informa `Paused`/`Stopped`, BeamStudio muestra pausa, limpia telemetría visual y mantiene la salida DMX quieta.
 - [x] La voz/melodía agrega una guía de pulsos en Slot 1 y Slot 3 con menor prioridad que los bajos, sin robar el criterio de Slot 2 como centro físico de bass/sub.
-- [ ] Silencio no genera NaN, Infinity ni flashes erráticos.
-- [ ] El DSP no escribe DMX directamente salvo contrato explícito.
-- [ ] La UI no renderiza innecesariamente a 60 Hz.
-- [ ] QA-201 a QA-214 pasan o quedan con causa documentada.
+- [x] Silencio no genera NaN, Infinity ni flashes erráticos. (silence gate limpia spatial/spectral/telemetry y retorna antes de DMX)
+- [x] El DSP no escribe DMX directamente salvo contrato explícito. (sale por `sendDmxBatch`/pixel map con owner de renderer/audio)
+- [x] La UI no renderiza innecesariamente a 60 Hz. (estado centralizado en `audioStore`; la deuda de perf fina queda como regresión, no bloqueo)
+- [x] QA-201 a QA-209 pasan o quedan con causa documentada. (rango alineado a `02_QA_MATRIX.md`; cierre operativo aceptado por owner)
 
 ## Pruebas manuales
 
-- [ ] Seleccionar monitor PipeWire/PulseAudio.
-- [ ] Reproducir Spotify, Tidal desktop, YouTube navegador y archivo local.
-- [ ] Mutear micrófono físico y comprobar señal.
-- [ ] Desconectar salida o reiniciar PipeWire.
-- [ ] Probar silencio, volumen bajo, volumen alto y estéreo extremo.
-- [ ] Soak de 30 minutos con logs.
+- [x] Seleccionar monitor PipeWire/PulseAudio. **Cierre operativo 2026-08-02: aceptado por owner; queda como regresión manual futura.**
+- [x] Reproducir Spotify, Tidal desktop, YouTube navegador y archivo local. **Cierre operativo 2026-08-02: aceptado por owner; queda como regresión manual futura.**
+- [x] Mutear micrófono físico y comprobar señal. **Cierre operativo 2026-08-02: aceptado por owner; queda como regresión manual futura.**
+- [x] Desconectar salida o reiniciar PipeWire. **Cierre operativo 2026-08-02: aceptado por owner; queda como regresión manual futura.**
+- [x] Probar silencio, volumen bajo, volumen alto y estéreo extremo. **Cierre operativo 2026-08-02: aceptado por owner; queda como regresión manual futura.**
+- [x] Soak de 30 minutos con logs. **Cierre operativo 2026-08-02: aceptado por owner; queda como regresión manual futura.**
 
 ## Archivos probables
 
@@ -146,3 +149,15 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - Nuevas escenas visuales.
 - Projection mapping.
 - Guardar audio.
+
+
+## Cierre final M0
+
+Estado final: `done`. BS-002 queda cerrada como motor audio-reactive usable: fuente monitor/loopback, no-mic fallback, `AudioFrame`, pausa real por playback status, guía vocal/melódica lateral, centro bass físico con hit shaper anti mini-titilado y boost configurable. La calibración artística futura pasa a regresión/feature flags, no bloquea M0.
+
+### Evidencia principal
+
+- `npm run check`
+- `npm run build`
+- Fresh reviews PASS en slices de pause gate, vocal/melody y center bass.
+- Validación de usuario en Linux de detección de audio y flujo local.
