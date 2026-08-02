@@ -16,6 +16,7 @@ const AudioPage = () => {
 
     const setAudioTelemetryDSP = useAudioStore(state => state.setAudioTelemetryDSP)
     const setAudioData = useAudioStore(state => state.setAudioData)
+    const audioFrame = useAudioStore(state => state.audioFrame)
 
     // Core Engine
     const {
@@ -106,6 +107,29 @@ const AudioPage = () => {
                             {activeSource.fallbackToDefault ? ' (fallback to default)' : ''}
                         </div>
                     )}
+
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                        <div style={{
+                            padding: '6px 10px',
+                            borderRadius: '999px',
+                            fontSize: '11px',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            background: audioFrame.status.silence ? 'rgba(255, 170, 0, 0.12)' : 'rgba(0, 255, 128, 0.10)',
+                            color: audioFrame.status.silence ? '#ffcc66' : '#8fffc2'
+                        }}>
+                            {audioFrame.status.silence ? 'Silence' : 'Signal OK'}
+                        </div>
+                        <div style={{
+                            padding: '6px 10px',
+                            borderRadius: '999px',
+                            fontSize: '11px',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            background: audioFrame.status.clipping ? 'rgba(255, 68, 68, 0.12)' : 'rgba(255,255,255,0.05)',
+                            color: audioFrame.status.clipping ? '#ff9b9b' : 'var(--text-secondary)'
+                        }}>
+                            {audioFrame.status.clipping ? 'Clipping risk' : 'No clipping'}
+                        </div>
+                    </div>
 
                     {/* STEREO VISUALIZER */}
                     <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', height: '160px' }}>

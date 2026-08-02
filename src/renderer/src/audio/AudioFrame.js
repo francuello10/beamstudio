@@ -20,6 +20,10 @@ export const createEmptyAudioFrame = () => ({
         midRms: 0,
         stereoWidth: 0
     },
+    status: {
+        silence: true,
+        clipping: false
+    },
     genre: 'UNKNOWN'
 })
 
@@ -30,6 +34,7 @@ export const createAudioFrame = ({
     spatial,
     spectral,
     telemetry,
+    status,
     genre
 }) => ({
     timestamp,
@@ -58,6 +63,10 @@ export const createAudioFrame = ({
         transientDensity: telemetry?.transientDensity || 0,
         midRms: telemetry?.midRms || 0,
         stereoWidth: telemetry?.stereoWidth || 0
+    },
+    status: {
+        silence: !!status?.silence,
+        clipping: !!status?.clipping
     },
     genre: genre || 'UNKNOWN'
 })

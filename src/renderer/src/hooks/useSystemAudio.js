@@ -410,6 +410,8 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 const highEnergy = spectral.slice(10).reduce((sum, value) => sum + value, 0) / 6
                 const midEnergy = spectral.slice(4, 10).reduce((sum, value) => sum + value, 0) / 6
                 const volume = Math.min(1.0, (bassSmooth + midHighL + midHighR) / 3)
+                const silence = volume < 0.025
+                const clipping = Math.max(...spectral, bassSmooth, midHighL, midHighR) >= 0.98
                 const frameTelemetry = {
                     lowEndDynamics: Math.round(Math.sqrt(bassEnergy) * 100),
                     transientDensity: Math.round((((bandsL.reduce((a, b) => a + b, 0) + bandsR.reduce((a, b) => a + b, 0)) / 32) > 0.01
@@ -432,6 +434,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                     spatial,
                     spectral,
                     telemetry: frameTelemetry,
+                    status: { silence, clipping },
                     genre: autoGenre ? detectedGenre : manualGenre
                 })
 
