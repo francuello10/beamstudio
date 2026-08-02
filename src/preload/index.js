@@ -187,6 +187,19 @@ const projectorAPI = {
     }
 }
 
+// Mapping API (BS-006) — quad-warp projection mapping edit-mode toggle.
+// Follows the exact same one-way send / subscribe-with-unsubscribe shape as
+// projectorAPI's setBlackout/onBlackout: the main window calls setEditMode,
+// the projector window listens via onEditModeChanged.
+const mappingAPI = {
+    setEditMode: (value) => ipcRenderer.send('mapping:setEditMode', value),
+    onEditModeChanged: (cb) => {
+        const listener = (_e, v) => cb(v)
+        ipcRenderer.on('mapping:editModeChanged', listener)
+        return () => ipcRenderer.removeListener('mapping:editModeChanged', listener)
+    }
+}
+
 // Expose APIs
 // BS-005: `electron`, `audio`, and `projector` are always exposed — the
 // projector window needs `audio` for the AudioFrame relay and `projector`
@@ -194,6 +207,8 @@ const projectorAPI = {
 // `scene`, `theme`, `ai`, and `windowOps` are main-window-only: the projector
 // is a pure visual output and must never be able to touch DMX/ambilight
 // output ownership or main-window-only chrome.
+// BS-006: `mapping` is exposed the same way as `projector` — the main window
+// calls setEditMode, the projector window listens via onEditModeChanged.
 if (process.contextIsolated) {
     try {
         contextBridge.exposeInMainWorld('electron', electronAPI)
@@ -209,6 +224,7 @@ if (process.contextIsolated) {
             contextBridge.exposeInMainWorld('windowOps', windowOps)
         }
         contextBridge.exposeInMainWorld('projector', projectorAPI)
+        contextBridge.exposeInMainWorld('mapping', mappingAPI)
     } catch (error) {
         console.error(error)
     }
@@ -226,4 +242,5 @@ if (process.contextIsolated) {
         window.windowOps = windowOps
     }
     window.projector = projectorAPI
+    window.mapping = mappingAPI
 }

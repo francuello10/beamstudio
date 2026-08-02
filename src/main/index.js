@@ -1704,6 +1704,11 @@ function setupIPC() {
     ipcMain.on('projector:setTestPattern', (event, value) => projectorWindow?.webContents.send('projector:testPattern', value))
     ipcMain.on('projector:setVisual', (event, visualId) => projectorWindow?.webContents.send('projector:visualChanged', visualId))
 
+    // Projection Mapping (BS-006) — relayed the same way as
+    // projector:setBlackout: the main window's Edit Mapping toggle sends
+    // this, the projector window listens for it to show/hide corner handles.
+    ipcMain.on('mapping:setEditMode', (event, value) => projectorWindow?.webContents.send('mapping:editModeChanged', value))
+
     // Relay AudioFrame from the main window's renderer process to every other
     // window (i.e. the projector window). Each BrowserWindow is a separate
     // renderer process with its own independent useAudioStore instance, so the
