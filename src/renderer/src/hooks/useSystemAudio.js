@@ -22,6 +22,7 @@ const AUDIO_INPUT_STORAGE_KEY = 'beamstudio.audio.inputDeviceId'
 export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate = null, audioSensitivity = 1.0) => {
     // === STATE ===
     const [active, setActive] = useState(false)
+    const [reconnecting, setReconnecting] = useState(false)
     const [availableInputs, setAvailableInputs] = useState([])
     const [selectedDeviceId, setSelectedDeviceIdState] = useState(() => {
         try {
@@ -31,6 +32,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
         }
     })
     const [sourceError, setSourceError] = useState(null)
+    const [activeSource, setActiveSource] = useState({ deviceId: '', label: '', fallbackToDefault: false })
     const [autoGenre, setAutoGenre] = useState(true)
     const [manualGenre, setManualGenre] = useState('ELECTRO')
     const [detectedGenre, setDetectedGenre] = useState('UNKNOWN')
@@ -65,6 +67,8 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
 
     const bassPulseModeRef = useRef(bassPulseMode)
     useEffect(() => { bassPulseModeRef.current = bassPulseMode }, [bassPulseMode])
+    const activeRef = useRef(active)
+    useEffect(() => { activeRef.current = active }, [active])
 
     // === REFS ===
     const audioCtx = useRef(null)
@@ -147,6 +151,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
         }
 
         setActive(false)
+        setReconnecting(false)
         setDetectedGenre('UNKNOWN')
         setVisualizerData({ left: new Array(16).fill(0), right: new Array(16).fill(0), bass: 0 })
         setAudioTelemetryDSP({ left: 0, center: 0, right: 0 })
@@ -156,6 +161,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
             { r: 0, g: 0, b: 0 }
         ]
         activeSourceRef.current = { deviceId: '', label: '', fallbackToDefault: false }
+        setActiveSource({ deviceId: '', label: '', fallbackToDefault: false })
         window.audio?.stop()
     }, [])
 
@@ -208,6 +214,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                     || (selectedDeviceId ? 'Selected audio input' : 'Default audio input'),
                 fallbackToDefault
             }
+            setActiveSource(activeSourceRef.current)
 
             const AudioContextClass = window.AudioContext || window.webkitAudioContext
             audioCtx.current = new AudioContextClass()
@@ -567,7 +574,21 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
             }
             loop()
 
-            stream.getAudioTracks()[0].onended = stop
+            const track = stream.getAudioTracks()[0]
+            if (track) {
+                track.onended = async () => {
+                    if (!activeRef.current) return
+                    setSourceError('Active audio input ended. BeamStudio is trying to reconnect.')
+                    setReconnecting(true)
+                    try {
+                        await start()
+                    } catch {
+                        stop()
+                    } finally {
+                        setReconnecting(false)
+                    }
+                }
+            }
         } catch (err) {
             console.error('[Audio DSP] Failed:', err)
             stop()
@@ -577,8 +598,35 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
     // Cleanup on unmount
     useEffect(() => () => stop(), [stop])
 
+    useEffect(() => {
+        if (!navigator.mediaDevices?.addEventListener) return undefined
+
+        const handleDeviceChange = async () => {
+            const inputs = await refreshInputs().catch(() => [])
+            if (!activeRef.current) return
+
+            const currentDeviceId = activeSourceRef.current.deviceId
+            if (currentDeviceId && !inputs.some(input => input.deviceId === currentDeviceId)) {
+                setSourceError('Active audio input disconnected. BeamStudio is reconnecting with the best available source.')
+                setReconnecting(true)
+                try {
+                    await start()
+                } catch {
+                    stop()
+                } finally {
+                    setReconnecting(false)
+                }
+            }
+        }
+
+        navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange)
+        return () => navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange)
+    }, [refreshInputs, start, stop])
+
     return {
         start, stop, active,
+        reconnecting,
+        activeSource,
         detectedGenre, autoGenre, setAutoGenre, manualGenre, setManualGenre,
         modifierMode, setModifierMode, bassPulseMode, setBassPulseMode,
         energyFactor,

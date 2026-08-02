@@ -22,7 +22,8 @@ const AudioPage = () => {
         start, stop, active, detectedGenre, autoGenre, setAutoGenre,
         manualGenre, setManualGenre, telemetry, visualizerData,
         bassPulseMode, setBassPulseMode,
-        availableInputs, selectedDeviceId, setSelectedDeviceId, refreshInputs, sourceError
+        availableInputs, selectedDeviceId, setSelectedDeviceId, refreshInputs, sourceError,
+        activeSource, reconnecting
     } = useSystemAudio((colors) => sendPixelMapBuffer(colors, 'audio'), null, setAudioTelemetryDSP)
 
     // Toggle dynamic renderer flag so main process routes color updates to DMX
@@ -33,8 +34,8 @@ const AudioPage = () => {
 
     // Sync store with hook data
     React.useEffect(() => {
-        setAudioData({ telemetry, visualizerData, audioActive: active })
-    }, [telemetry, visualizerData, active, setAudioData])
+        setAudioData({ telemetry, visualizerData, audioActive: active, activeAudioSource: activeSource })
+    }, [telemetry, visualizerData, active, activeSource, setAudioData])
 
     return (
         <div className="page audio-page">
@@ -85,6 +86,24 @@ const AudioPage = () => {
                             fontSize: '12px'
                         }}>
                             {sourceError}
+                        </div>
+                    )}
+
+                    {(activeSource.label || reconnecting) && (
+                        <div style={{
+                            marginBottom: '16px',
+                            padding: '10px 12px',
+                            borderRadius: '10px',
+                            background: 'rgba(255,255,255,0.05)',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            color: 'var(--text-secondary)',
+                            fontSize: '12px'
+                        }}>
+                            <strong style={{ color: '#fff' }}>Active source:</strong>{' '}
+                            {reconnecting
+                                ? 'Reconnecting...'
+                                : (activeSource.label || 'Default audio input')}
+                            {activeSource.fallbackToDefault ? ' (fallback to default)' : ''}
                         </div>
                     )}
 

@@ -25,6 +25,7 @@ export const useAudioStore = create((set) => ({
         bass: 0
     },
     audioActive: false,
+    activeAudioSource: { deviceId: '', label: '', fallbackToDefault: false },
     energyFactor: 1,
 
     // Centralized Audio Intelligence (v7)
