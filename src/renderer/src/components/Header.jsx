@@ -1,11 +1,54 @@
 import React, { useState, useEffect } from 'react'
-import { PowerOff, Check, AlertCircle, Minus, X, Square } from 'lucide-react'
+import { PowerOff, Check, AlertCircle, Minus, Plus, Volume2, X, Square } from 'lucide-react'
 import { useConfigStore } from '../store/configStore'
+import { useAudioEngine } from '../audio/AudioEngineContext'
+import { useAudioStore } from '../store/audioStore'
 
 const Header = React.memo(({ onReset, onMeet, onFlash }) => {
     const pendingRequests = useConfigStore(state => state.pendingRequests)
     const [flashActive, setFlashActive] = useState(false)
     const [offTimer, setOffTimer] = useState(null)
+
+    // === Shared Audio Engine widget ===
+    // `active` is the ONLY source of truth for on/off - the engine is mounted
+    // once in AudioEngineProvider (App.jsx) and survives page navigation, so a
+    // page-local useState here would drift from reality the moment some OTHER
+    // page started/stopped it. See AudioEngineContext.jsx's own header comment
+    // for the DMX-layer version of this same bug class.
+    const { active: audioEngineActive, start: startAudioEngine, stop: stopAudioEngine } = useAudioEngine()
+    const audioBoostLevel = useAudioStore(state => state.audioBoostLevel)
+    const setAudioBoostLevel = useAudioStore(state => state.setAudioBoostLevel)
+    const setAudioActive = useAudioStore(state => state.setAudioActive)
+    const [isStartingAudio, setIsStartingAudio] = useState(false)
+
+    // Mirrors the real engine state into useAudioStore.audioActive regardless
+    // of which page (if any) is mounted - DmxScheduler.js reads that flag to
+    // avoid fighting the audio engine's own RGB writes, and it used to only
+    // get updated by whichever page's own toggle happened to be open.
+    useEffect(() => {
+        setAudioActive(audioEngineActive)
+    }, [audioEngineActive, setAudioActive])
+
+    const handleAudioEngineToggle = async () => {
+        if (audioEngineActive) {
+            stopAudioEngine()
+            return
+        }
+        if (isStartingAudio) return
+        setIsStartingAudio(true)
+        try {
+            // Bare start(): claimsOutput defaults to true. This widget is the
+            // user explicitly asking for audio-reactive DMX output, same as
+            // AudioPage's own Start button - not an analysis-only caller.
+            await startAudioEngine()
+        } finally {
+            setIsStartingAudio(false)
+        }
+    }
+
+    const adjustAudioBoost = (delta) => {
+        setAudioBoostLevel(Math.round((audioBoostLevel + delta) * 10) / 10)
+    }
 
     const handleFlash = () => {
         onFlash()
@@ -68,6 +111,38 @@ const Header = React.memo(({ onReset, onMeet, onFlash }) => {
                 >
                     <AlertCircle size={16} /> FLASH
                 </button>
+
+                <div className="audio-engine-widget">
+                    <button
+                        className={`meet-button audio-engine-toggle ${audioEngineActive ? 'active' : ''}`}
+                        onClick={handleAudioEngineToggle}
+                        disabled={isStartingAudio}
+                        title={audioEngineActive ? 'Stop shared audio-reactive engine' : 'Start shared audio-reactive engine'}
+                    >
+                        <span className={`audio-engine-dot ${audioEngineActive ? 'on' : 'off'}`} />
+                        <Volume2 size={16} />
+                        AUDIO {audioEngineActive ? 'ON' : isStartingAudio ? '...' : 'OFF'}
+                    </button>
+                    <div className="audio-engine-boost" title="Audio boost level">
+                        <button
+                            type="button"
+                            onClick={() => adjustAudioBoost(-0.5)}
+                            disabled={audioBoostLevel <= 0.5}
+                            aria-label="Decrease audio boost"
+                        >
+                            <Minus size={10} />
+                        </button>
+                        <span>x{audioBoostLevel.toFixed(1)}</span>
+                        <button
+                            type="button"
+                            onClick={() => adjustAudioBoost(0.5)}
+                            disabled={audioBoostLevel >= 4}
+                            aria-label="Increase audio boost"
+                        >
+                            <Plus size={10} />
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <div style={{ flex: 1 }} />

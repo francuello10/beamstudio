@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react'
-import { Sliders, Zap, Check } from 'lucide-react'
+import { Sliders, Check } from 'lucide-react'
 import VerticalFader from '../components/VerticalFader'
 import LivePreviewContainer from '../components/LivePreviewContainer'
 import ColorWheel from '../components/ColorWheel'
@@ -28,22 +28,18 @@ const ConsoleMixerPage = ({ onReset }) => {
     // Audio Store
     const audioTelemetryDSP = useAudioStore(state => state.audioTelemetryDSP)
     const setAudioData = useAudioStore(state => state.setAudioData)
-    const setAudioActive = useAudioStore(state => state.setAudioActive)
-    const audioBoostLevel = useAudioStore(state => state.audioBoostLevel)
-    const setAudioBoostLevel = useAudioStore(state => state.setAudioBoostLevel)
     const setAudioInputColors = useAudioStore(state => state.setAudioInputColors)
 
     const config = useConfigStore(state => state.config)
     const incrementPending = useConfigStore(state => state.incrementPending)
     const decrementPending = useConfigStore(state => state.decrementPending)
 
-    // Local state for Audio Mode
-    const [audioReactive, setAudioReactive] = React.useState(false)
-
-    // 1. Consume the shared Audio Engine (mounted in App.jsx, never unmounted by
-    //    navigation). Its DMX writes go out through useDmxStore.sendPixelMapBuffer
-    //    with source 'audio' - byte-for-byte what this page's old
-    //    dispatchAudioColors did.
+    // Consume the shared Audio Engine (mounted in App.jsx, never unmounted by
+    // navigation, started/stopped only via the global Header widget now - this
+    // page no longer owns a start/stop toggle of its own). Its DMX writes go
+    // out through useDmxStore.sendPixelMapBuffer with source 'audio' -
+    // byte-for-byte what this page's old dispatchAudioColors did.
+    const { active: audioActive, visualizerData } = useAudioEngine()
 
     // The *Manual Colors* from dmxUniverseState are the base "Input Colors" the
     // engine modulates. Memoized on the actual values because it is published to
@@ -56,54 +52,31 @@ const ConsoleMixerPage = ({ onReset }) => {
     })), [dmxFixtures, dmxUniverseState.red, dmxUniverseState.green, dmxUniverseState.blue])
 
     // Publish the manual mix as the shared engine's modifier input, but ONLY
-    // while this page's audio boost is on. The engine is shared now, so an
-    // unconditional push would override whatever another feature already fed it
-    // just because the user happened to open the mixer.
+    // while the shared engine is actually running (`audioActive`, the real
+    // engine state - this page has no on/off toggle of its own any more, that
+    // now lives solely in the global Header widget). Gating on the real active
+    // state instead of a page-local flag means this never goes stale: if audio
+    // gets stopped from the Header while this page is open, the override is
+    // released immediately instead of silently overriding the shared engine's
+    // input forever. This effect never touches audioOutputSource, only the
+    // input-color base, so it is safe regardless of which page happens to be
+    // mounted while audio is active.
     React.useEffect(() => {
-        if (audioReactive) setAudioInputColors(currentManualColors)
-    }, [audioReactive, currentManualColors, setAudioInputColors])
+        if (audioActive) setAudioInputColors(currentManualColors)
+    }, [audioActive, currentManualColors, setAudioInputColors])
 
-    // Release the override when the boost is switched off or the page goes away,
-    // so the global audioBaseColors fallback takes over again.
+    // Release the override when the engine stops or the page goes away, so the
+    // global audioBaseColors fallback takes over again.
     React.useEffect(() => {
-        if (!audioReactive) return undefined
+        if (!audioActive) return undefined
         return () => setAudioInputColors(null)
-    }, [audioReactive, setAudioInputColors])
-
-    const { start: startAudio, stop: stopAudio, energyFactor, visualizerData, setModifierMode } = useAudioEngine()
-
-    const handleBoostLevelChange = useCallback((event) => {
-        setAudioBoostLevel(parseFloat(event.target.value))
-    }, [setAudioBoostLevel])
+    }, [audioActive, setAudioInputColors])
 
     // Sync Audio Data
     React.useEffect(() => {
         window.currentBassLevel = visualizerData.bass
         setAudioData({ visualizerData })
     }, [visualizerData, setAudioData])
-
-    // Toggle Audio Mode — a deliberate user action, so stopAudio() stays here.
-    // The redundant setDynamicRendererActive(_, 'audio') calls are gone:
-    // audio:start(claimsOutput) / audio:stop in src/main/index.js already claim
-    // and release the 'audio' output owner, and startAudio() below claims it
-    // anyway (claimsOutput defaults to true).
-    const handleAudioReactiveToggle = async () => {
-        if (audioReactive) {
-            setAudioReactive(false)
-            setAudioActive(false)
-            setModifierMode(false)
-            stopAudio()
-        } else {
-            setAudioReactive(true)
-            setAudioActive(true)
-            setModifierMode(true) // ENABLE MODIFIER MODE (Boosts input colors)
-            await startAudio()
-        }
-    }
-
-    // NOTE: no unmount teardown any more. The engine is shared and always
-    // mounted; stopping it here killed audio-reactive DMX output the moment the
-    // user navigated to another page.
 
     const handleChannelChange = useCallback((channel, value) => {
         dispatchDmxAttributeUpdate(channel, value)
@@ -117,9 +90,10 @@ const ConsoleMixerPage = ({ onReset }) => {
         const updates = { red: color.r, green: color.g, blue: color.b }
         handleSelectedChannelsChange(updates)
 
-        // Rapid IPC send for colors
+        // Rapid IPC send for colors - skipped while the shared audio engine is
+        // actually running, so this doesn't fight the engine's own DMX writes.
         const selectedIds = dmxFixtures.filter(f => f.selected).map(f => f.id)
-        if (!audioReactive && selectedIds.length > 0) {
+        if (!audioActive && selectedIds.length > 0) {
             window.dmx?.setChannelsAsync(selectedIds, updates)
         }
     }
@@ -141,43 +115,8 @@ const ConsoleMixerPage = ({ onReset }) => {
         <div className="mixer-page">
             <div className="mixer-console">
                 <section className="console-section faders-section">
-                    <div className="section-header-slim" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between' }}>
+                    <div className="section-header-slim" style={{ marginBottom: '16px' }}>
                         <h3><Sliders size={16} /> GrandMaster Console</h3>
-
-                        {/* AUDIO TOGGLE BUTTON */}
-                        <div
-                            onClick={handleAudioReactiveToggle}
-                            className="audio-reactive-toggle"
-                            style={{
-                                padding: '6px 12px',
-                                borderRadius: '20px',
-                                background: audioReactive ? 'linear-gradient(135deg, #ff0080, #7928ca)' : 'rgba(255,255,255,0.05)',
-                                border: '1px solid rgba(255,255,255,0.1)',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                fontSize: '11px',
-                                fontWeight: 700,
-                                transition: 'all 0.3s'
-                            }}
-                        >
-                            <Zap size={14} fill={audioReactive ? "white" : "none"} />
-                            <span>AUDIO BOOST {audioReactive ? 'ON' : 'OFF'}</span>
-                            {audioReactive && <span style={{ opacity: 0.7, marginLeft: '4px' }}>x{energyFactor.toFixed(1)}</span>}
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '170px' }}>
-                            <span style={{ fontSize: '10px', color: 'var(--text-secondary)', fontWeight: 700 }}>BOOST x{audioBoostLevel.toFixed(1)}</span>
-                            <input
-                                type="range"
-                                min="0.5"
-                                max="4"
-                                step="0.5"
-                                value={audioBoostLevel}
-                                onChange={handleBoostLevelChange}
-                                style={{ width: '90px' }}
-                            />
-                        </div>
                     </div>
 
                     <div className="faders-grid">
@@ -249,7 +188,7 @@ const ConsoleMixerPage = ({ onReset }) => {
                         fixtures={dmxFixtures}
                         masterDimmer={dmxUniverseState.dim}
                         onToggleFixture={onToggleFixture}
-                        isAudioActive={audioReactive}
+                        isAudioActive={audioActive}
                     />
                 </div>
             </div>

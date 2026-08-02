@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { motion } from 'framer-motion'
 import { Sparkles, Music, Sliders } from 'lucide-react'
 import LivePreviewContainer from '../components/LivePreviewContainer'
 import { useDmxStore } from '../store/dmxStore'
@@ -28,8 +27,6 @@ const DynamicScenesPageV2 = () => {
     const audioTelemetryDSP = useAudioStore(state => state.audioTelemetryDSP)
     const setAudioData = useAudioStore(state => state.setAudioData)
     const setAudioActive = useAudioStore(state => state.setAudioActive)
-    const audioBoostLevel = useAudioStore(state => state.audioBoostLevel)
-    const setAudioBoostLevel = useAudioStore(state => state.setAudioBoostLevel)
     const setAudioInputColors = useAudioStore(state => state.setAudioInputColors)
     const setAudioOutputSource = useAudioStore(state => state.setAudioOutputSource)
 
@@ -37,8 +34,14 @@ const DynamicScenesPageV2 = () => {
     // ignoring potentially stale config.dynamicScenes
     const dynamicScenes = BUILT_IN_SCENES
 
-    // Page Local State
-    const [audioReactive, setAudioReactive] = useState(false)
+    // Page-local intent: "route this page's scene through the shared audio
+    // engine as a colorizer". This is NOT the shared engine's on/off (that is
+    // useAudioEngine().active, shown/controlled only by the global Header
+    // widget now) - it is this page's own claim on 'renderer' DMX output
+    // ownership, which is genuinely page-specific and must stay a deliberate,
+    // explicit trigger here (see the ownership-claim comment on the toggle
+    // handler below).
+    const [colorizeWithAudio, setColorizeWithAudio] = useState(false)
     const [sceneColors, setSceneColors] = useState([{ r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }])
     const [aiPrompt, setAiPrompt] = useState('')
     const [isGenerating, setIsGenerating] = useState(false)
@@ -82,7 +85,7 @@ const DynamicScenesPageV2 = () => {
                     setPreviewScene(scene)
                     setActiveDynamicScene(null)
                     setActiveFlag(null)
-                    setAudioReactive(true)
+                    setColorizeWithAudio(true)
                 }
             } else if (aiJson.type === 'FLAG') {
                 setPreviewScene(scene)
@@ -102,14 +105,31 @@ const DynamicScenesPageV2 = () => {
         setPreviewScene(null)
     }
 
-    useEffect(() => {
-        const rendererDriven = !!activeFlag || audioReactive || previewScene?.type === 'DYNAMIC'
-        window.dmx?.setDynamicRendererActive(rendererDriven, 'renderer')
-        return () => window.dmx?.setDynamicRendererActive(false, 'renderer')
-    }, [activeFlag, audioReactive, previewScene])
+    // Shared Audio Engine (mounted in App.jsx, never unmounted by navigation).
+    // `active` is the ONLY source of truth for whether the engine is actually
+    // running - the global Header widget is the sole on/off control now. This
+    // page keeps its own `colorizeWithAudio` toggle only to express ITS intent
+    // to route the scene through the engine as a colorizer (see the effects
+    // below and the toggle handler further down).
+    const { start: startAudio, stop: stopAudio, active: audioEngineActive, energyFactor, visualizerData, setModifierMode } = useAudioEngine()
+
+    // True only when this page BOTH wants to colorize (its own toggle) AND the
+    // shared engine is actually running. Using `active` here - not just the
+    // local toggle - closes the same state-desync gap the engine-hoisting fix
+    // targeted at the DMX layer: if the shared engine gets stopped from the
+    // global Header widget while this page's toggle is still "on", this flips
+    // to false immediately, so the scene falls back to dispatching DMX itself
+    // instead of silently waiting on an engine that is no longer running.
+    const audioReallyDriving = colorizeWithAudio && audioEngineActive
 
     useEffect(() => {
-        if (!audioReactive && !previewScene) return
+        const rendererDriven = !!activeFlag || audioReallyDriving || previewScene?.type === 'DYNAMIC'
+        window.dmx?.setDynamicRendererActive(rendererDriven, 'renderer')
+        return () => window.dmx?.setDynamicRendererActive(false, 'renderer')
+    }, [activeFlag, audioReallyDriving, previewScene])
+
+    useEffect(() => {
+        if (!audioReallyDriving && !previewScene) return
 
         let frameId
         let scene
@@ -132,7 +152,7 @@ const DynamicScenesPageV2 = () => {
             setSceneColors(colors)
 
             // Fix: Dispatch DMX update immediately if not using Audio engine
-            if (!audioReactive) {
+            if (!audioReallyDriving) {
                 dispatchPixelMapUpdate(colors)
             }
 
@@ -143,7 +163,7 @@ const DynamicScenesPageV2 = () => {
         return () => {
             if (frameId) cancelAnimationFrame(frameId)
         }
-    }, [activeDynamicScene, audioReactive, previewScene])
+    }, [activeDynamicScene, audioReallyDriving, previewScene])
 
     let colorsForAudio = sceneColors
     if (previewScene) {
@@ -155,32 +175,33 @@ const DynamicScenesPageV2 = () => {
     // Publish this page's live scene frame as the shared engine's modifier input
     // (it used to be a hook argument). sceneColors is replaced ~60fps by the rAF
     // loop above, so this effect re-runs at that rate on purpose. Gated on
-    // audioReactive: the engine is shared, so pushing this page's scene frame
-    // while its own boost is OFF would hijack the input of audio that another
-    // feature started.
+    // audioReallyDriving (this page's own colorize intent AND the engine really
+    // being active): the engine is shared, so pushing this page's scene frame
+    // just because the engine happens to be active for some OTHER reason would
+    // hijack the input of audio that another feature started.
     useEffect(() => {
-        if (audioReactive) setAudioInputColors(colorsForAudio)
-    }, [audioReactive, colorsForAudio, setAudioInputColors])
+        if (audioReallyDriving) setAudioInputColors(colorsForAudio)
+    }, [audioReallyDriving, colorsForAudio, setAudioInputColors])
 
-    // While this page's boost is on it owns DMX output as 'renderer' (see the
-    // setDynamicRendererActive effect above), so the shared engine must tag ITS
-    // writes 'renderer' too or isAsyncOutputSourceAllowed() in src/main/index.js
-    // drops them. That also keeps the backend output path identical to what this
-    // page had when it passed dispatchPixelMapUpdate: 'renderer' frames respect
-    // the Grand Master dimmer and use adaptive smoothing, while 'audio' frames
-    // let audio drive the dimmer and slam Slot 2 at factor 1.
-    // Both overrides are released when the boost is switched off or the page
-    // unmounts, so nothing leaks into another feature.
+    // While this page is really driving via audio it owns DMX output as
+    // 'renderer' (see the setDynamicRendererActive effect above), so the shared
+    // engine must tag ITS writes 'renderer' too or isAsyncOutputSourceAllowed()
+    // in src/main/index.js drops them. That also keeps the backend output path
+    // identical to what this page had when it passed dispatchPixelMapUpdate:
+    // 'renderer' frames respect the Grand Master dimmer and use adaptive
+    // smoothing, while 'audio' frames let audio drive the dimmer and slam Slot
+    // 2 at factor 1.
+    // Both overrides are released when colorizing stops (toggle-off, engine
+    // stopped externally, or the page unmounts), so nothing leaks into another
+    // feature.
     useEffect(() => {
-        if (!audioReactive) return undefined
+        if (!audioReallyDriving) return undefined
         setAudioOutputSource('renderer')
         return () => {
             setAudioOutputSource('audio')
             setAudioInputColors(null)
         }
-    }, [audioReactive, setAudioOutputSource, setAudioInputColors])
-
-    const { start: startAudio, stop: stopAudio, energyFactor, visualizerData, setModifierMode } = useAudioEngine()
+    }, [audioReallyDriving, setAudioOutputSource, setAudioInputColors])
 
     useEffect(() => {
         window.currentBassLevel = visualizerData.bass
@@ -191,14 +212,33 @@ const DynamicScenesPageV2 = () => {
     // this page already claims DMX output as 'renderer' — letting audio:start
     // claim 'audio' would steal ownership from the page's own claim and every
     // frame would be dropped.
-    const handleAudioReactiveToggle = async () => {
-        if (audioReactive) {
-            setAudioReactive(false)
+    //
+    // NOTE: this toggle is scoped to "colorize THIS page's scene with audio",
+    // not the shared engine's global on/off - that now lives solely in the
+    // Header widget. Turning this off does stop the shared engine outright
+    // (matches the existing behavior this toggle already had before the
+    // Header widget existed) rather than just releasing this page's own
+    // 'renderer' claim, so avoid relying on this toggle if audio is also being
+    // used elsewhere for output claimed as 'audio' - use the Header widget for
+    // that instead.
+    //
+    // Bugfix: branches on audioReallyDriving, not the raw colorizeWithAudio
+    // flag - if the shared engine gets stopped externally (Header widget)
+    // while this page's toggle is still visually "on", colorizeWithAudio
+    // alone would make a click here take the "turn off" branch (matching
+    // internal state) even though nothing is actually colorizing any more -
+    // confusing, since the operator sees an "ON" pill that isn't doing
+    // anything and clicking it just quietly clears a flag. audioReallyDriving
+    // reflects reality, so the same click instead correctly restarts
+    // colorization in that case.
+    const handleColorizeToggle = async () => {
+        if (audioReallyDriving) {
+            setColorizeWithAudio(false)
             setAudioActive(false)
             setModifierMode(false)
             stopAudio()
         } else {
-            setAudioReactive(true)
+            setColorizeWithAudio(true)
             setAudioActive(true)
             setModifierMode(true)
             await startAudio({ claimsOutput: false })
@@ -209,7 +249,7 @@ const DynamicScenesPageV2 = () => {
         if (activeFlag === flagId) {
             // Deselect flag - reset to black
             setActiveFlag(null)
-            if (!audioReactive) {
+            if (!audioReallyDriving) {
                 await window.dmx?.reset()
                 dispatchBulkDmxUpdate({ red: 0, green: 0, blue: 0, func: 0, spd: 0, flash: 0, dim: 0 })
             }
@@ -261,12 +301,13 @@ const DynamicScenesPageV2 = () => {
                             <span className="section-title">Dynamic Scenes</span>
                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                 <div
-                                    onClick={handleAudioReactiveToggle}
-                                    className="audio-reactive-toggle"
+                                    onClick={handleColorizeToggle}
+                                    className="colorize-with-audio-toggle"
+                                    title="Route this scene's colors through the shared audio engine as a colorizer. This does not turn the shared engine itself on/off - use the AUDIO widget in the header for that."
                                     style={{
                                         padding: '6px 12px',
                                         borderRadius: '20px',
-                                        background: audioReactive ? 'linear-gradient(135deg, #ff0080, #7928ca)' : 'rgba(255,255,255,0.05)',
+                                        background: audioReallyDriving ? 'linear-gradient(135deg, #ff0080, #7928ca)' : 'rgba(255,255,255,0.05)',
                                         border: '1px solid rgba(255,255,255,0.1)',
                                         cursor: 'pointer',
                                         display: 'flex',
@@ -278,31 +319,11 @@ const DynamicScenesPageV2 = () => {
                                     }}
                                 >
                                     <Music size={14} />
-                                    <span>AUDIO BOOST {audioReactive ? 'ON' : 'OFF'}</span>
-                                    {audioReactive && <span style={{ opacity: 0.7, marginLeft: '4px' }}>x{energyFactor.toFixed(1)}</span>}
+                                    <span>COLORIZE WITH AUDIO {audioReallyDriving ? 'ON' : 'OFF'}</span>
+                                    {audioReallyDriving && <span style={{ opacity: 0.7, marginLeft: '4px' }}>x{energyFactor.toFixed(1)}</span>}
                                 </div>
                             </div>
                         </div>
-
-                        {audioReactive && (
-                            <div className="glass-card" style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>BOOST LEVEL</span>
-                                    <input
-                                        type="range" min="0.5" max="4" step="0.5" value={audioBoostLevel}
-                                        onChange={(e) => setAudioBoostLevel(parseFloat(e.target.value))}
-                                        style={{ flex: 1 }}
-                                    />
-                                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--accent)' }}>x{audioBoostLevel.toFixed(1)}</span>
-                                </div>
-                                <div style={{ display: 'flex', gap: '4px', height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden' }}>
-                                    <motion.div
-                                        animate={{ width: `${visualizerData.bass * 100}%` }}
-                                        style={{ height: '100%', background: 'var(--accent)', boxShadow: '0 0 10px var(--accent)' }}
-                                    />
-                                </div>
-                            </div>
-                        )}
 
                         <div className="scenes-grid-slim">
                             {dynamicScenes.map(scene => {
@@ -353,7 +374,7 @@ const DynamicScenesPageV2 = () => {
                                         }}
                                     >
                                         {flag.name}
-                                        {isActive && audioReactive && (
+                                        {isActive && audioReallyDriving && (
                                             <span style={{ fontSize: '10px', opacity: 0.8 }}>x{energyFactor.toFixed(1)}</span>
                                         )}
                                     </button>
@@ -410,7 +431,7 @@ const DynamicScenesPageV2 = () => {
                         fixtures={dmxFixtures}
                         masterDimmer={dmxUniverseState.dim}
                         onToggleFixture={toggleBlackout}
-                        isAudioActive={audioReactive}
+                        isAudioActive={audioEngineActive}
                     />
 
                     {previewScene && (
