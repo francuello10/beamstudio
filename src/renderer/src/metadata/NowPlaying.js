@@ -49,17 +49,30 @@ export const normalizeNowPlayingState = (rawPlaybackStatus) => {
 
 /**
  * Normalizes a raw `artUrl`-style string into a value safe to render in an
- * <img src>. Only http(s) URLs are accepted - anything else (a bare `file://`
- * path some players like VLC may report, or any other scheme) is treated as
- * "no artwork" rather than a broken image, since the CSP's `img-src` doesn't
- * allow it anyway and this lets the iTunes fallback lookup in
- * useNowPlaying.js still kick in instead of the code believing valid art
- * already exists when it can't actually be displayed.
+ * <img src>. http(s) and file: URLs are accepted (both allowed by the CSP's
+ * `img-src`); anything else is treated as "no artwork" rather than a broken
+ * image.
+ *
+ * Bugfix: this used to reject file:// entirely, on the assumption that only
+ * "some players like VLC" report it and that the CSP didn't allow it anyway.
+ * Verified live against a real MPRIS session: Chromium (and so any
+ * Chrome-hosted playback - YouTube, Tidal's web player, etc.) reports
+ * mpris:artUrl as a LOCAL file:// path to its own cached thumbnail
+ * (file:///tmp/.com.google.Chrome.XXXXXX), not an https URL - this is the
+ * normal, common case for browser-based playback, not an edge case. Rejecting
+ * it silently dropped cover art for that entire class of source. The CSP's
+ * img-src was updated to allow file: alongside this change. Safe to allow:
+ * this value comes from local D-Bus MPRIS metadata reflecting whatever media
+ * player is already running as the same user - it grants no new file-access
+ * capability an already-running local app didn't already have, and loading it
+ * into an <img> can only render or fail to render, never leak pixel data back
+ * to JS (cross-origin file: canvas reads are tainted/blocked the same as any
+ * other origin).
  */
 const normalizeArtworkUrl = (artwork) => {
     if (typeof artwork !== 'string') return null
     const trimmed = artwork.trim()
-    return /^https?:\/\//i.test(trimmed) ? trimmed : null
+    return /^(https?|file):\/\//i.test(trimmed) ? trimmed : null
 }
 
 /**
