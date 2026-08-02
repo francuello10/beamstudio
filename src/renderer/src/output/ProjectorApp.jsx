@@ -4,6 +4,7 @@ import FluidNeonVisual from '../visuals/FluidNeonVisual'
 import ParticleFieldVisual from '../visuals/ParticleFieldVisual'
 import TunnelGridVisual from '../visuals/TunnelGridVisual'
 import KaleidoscopeVisual from '../visuals/KaleidoscopeVisual'
+import CeilingDomeVisual from '../visuals/CeilingDomeVisual'
 import { DEFAULT_VISUAL_ID } from '../visuals/visualRegistry'
 import MappingCompositor from '../mapping/MappingCompositor'
 import { useNowPlaying } from '../hooks/useNowPlaying'
@@ -12,13 +13,14 @@ import NowPlayingOverlay from './NowPlayingOverlay'
 
 // BS-005: maps a visual id from visualRegistry to its component. All 4
 // planned visuals (Fluid Neon, Particle Field, Tunnel Grid, Kaleidoscope)
-// are now present here; a future visual would still just be another entry
-// plus a registry entry in visualRegistry.js.
+// plus Ceiling Dome are now present here; a future visual would still just
+// be another entry plus a registry entry in visualRegistry.js.
 const VISUAL_COMPONENTS = {
     fluidNeon: FluidNeonVisual,
     particleField: ParticleFieldVisual,
     tunnelGrid: TunnelGridVisual,
-    kaleidoscope: KaleidoscopeVisual
+    kaleidoscope: KaleidoscopeVisual,
+    ceilingDome: CeilingDomeVisual
 }
 
 /**
@@ -102,8 +104,8 @@ const ProjectorApp = () => {
     // Keep the active visual mounted for the whole life of this window and
     // just overlay blackout/test-pattern on top instead of unmounting it, so
     // e.g. the Fluid Neon WebGL context is never recreated. All 4 planned
-    // visuals are wired in now; a future visual would still just be another
-    // VISUAL_COMPONENTS entry — no new branch here.
+    // visuals plus Ceiling Dome are wired in now; a future visual would
+    // still just be another VISUAL_COMPONENTS entry — no new branch here.
     const ActiveVisualComponent = VISUAL_COMPONENTS[activeVisual]
 
     return (
