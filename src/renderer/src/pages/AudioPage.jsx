@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react'
-import { Volume2, PowerOff, Play, Activity, Music2 } from 'lucide-react'
+import { Volume2, PowerOff, Play, Activity, Music2, RefreshCw } from 'lucide-react'
 import { motion } from 'framer-motion'
 import LivePreviewContainer from '../components/LivePreviewContainer'
 import { useSystemAudio } from '../hooks/useSystemAudio'
@@ -21,7 +21,8 @@ const AudioPage = () => {
     const {
         start, stop, active, detectedGenre, autoGenre, setAutoGenre,
         manualGenre, setManualGenre, telemetry, visualizerData,
-        bassPulseMode, setBassPulseMode
+        bassPulseMode, setBassPulseMode,
+        availableInputs, selectedDeviceId, setSelectedDeviceId, refreshInputs, sourceError
     } = useSystemAudio((colors) => sendPixelMapBuffer(colors, 'audio'), null, setAudioTelemetryDSP)
 
     // Toggle dynamic renderer flag so main process routes color updates to DMX
@@ -46,6 +47,46 @@ const AudioPage = () => {
                     </div>
 
                     <p className="subtitle">True Stereo Analysis • Auto Genre Detection</p>
+
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '20px' }}>
+                        <select
+                            value={selectedDeviceId}
+                            onChange={(e) => setSelectedDeviceId(e.target.value)}
+                            disabled={active}
+                            className="system-select"
+                            style={{ flex: 1, padding: '10px 12px' }}
+                        >
+                            <option value="">Default audio input</option>
+                            {availableInputs.map((input) => (
+                                <option key={input.deviceId} value={input.deviceId}>
+                                    {input.isMonitor ? '🔊 ' : ''}{input.label}
+                                </option>
+                            ))}
+                        </select>
+                        <button
+                            onClick={() => refreshInputs()}
+                            disabled={active}
+                            className="action-button"
+                            style={{ minWidth: '44px', padding: '10px 12px' }}
+                            title="Refresh audio inputs"
+                        >
+                            <RefreshCw size={16} />
+                        </button>
+                    </div>
+
+                    {sourceError && (
+                        <div style={{
+                            marginBottom: '16px',
+                            padding: '10px 12px',
+                            borderRadius: '10px',
+                            background: 'rgba(255, 68, 68, 0.12)',
+                            border: '1px solid rgba(255, 68, 68, 0.35)',
+                            color: '#ff9b9b',
+                            fontSize: '12px'
+                        }}>
+                            {sourceError}
+                        </div>
+                    )}
 
                     {/* STEREO VISUALIZER */}
                     <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', height: '160px' }}>

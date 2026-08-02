@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { multiplyBrightness, lerpColor, GENRE_PROFILES } from '../utils/palettes'
 
+const AUDIO_INPUT_STORAGE_KEY = 'beamstudio.audio.inputDeviceId'
+
 /**
  * useSystemAudio v6.1 — Expert Deco Tuning for Thonet & Vander Ratsel 2.1
  *
@@ -19,6 +21,15 @@ import { multiplyBrightness, lerpColor, GENRE_PROFILES } from '../utils/palettes
 export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate = null, audioSensitivity = 1.0) => {
     // === STATE ===
     const [active, setActive] = useState(false)
+    const [availableInputs, setAvailableInputs] = useState([])
+    const [selectedDeviceId, setSelectedDeviceIdState] = useState(() => {
+        try {
+            return localStorage.getItem(AUDIO_INPUT_STORAGE_KEY) || ''
+        } catch {
+            return ''
+        }
+    })
+    const [sourceError, setSourceError] = useState(null)
     const [autoGenre, setAutoGenre] = useState(true)
     const [manualGenre, setManualGenre] = useState('ELECTRO')
     const [detectedGenre, setDetectedGenre] = useState('UNKNOWN')
@@ -78,6 +89,41 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
         { r: 0, g: 0, b: 0 }
     ])
 
+    const refreshInputs = useCallback(async () => {
+        if (!navigator.mediaDevices?.enumerateDevices) return []
+
+        const devices = await navigator.mediaDevices.enumerateDevices()
+        const inputs = devices
+            .filter(device => device.kind === 'audioinput')
+            .map((device, index) => ({
+                deviceId: device.deviceId,
+                label: device.label || `Audio Input ${index + 1}`,
+                isMonitor: /monitor|loopback|stereo mix/i.test(device.label || '')
+            }))
+
+        setAvailableInputs(inputs)
+        return inputs
+    }, [])
+
+    const setSelectedDeviceId = useCallback((deviceId) => {
+        setSelectedDeviceIdState(deviceId)
+        setSourceError(null)
+        try {
+            if (deviceId) localStorage.setItem(AUDIO_INPUT_STORAGE_KEY, deviceId)
+            else localStorage.removeItem(AUDIO_INPUT_STORAGE_KEY)
+        } catch { }
+    }, [])
+
+    useEffect(() => {
+        refreshInputs().catch(() => { })
+
+        if (!navigator.mediaDevices?.addEventListener) return undefined
+
+        const handleDeviceChange = () => refreshInputs().catch(() => { })
+        navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange)
+        return () => navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange)
+    }, [refreshInputs])
+
     // === CLEANUP ===
     const stop = useCallback(() => {
         if (streamRef.current) {
@@ -88,7 +134,10 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
             audioCtx.current.close().catch(() => { })
             audioCtx.current = null
         }
-        if (timerRef.current) clearTimeout(timerRef.current)
+        if (timerRef.current) {
+            clearTimeout(timerRef.current)
+            timerRef.current = null
+        }
 
         setActive(false)
         setDetectedGenre('UNKNOWN')
@@ -105,17 +154,36 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
     // === MAIN ENGINE ===
     const start = useCallback(async () => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    echoCancellation: false,
-                    autoGainControl: false,
-                    noiseSuppression: false,
-                    latency: 0
-                },
-                video: false
-            })
+            stop()
+            setSourceError(null)
+
+            const baseAudioConstraints = {
+                echoCancellation: false,
+                autoGainControl: false,
+                noiseSuppression: false,
+                latency: 0
+            }
+
+            let stream
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    audio: selectedDeviceId
+                        ? { ...baseAudioConstraints, deviceId: { exact: selectedDeviceId } }
+                        : baseAudioConstraints,
+                    video: false
+                })
+            } catch (err) {
+                if (!selectedDeviceId) throw err
+
+                setSourceError('Selected audio input is unavailable. BeamStudio fell back to the default input.')
+                stream = await navigator.mediaDevices.getUserMedia({
+                    audio: baseAudioConstraints,
+                    video: false
+                })
+            }
 
             streamRef.current = stream
+            await refreshInputs().catch(() => { })
 
             const AudioContextClass = window.AudioContext || window.webkitAudioContext
             audioCtx.current = new AudioContextClass()
@@ -305,6 +373,8 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                     spectral[i] = Math.min(1.0, val * 1.5) // Norm & boost
                 }
 
+                const energies = spatial
+
                 // 3. ATOMIC UPDATE
                 useAudioStore.getState().updateAudioAnalysis(spatial, spectral)
 
@@ -449,7 +519,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
             console.error('[Audio DSP] Failed:', err)
             stop()
         }
-    }, [sendDmxBatch, stop, detectedGenre])
+    }, [refreshInputs, selectedDeviceId, sendDmxBatch, stop, autoGenre, detectedGenre, manualGenre, onAudioUpdate, audioSensitivity])
 
     // Cleanup on unmount
     useEffect(() => () => stop(), [stop])
@@ -460,6 +530,11 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
         modifierMode, setModifierMode, bassPulseMode, setBassPulseMode,
         energyFactor,
         audioTelemetryDSP,
+        availableInputs,
+        selectedDeviceId,
+        setSelectedDeviceId,
+        refreshInputs,
+        sourceError,
         telemetry,
         visualizerData
     }

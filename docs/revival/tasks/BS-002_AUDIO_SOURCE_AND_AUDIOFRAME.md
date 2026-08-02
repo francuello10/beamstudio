@@ -1,14 +1,15 @@
 ---
 id: BS-002
 title: "Audio Source Manager, DSP estable y AudioFrame"
-status: proposed
+status: in-progress
 priority: P0
 size: XL
 milestone: M0
 depends_on: ["BS-000"]
-owner:
-branch:
+owner: Fran Cuello
+branch: main
 pr:
+started_at: 2026-08-02
 absorbs: ["old BS-003", "old BS-004", "GStack energies bug"]
 ---
 
@@ -29,6 +30,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - La ruta central calcula `spatial` pero actualiza con `energies` fuera de scope.
 - El hook mezcla análisis, React state, colorización y control DMX.
 - No existe un contrato único consumido por escenas y visuales.
+- Primer slice activo en `main`: selección explícita de `audioinput` persistida en renderer + fix del bug `energies` fuera de scope.
 
 ## Alcance
 
