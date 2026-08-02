@@ -134,6 +134,19 @@ function App() {
         return () => h1 && h1()
     }, [setPixelMapBuffer])
 
+    // BS-005: relay AudioFrame to the projector window over IPC. Each
+    // BrowserWindow is a separate renderer process with its own independent
+    // useAudioStore, so the projector never sees live analysis unless this
+    // window (the only one running useSystemAudio) forwards it explicitly.
+    // This runs only here because App.jsx never renders in the projector
+    // window (main.jsx swaps in ProjectorApp for `?role=projector`).
+    useEffect(() => {
+        const unsubscribe = useAudioStore.subscribe((state) => {
+            window.audio?.broadcastFrame?.(state.audioFrame)
+        })
+        return () => unsubscribe()
+    }, [])
+
 
     React.useEffect(() => {
         const baseColor = {

@@ -1,50 +1,61 @@
 import React, { useEffect, useState } from 'react'
-import { useFluidSimulation } from '../hooks/useFluidSimulation'
+import { useAudioStore } from '../store/audioStore'
+import FluidNeonVisual from '../visuals/FluidNeonVisual'
+import { DEFAULT_VISUAL_ID } from '../visuals/visualRegistry'
+
+// BS-005: maps a visual id from visualRegistry to its component. Adding one
+// of the next 3 visuals (Particle Field, Tunnel/Grid, Kaleidoscope) is just
+// another entry here plus a registry entry in visualRegistry.js.
+const VISUAL_COMPONENTS = { fluidNeon: FluidNeonVisual }
 
 /**
  * ProjectorApp — fullscreen renderer mounted on `?role=projector`.
  *
  * No sidebar/header chrome, no operator controls. The operator drives this
  * window remotely from ProjectorPage in the main window via IPC
- * (blackout / test pattern / open / close).
+ * (blackout / test pattern / visual / open / close).
  *
  * @ai-constraints No renderiza controles de operador. Es salida pura.
  */
 const ProjectorApp = () => {
     const [blackout, setBlackout] = useState(false)
     const [testPattern, setTestPattern] = useState(false)
-
-    // Reuse the existing Fluid Neon engine exactly as-is (do not touch its internals).
-    // It manages its own rAF loop and reads useAudioStore.getState() internally.
-    const { canvasRef, start, stop } = useFluidSimulation()
+    const [activeVisual, setActiveVisual] = useState(DEFAULT_VISUAL_ID)
 
     useEffect(() => {
         const unsubBlackout = window.projector?.onBlackout(setBlackout)
         const unsubTestPattern = window.projector?.onTestPattern(setTestPattern)
+        const unsubVisual = window.projector?.onVisualChanged(setActiveVisual)
 
         return () => {
             unsubBlackout?.()
             unsubTestPattern?.()
+            unsubVisual?.()
         }
     }, [])
 
-    // Keep the WebGL canvas mounted for the whole life of this window and just
-    // start the fluid engine once. We overlay blackout/test-pattern on top
-    // instead of unmounting the canvas, so the GL context is never recreated.
+    // BS-005: this window is a separate renderer process from the main
+    // window, so it never runs useSystemAudio itself — it only consumes the
+    // AudioFrame relayed over IPC by App.jsx (window.audio.broadcastFrame)
+    // and writes it into its own local useAudioStore via the store's
+    // existing setAudioData action.
     useEffect(() => {
-        start()
-        return () => stop()
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        const unsubscribe = window.audio?.onFrameBroadcast?.((frame) => {
+            useAudioStore.getState().setAudioData({ audioFrame: frame })
+        })
+        return () => unsubscribe?.()
     }, [])
+
+    // Keep the active visual mounted for the whole life of this window and
+    // just overlay blackout/test-pattern on top instead of unmounting it, so
+    // e.g. the Fluid Neon WebGL context is never recreated. Adding a new
+    // visual later is just another VISUAL_COMPONENTS entry — no new branch
+    // here.
+    const ActiveVisualComponent = VISUAL_COMPONENTS[activeVisual]
 
     return (
         <div className="projector-root" style={{ position: 'relative', width: '100vw', height: '100vh', background: '#000', overflow: 'hidden' }}>
-            <canvas
-                ref={canvasRef}
-                width={1024}
-                height={576}
-                style={{ width: '100%', height: '100%', display: 'block' }}
-            />
+            {ActiveVisualComponent ? <ActiveVisualComponent /> : null}
 
             {testPattern && !blackout && <TestPatternOverlay />}
 
