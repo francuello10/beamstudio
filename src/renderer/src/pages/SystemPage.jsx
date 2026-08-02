@@ -6,6 +6,12 @@ import { useDmxStore } from '../store/dmxStore'
 import { useConfigStore } from '../store/configStore'
 import { useNowPlayingStore } from '../metadata/nowPlayingStore'
 import { useNowPlaying } from '../hooks/useNowPlaying'
+import { readStoredPreferredPlayer, writeStoredPreferredPlayer } from '../metadata/NowPlaying'
+
+// BS-007 phase 3: MPRIS players can open/close at any time (a browser tab
+// starting/stopping playback, Spotify launching), so the picker's option list
+// is refreshed on this interval rather than only once on mount.
+const PLAYER_LIST_REFRESH_MS = 5000
 
 const NOW_PLAYING_STATE_LABELS = {
     playing: 'Reproduciendo',
@@ -41,6 +47,30 @@ const SystemPage = () => {
     // from audio-reactive (see src/renderer/src/metadata/NowPlaying.js).
     useNowPlaying()
     const nowPlaying = useNowPlayingStore(state => state.nowPlaying)
+
+    // BS-007 phase 3: with multiple MPRIS players running at once, playerctl
+    // picks one via its own priority unless told otherwise. This picker lets
+    // the operator choose which one useNowPlaying.js/useSystemAudio.js should
+    // target - see readStoredPreferredPlayer/writeStoredPreferredPlayer.
+    const [availablePlayers, setAvailablePlayers] = useState([])
+    const [preferredPlayer, setPreferredPlayer] = useState(() => readStoredPreferredPlayer())
+    useEffect(() => {
+        let cancelled = false
+        const refreshPlayers = async () => {
+            const list = await window.nowPlaying?.listPlayers?.()
+            if (!cancelled && Array.isArray(list)) setAvailablePlayers(list)
+        }
+        refreshPlayers()
+        const intervalId = setInterval(refreshPlayers, PLAYER_LIST_REFRESH_MS)
+        return () => {
+            cancelled = true
+            clearInterval(intervalId)
+        }
+    }, [])
+    const handlePreferredPlayerChange = (value) => {
+        setPreferredPlayer(value)
+        writeStoredPreferredPlayer(value)
+    }
     // BS-007 bugfix: a failed <img> load (dead link, or a CSP-disallowed
     // scheme that slipped past NowPlaying.js's normalization) must fall back
     // to the Music icon placeholder instead of showing a broken-image glyph.
@@ -198,6 +228,33 @@ const SystemPage = () => {
                         <Music size={20} className="accent-text" />
                         <h3>Now Playing</h3>
                     </div>
+
+                    {availablePlayers.length > 1 && (
+                        <div style={{ marginTop: '12px' }}>
+                            <label style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                                Reproductor activo
+                            </label>
+                            <select
+                                value={preferredPlayer}
+                                onChange={(e) => handlePreferredPlayerChange(e.target.value)}
+                                style={{
+                                    width: '100%',
+                                    padding: '8px 10px',
+                                    borderRadius: '8px',
+                                    background: 'rgba(255,255,255,0.05)',
+                                    border: '1px solid var(--border-color)',
+                                    color: 'white',
+                                    fontSize: '12px'
+                                }}
+                            >
+                                <option value="">Automático (varios reproductores detectados)</option>
+                                {availablePlayers.map(name => (
+                                    <option key={name} value={name}>{name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
                     <div style={{ marginTop: '16px' }}>
                         {nowPlaying.state === 'no-player' ? (
                             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>

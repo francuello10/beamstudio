@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useNowPlayingStore } from '../metadata/nowPlayingStore'
-import { createNowPlaying, createEmptyNowPlaying } from '../metadata/NowPlaying'
+import { createNowPlaying, createEmptyNowPlaying, readStoredPreferredPlayer } from '../metadata/NowPlaying'
 import { fetchFallbackArtwork } from '../metadata/fallbackArtwork'
 
 // Metadata, not real-time audio - a slow, independent poll is enough and
@@ -54,7 +54,11 @@ export const useNowPlaying = () => {
                     return
                 }
 
-                const media = await window.nowPlaying.getSystemMedia()
+                // Read fresh on every tick (cheap) so a mid-session change to
+                // the operator's preferred-player choice (SystemPage.jsx's
+                // picker) takes effect on the next poll without needing to
+                // remount this hook.
+                const media = await window.nowPlaying.getSystemMedia(readStoredPreferredPlayer() || undefined)
                 if (cancelled) return
 
                 if (!media) {

@@ -27,7 +27,7 @@ const isProjectorWindow = process.argv.includes('--beamstudio-role=projector')
 const dmxAPI = {
     getFixtures: () => ipcRenderer.invoke('dmx:getFixtures'),
     getConfig: () => ipcRenderer.invoke('dmx:getConfig'),
-    getSystemMedia: () => ipcRenderer.invoke('get-system-media'),
+    getSystemMedia: (preferredPlayer) => ipcRenderer.invoke('get-system-media', { preferredPlayer }),
     setChannels: (fixtureIds, channels) => ipcRenderer.invoke('dmx:setChannels', { fixtureIds, channels }),
     setChannel: (channel, value) => ipcRenderer.invoke('dmx:setChannel', { channel, value }),
     saveFixtures: (fixtures) => ipcRenderer.invoke('dmx:saveFixtures', fixtures),
@@ -249,7 +249,11 @@ const mappingAPI = {
 // window.dmx.getSystemMedia() directly - this is purely an additive, more
 // discoverable name for new Now Playing metadata consumers.
 const nowPlayingAPI = {
-    getSystemMedia: () => ipcRenderer.invoke('get-system-media')
+    getSystemMedia: (preferredPlayer) => ipcRenderer.invoke('get-system-media', { preferredPlayer }),
+    // BS-007 phase 3: lists currently-running MPRIS players so the operator
+    // can pick which one preferredPlayer above targets, instead of playerctl
+    // silently choosing one via its own priority when more than one is active.
+    listPlayers: () => ipcRenderer.invoke('nowPlaying:listPlayers')
 }
 
 // Expose APIs

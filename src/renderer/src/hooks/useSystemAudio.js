@@ -28,6 +28,7 @@ import {
 } from '../audio/AudioSourceManager'
 import { useAudioStore } from '../store/audioStore'
 import { useDmxStore } from '../store/dmxStore'
+import { readStoredPreferredPlayer } from '../metadata/NowPlaying'
 
 const MEDIA_STATUS_CHECK_INTERVAL_MS = 900
 const PLAYBACK_PAUSED_STATUSES = new Set(['paused', 'stopped'])
@@ -324,7 +325,10 @@ export const useSystemAudio = () => {
         if (now - mediaPlaybackRef.current.checkedAt < MEDIA_STATUS_CHECK_INTERVAL_MS) return
 
         mediaPlaybackRef.current.checkedAt = now
-        mediaStatusRequestRef.current = window.dmx.getSystemMedia()
+        // Same preferred-player choice useNowPlaying.js reads, so pause
+        // detection tracks whichever MPRIS player the operator actually
+        // picked instead of playerctl's own default-player guess.
+        mediaStatusRequestRef.current = window.dmx.getSystemMedia(readStoredPreferredPlayer() || undefined)
             .then((media) => {
                 const status = String(media?.playbackStatus || '').toLowerCase()
                 mediaPlaybackRef.current = {

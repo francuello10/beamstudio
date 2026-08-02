@@ -2124,8 +2124,27 @@ const getWindowsMedia = async () => {
         playbackStatus: (playbackStatus || '').trim()
     }
 }
-const getLinuxMedia = async () => {
-    const playbackStatus = await execPromise('playerctl status')
+// Real MPRIS bus/instance names (what `playerctl -l` prints, e.g. 'spotify' or
+// 'chromium.instance12345') only ever contain these characters. preferredPlayer
+// arrives over IPC from the renderer, so it must be validated before being
+// interpolated into a shell string below (execPromise runs via child_process's
+// `exec`, not `execFile` - an unvalidated value here would be a command
+// injection vector). An invalid/absent value is treated as "no preference",
+// not an error - playerctl falls back to its own default player selection.
+const isValidPlayerName = (name) => typeof name === 'string' && /^[A-Za-z0-9_.-]+$/.test(name)
+
+// BS-007 phase 3: with multiple MPRIS players running at once (e.g. Spotify
+// native app + a Chrome tab), playerctl with no -p flag picks one via its own
+// internal, unpredictable priority - not necessarily the one the user actually
+// wants BeamStudio to track. preferredPlayer, when a valid instance name, adds
+// `-p <name>` to target that specific player; getWindowsMedia has no
+// equivalent (GSMTC's "current session" concept doesn't map the same way and
+// this machine only needs to support Linux).
+const playerctlTarget = (preferredPlayer) => isValidPlayerName(preferredPlayer) ? `-p ${preferredPlayer} ` : ''
+
+const getLinuxMedia = async (preferredPlayer) => {
+    const target = playerctlTarget(preferredPlayer)
+    const playbackStatus = await execPromise(`playerctl ${target}status`)
     // BS-007: format string extended with position/mpris:length/mpris:artUrl
     // (additive only - title/artist/playbackStatus below keep their exact
     // existing shape/behavior so useSystemAudio.js and geminiService.js, both
@@ -2141,7 +2160,7 @@ const getLinuxMedia = async () => {
     // MPRIS field - Spotify's MPRIS integration does not expose one, so it
     // is deliberately not requested/returned here.
     const output = await execPromise(
-        `playerctl metadata --format '{{title}}${METADATA_FIELD_SEPARATOR}{{artist}}${METADATA_FIELD_SEPARATOR}{{position}}${METADATA_FIELD_SEPARATOR}{{mpris:length}}${METADATA_FIELD_SEPARATOR}{{mpris:artUrl}}${METADATA_FIELD_SEPARATOR}{{xesam:album}}'`
+        `playerctl ${target}metadata --format '{{title}}${METADATA_FIELD_SEPARATOR}{{artist}}${METADATA_FIELD_SEPARATOR}{{position}}${METADATA_FIELD_SEPARATOR}{{mpris:length}}${METADATA_FIELD_SEPARATOR}{{mpris:artUrl}}${METADATA_FIELD_SEPARATOR}{{xesam:album}}'`
     )
     if (!output || !output.includes(METADATA_FIELD_SEPARATOR)) {
         if (playbackStatus) return { title: '', artist: '', playbackStatus: playbackStatus.trim() }
@@ -2163,10 +2182,21 @@ const getLinuxMedia = async () => {
     }
 }
 
-ipcMain.handle('get-system-media', async () => {
+ipcMain.handle('get-system-media', async (_, { preferredPlayer } = {}) => {
     if (process.platform === 'win32') return await getWindowsMedia()
-    if (process.platform === 'linux') return await getLinuxMedia()
+    if (process.platform === 'linux') return await getLinuxMedia(preferredPlayer)
     return null
+})
+
+// BS-007 phase 3: lets the renderer list currently-running MPRIS players so
+// the user can pick which one preferredPlayer above should target, instead of
+// playerctl silently choosing one via its own priority when more than one
+// player is active (e.g. Spotify's native app plus a Chrome tab).
+ipcMain.handle('nowPlaying:listPlayers', async () => {
+    if (process.platform !== 'linux') return []
+    const output = await execPromise('playerctl -l')
+    if (!output) return []
+    return output.split('\n').map(name => name.trim()).filter(Boolean)
 })
 
 app.whenReady().then(async () => {

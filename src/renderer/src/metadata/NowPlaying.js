@@ -118,3 +118,26 @@ export const createNowPlaying = ({
     provider: typeof provider === 'string' && provider ? provider : 'unknown',
     timestamp: Number.isFinite(timestamp) ? timestamp : Date.now()
 })
+
+// BS-007 phase 3: with multiple MPRIS players running at once (Spotify's
+// native app plus a Chrome tab, say), playerctl with no -p flag picks one via
+// its own internal priority - not necessarily the one the user wants tracked.
+// This persists the user's explicit choice the same way
+// AudioSourceManager.js's readStoredAudioInputId/writeStoredAudioInputId
+// persist the selected audio input device.
+export const PREFERRED_PLAYER_STORAGE_KEY = 'beamstudio.nowPlaying.preferredPlayer'
+
+export const readStoredPreferredPlayer = () => {
+    try {
+        return localStorage.getItem(PREFERRED_PLAYER_STORAGE_KEY) || ''
+    } catch {
+        return ''
+    }
+}
+
+export const writeStoredPreferredPlayer = (playerName) => {
+    try {
+        if (playerName) localStorage.setItem(PREFERRED_PLAYER_STORAGE_KEY, playerName)
+        else localStorage.removeItem(PREFERRED_PLAYER_STORAGE_KEY)
+    } catch { }
+}
