@@ -100,3 +100,4 @@ Esto es un spike time-boxed con política documentada, no una integración real.
 - DRM bypass.
 - Sincronización visual basada en metadata.
 - OAuth completo antes de revisar políticas.
+- **Letras sincronizadas estilo karaoke** — pedido explícitamente por el owner como feature futura "nice to have", no para este slice. MPRIS no expone letras en absoluto; requeriría una fuente externa nueva (la opción más viable sin fricción/sin auth es lrclib.net, con timing por línea; Musixmatch tiene API pero con términos restrictivos). Además, a diferencia de portada/metadata, las letras son contenido con copyright — cualquier implementación futura debe elegir una fuente con licencia/términos claros, no scrapear texto de letras arbitrariamente.
