@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Projector, Power, EyeOff, Crosshair, RefreshCw, Check, AlertCircle } from 'lucide-react'
+import { Projector, Power, EyeOff, Crosshair, RefreshCw, Check, AlertCircle, Move } from 'lucide-react'
 import { VISUALS } from '../visuals/visualRegistry'
 
 // BS-005: visual library — Fluid Neon exists today, the remaining 3 (Particle
@@ -24,6 +24,9 @@ const ProjectorPage = () => {
     const [testPattern, setTestPattern] = useState(false)
     const [activeVisual, setActiveVisual] = useState(VISUALS[0].id)
     const [refreshing, setRefreshing] = useState(false)
+    // BS-006: projection mapping edit mode — shows/hides the quad-warp
+    // corner handles on the projector output.
+    const [mappingEditMode, setMappingEditMode] = useState(false)
 
     const refreshDisplays = async () => {
         setRefreshing(true)
@@ -85,6 +88,12 @@ const ProjectorPage = () => {
     const handleVisualSelect = (visualId) => {
         setActiveVisual(visualId)
         window.projector?.setVisual(visualId)
+    }
+
+    const handleMappingEditModeToggle = () => {
+        const next = !mappingEditMode
+        setMappingEditMode(next)
+        window.mapping?.setEditMode(next)
     }
 
     const connectedDisplay = displays.find(d => d.id === status.displayId)
@@ -196,6 +205,18 @@ const ProjectorPage = () => {
                                     <span>{visual.label.toUpperCase()}</span>
                                 </div>
                             ))}
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                            <div
+                                className={`bgr-toggle ${mappingEditMode ? 'active' : ''}`}
+                                onClick={handleMappingEditModeToggle}
+                                title="Edit Mapping"
+                                style={{ height: '48px', padding: '0 16px', flex: 1, justifyContent: 'center' }}
+                            >
+                                <Move size={16} />
+                                <span>EDIT MAPPING</span>
+                            </div>
                         </div>
                     </div>
                 </div>

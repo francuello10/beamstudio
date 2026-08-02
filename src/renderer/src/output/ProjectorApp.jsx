@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useAudioStore } from '../store/audioStore'
 import FluidNeonVisual from '../visuals/FluidNeonVisual'
 import ParticleFieldVisual from '../visuals/ParticleFieldVisual'
 import { DEFAULT_VISUAL_ID } from '../visuals/visualRegistry'
+import MappingCompositor from '../mapping/MappingCompositor'
 
 // BS-005: maps a visual id from visualRegistry to its component. Adding one
 // of the next 2 visuals (Tunnel/Grid, Kaleidoscope) is just another entry
@@ -22,16 +23,27 @@ const ProjectorApp = () => {
     const [blackout, setBlackout] = useState(false)
     const [testPattern, setTestPattern] = useState(false)
     const [activeVisual, setActiveVisual] = useState(DEFAULT_VISUAL_ID)
+    // BS-006: quad-warp mapping edit mode, driven remotely from ProjectorPage
+    // the same way blackout/testPattern/activeVisual already are.
+    const [mappingEditMode, setMappingEditMode] = useState(false)
+    // Ref to whichever visual component is currently mounted below — its
+    // <canvas> DOM node gets forwarded here via React.forwardRef
+    // (FluidNeonVisual.jsx / ParticleFieldVisual.jsx) so MappingCompositor
+    // can read it as a texture source without ever importing a specific
+    // visual's hook or internals.
+    const activeVisualCanvasRef = useRef(null)
 
     useEffect(() => {
         const unsubBlackout = window.projector?.onBlackout(setBlackout)
         const unsubTestPattern = window.projector?.onTestPattern(setTestPattern)
         const unsubVisual = window.projector?.onVisualChanged(setActiveVisual)
+        const unsubMappingEditMode = window.mapping?.onEditModeChanged(setMappingEditMode)
 
         return () => {
             unsubBlackout?.()
             unsubTestPattern?.()
             unsubVisual?.()
+            unsubMappingEditMode?.()
         }
     }, [])
 
@@ -56,7 +68,18 @@ const ProjectorApp = () => {
 
     return (
         <div className="projector-root" style={{ position: 'relative', width: '100vw', height: '100vh', background: '#000', overflow: 'hidden' }}>
-            {ActiveVisualComponent ? <ActiveVisualComponent /> : null}
+            {/* BS-006: the active visual still renders every frame (so its
+                own rAF loop / WebGL context is never disturbed) but is kept
+                out of the final paint — MappingCompositor reads its live
+                pixels as a texture instead of it being shown directly.
+                visibility:hidden (NOT display:none) keeps it reliably
+                rendering as a WebGL2 texture source across Chromium
+                versions. */}
+            <div style={{ position: 'absolute', visibility: 'hidden', width: '100vw', height: '100vh' }}>
+                {ActiveVisualComponent ? <ActiveVisualComponent ref={activeVisualCanvasRef} /> : null}
+            </div>
+
+            <MappingCompositor visualCanvasRef={activeVisualCanvasRef} editMode={mappingEditMode} />
 
             {testPattern && !blackout && <TestPatternOverlay />}
 
