@@ -29,9 +29,9 @@ const compactCard = {
 }
 
 const audioSlotRoles = [
-    { label: 'Slot 1', role: 'LEFT SIDE', detail: 'L channel + vocal/melody accents + slight bass bleed' },
+    { label: 'Slot 1', role: 'LEFT SIDE', detail: 'L channel + lower-priority vocal guide + bass bleed' },
     { label: 'Slot 2', role: 'BASS CENTER', detail: 'Bass/sub only — put the physical center light here' },
-    { label: 'Slot 3', role: 'RIGHT SIDE', detail: 'R channel + vocal/melody accents + slight bass bleed' }
+    { label: 'Slot 3', role: 'RIGHT SIDE', detail: 'R channel + lower-priority vocal guide + bass bleed' }
 ]
 
 const AudioPage = () => {
@@ -282,7 +282,7 @@ Mixer/base palette → audio boost → Slot 2 bass center
                             </span>
                         </div>
                         <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
-                            Full Music Boost uses the whole profile. Bass Boost makes Slot 2 react only to bass/sub, while Slot 1 and Slot 3 follow L/R plus vocal/melody pulses with a smaller bass bleed. Base colors define hue only; audio drives high-power RGB/DIM jumps and restores DIM when stopped; FUNC/SPD/FLASH are left untouched.
+                            Full Music Boost uses the whole profile. Bass Boost makes Slot 2 react only to bass/sub, while Slot 1 and Slot 3 follow L/R plus a lower-priority vocal/melody guide; bass still leads the physical impact. Base colors define hue only; audio drives high-power RGB/DIM jumps and restores DIM when stopped; FUNC/SPD/FLASH are left untouched.
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
                             {mapping.map((item) => (

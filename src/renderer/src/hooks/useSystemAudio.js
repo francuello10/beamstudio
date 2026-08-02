@@ -401,8 +401,9 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 // Sides: Mid/High energy (bands 4-15) — needed by BOTH Bass Pulse and Genre mode
                 const { midHighL, midHighR } = computeMidHigh(bandsL, bandsR)
                 const vocalCenterBias = Math.max(0, Math.min(1, 1 - Math.abs(midHighL - midHighR) / (midHighL + midHighR + 0.04)))
-                const vocalEnergy = Math.min(1, vocalProfile.energy * (0.72 + vocalCenterBias * 0.28))
-                const vocalDecay = Math.max(0.42, 0.76 - boostLevel * 0.07)
+                const vocalRhythm = Math.max(vocalProfile.transient, vocalProfile.energy * 0.58)
+                const vocalEnergy = Math.min(1, vocalRhythm * (0.58 + vocalCenterBias * 0.22))
+                const vocalDecay = Math.max(0.34, 0.64 - boostLevel * 0.055)
                 vocalPulse.current = Math.max(vocalEnergy, vocalPulse.current * vocalDecay)
                 const vocalOutput = vocalPulse.current
 

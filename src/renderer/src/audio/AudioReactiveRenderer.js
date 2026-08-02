@@ -106,9 +106,9 @@ export const buildBassPulseColors = (audioFrame) => {
     const vocalPulse = Math.pow(clamp01(audioFrame.levels.vocal || audioFrame.levels.melodyPulse || 0), 0.7)
     const ambientFloor = 0.05
     const centerIntensity = Math.max(ambientFloor, bassBrightness)
-    const bassSideBleed = bassBrightness * 0.28
-    const leftIntensity = Math.max(ambientFloor, Math.min(1, Math.pow(audioFrame.stereo.midHighLeft, 0.9) + vocalPulse * 0.45 + bassSideBleed))
-    const rightIntensity = Math.max(ambientFloor, Math.min(1, Math.pow(audioFrame.stereo.midHighRight, 0.9) + vocalPulse * 0.45 + bassSideBleed))
+    const bassSideBleed = bassBrightness * 0.34
+    const leftIntensity = Math.max(ambientFloor, Math.min(1, Math.pow(audioFrame.stereo.midHighLeft, 0.9) + vocalPulse * 0.34 + bassSideBleed))
+    const rightIntensity = Math.max(ambientFloor, Math.min(1, Math.pow(audioFrame.stereo.midHighRight, 0.9) + vocalPulse * 0.34 + bassSideBleed))
 
     return {
         bassBrightness,
@@ -138,12 +138,12 @@ export const buildGenreColors = (audioFrame) => {
     const left = audioFrame.stereo.midHighLeft
     const right = audioFrame.stereo.midHighRight
     const vocalPulse = clamp01(audioFrame.levels.vocal || audioFrame.levels.melodyPulse || 0)
-    const leftMelody = clamp01(left + vocalPulse * 0.38)
-    const rightMelody = clamp01(right + vocalPulse * 0.38)
+    const leftMelody = clamp01(left + vocalPulse * 0.3)
+    const rightMelody = clamp01(right + vocalPulse * 0.3)
     const lowMidLeft = audioFrame.stereo.lowMidLeft
     const lowMidRight = audioFrame.stereo.lowMidRight
-    const lowMidMelodyLeft = clamp01(lowMidLeft + vocalPulse * 0.32)
-    const lowMidMelodyRight = clamp01(lowMidRight + vocalPulse * 0.32)
+    const lowMidMelodyLeft = clamp01(lowMidLeft + vocalPulse * 0.25)
+    const lowMidMelodyRight = clamp01(lowMidRight + vocalPulse * 0.25)
     const lowMidAvg = (lowMidLeft + lowMidRight) / 2
 
     if (genre === 'ELECTRO') {
@@ -211,7 +211,7 @@ export const applyModifierAndSmoothing = ({
             }
 
             const sideEnergy = index === 0 ? audioFrame.stereo.midHighLeft : audioFrame.stereo.midHighRight
-            const sideWithBassBleed = Math.min(1, Math.pow(sideEnergy, 0.72) + vocalPulse * 0.48 + bass * 0.24)
+            const sideWithBassBleed = Math.min(1, Math.pow(sideEnergy, 0.72) + vocalPulse * 0.34 + bass * 0.36)
             return buildSidePartyKickColor(color, sideWithBassBleed, bass, boostLevel)
         })
     }
