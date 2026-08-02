@@ -31,6 +31,37 @@ import { useAudioStore } from '../store/audioStore'
 const MEDIA_STATUS_CHECK_INTERVAL_MS = 900
 const PLAYBACK_PAUSED_STATUSES = new Set(['paused', 'stopped'])
 
+const clamp01 = (value) => Math.max(0, Math.min(1, value))
+
+const shapeCenterBassHit = ({ bassEnergy, boostLevel, now, state }) => {
+    const sensitivity = Math.max(0.5, Math.min(4, boostLevel || 1))
+    const trigger = Math.max(0.3, 0.5 - sensitivity * 0.04)
+    const reset = trigger * 0.48
+    const refractoryMs = Math.max(120, 220 - sensitivity * 24)
+    const holdMs = Math.max(58, 98 - sensitivity * 8)
+    const release = Math.max(0.32, 0.68 - sensitivity * 0.065)
+
+    if (bassEnergy <= reset) state.armed = true
+
+    if (state.armed && bassEnergy >= trigger && now - state.lastTriggerAt >= refractoryMs) {
+        const normalized = clamp01((bassEnergy - trigger) / (1 - trigger))
+        state.value = Math.max(0.78, Math.pow(normalized, 0.42))
+        state.lastTriggerAt = now
+        state.holdUntil = now + holdMs
+        state.armed = false
+        return state.value
+    }
+
+    if (now <= state.holdUntil) {
+        state.value = Math.max(state.value, 0.72)
+        return state.value
+    }
+
+    state.value *= release
+    if (state.value < 0.04) state.value = 0
+    return state.value
+}
+
 /**
  * useSystemAudio v6.1 — Expert Deco Tuning for Thonet & Vander Ratsel 2.1
  *
@@ -104,6 +135,12 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
     const peakHoldR = useRef(new Array(16).fill(0))
     const peakHoldBass = useRef(0)
     const bassPulse = useRef(0)
+    const centerBassHit = useRef({
+        value: 0,
+        lastTriggerAt: -Infinity,
+        holdUntil: 0,
+        armed: true
+    })
     const vocalPulse = useRef(0)
     const bassFloor = useRef(0)
     const previousBassRaw = useRef(0)
@@ -203,6 +240,12 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
         setAudioTelemetryDSP({ left: 0, center: 0, right: 0 })
         peakHoldBass.current = 0
         bassPulse.current = 0
+        centerBassHit.current = {
+            value: 0,
+            lastTriggerAt: -Infinity,
+            holdUntil: 0,
+            armed: true
+        }
         vocalPulse.current = 0
         bassFloor.current = 0
         previousBassRaw.current = 0
@@ -335,6 +378,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
 
                 const bandsL = extractBands(dataL)
                 const bandsR = extractBands(dataR)
+                const now = performance.now()
                 const boostLevel = Math.max(0.5, Math.min(4, audioSensitivity || 1))
                 const bassProfile = computeBassProfile(dataBass, {
                     sampleRate: audioCtx.current?.sampleRate || 48000,
@@ -371,11 +415,16 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 const bassDecay = Math.max(0.48, 0.78 - boostLevel * 0.075)
                 bassPulse.current = Math.max(bassEnergy, bassPulse.current * bassDecay)
                 const bassOutput = bassPulse.current
+                const centerBassOutput = shapeCenterBassHit({
+                    bassEnergy,
+                    boostLevel,
+                    now,
+                    state: centerBassHit.current
+                })
                 const stereoWidth = computeStereoWidth(bandsL, bandsR)
                 const { lowMidL, lowMidR, lowMidAvg } = computeLowMid(bandsL, bandsR)
 
                 // === GENRE DETECTION (Every 2.5s) ===
-                const now = performance.now()
                 refreshPlaybackStatus(now)
                 const playbackPaused = mediaPlaybackRef.current.paused
                 const playbackStatus = mediaPlaybackRef.current.status
@@ -407,7 +456,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 vocalPulse.current = Math.max(vocalEnergy, vocalPulse.current * vocalDecay)
                 const vocalOutput = vocalPulse.current
 
-                const spatial = buildSpatialResponse({ midHighL, bassSmooth: bassOutput, midHighR, vocalPulse: vocalOutput })
+                const spatial = buildSpatialResponse({ midHighL, bassSmooth: centerBassOutput, midHighR, vocalPulse: vocalOutput })
                 const spectral = buildSpectralResponse(bandsL, bandsR)
 
                 const energies = spatial
@@ -455,6 +504,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 const frameLevels = silence
                     ? {
                         bass: 0,
+                        centerBassHit: 0,
                         vocal: 0,
                         melodyPulse: 0,
                         mid: 0,
@@ -464,6 +514,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                     }
                     : {
                         bass: bassOutput,
+                        centerBassHit: centerBassOutput,
                         vocal: vocalOutput,
                         melodyPulse: vocalOutput,
                         mid: midEnergy,
@@ -502,6 +553,12 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                     peakHoldR.current = new Array(16).fill(0)
                     peakHoldBass.current = 0
                     bassPulse.current = 0
+                    centerBassHit.current = {
+                        value: 0,
+                        lastTriggerAt: -Infinity,
+                        holdUntil: 0,
+                        armed: true
+                    }
                     vocalPulse.current = 0
                     useAudioStore.getState().updateAudioAnalysis(
                         frameSpatial,

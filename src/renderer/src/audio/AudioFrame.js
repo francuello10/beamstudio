@@ -7,6 +7,7 @@ export const createEmptyAudioFrame = () => ({
     },
     levels: {
         bass: 0,
+        centerBassHit: 0,
         vocal: 0,
         melodyPulse: 0,
         mid: 0,
@@ -57,6 +58,7 @@ export const createAudioFrame = ({
     },
     levels: {
         bass: Math.max(0, Math.min(1, levels?.bass || 0)),
+        centerBassHit: Math.max(0, Math.min(1, levels?.centerBassHit ?? levels?.bass ?? 0)),
         vocal: Math.max(0, Math.min(1, levels?.vocal || 0)),
         melodyPulse: Math.max(0, Math.min(1, levels?.melodyPulse || levels?.vocal || 0)),
         mid: Math.max(0, Math.min(1, levels?.mid || 0)),
