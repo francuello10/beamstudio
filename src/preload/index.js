@@ -2,6 +2,27 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { HARDWARE_CONSTRAINTS } from '../shared/hardware-specs'
 
+// BS-005: the projector window is launched with an extra CLI argument (see
+// createProjectorWindow's webPreferences.additionalArguments in
+// src/main/index.js) so this preload script can tell it apart from the main
+// window and shrink its exposed globals accordingly — dmx/ambilight/scene/
+// theme/ai/windowOps are not assigned onto the projector window's `window`
+// object. This stops the projector's own normal application code from
+// touching DMX/ambilight/main-window-only controls, since that app code
+// always calls through optional chaining (e.g. `window.dmx?.xxx`), which now
+// correctly no-ops in this window.
+//
+// This preload-level restriction does NOT by itself make hijacking DMX
+// output ownership structurally impossible: the projector BrowserWindow runs
+// with sandbox: false and DevTools reachable, so a deliberate DevTools
+// console can still call `ipcRenderer.invoke('dmx:setDynamicRendererActive',
+// ...)` directly, bypassing this layer entirely. The actual authoritative
+// enforcement against that bypass is the sender-identity guard in
+// src/main/index.js's `ipcMain.handle('dmx:setDynamicRendererActive', ...)`
+// handler, which rejects ownership claims from the projector window
+// regardless of what this preload script exposes.
+const isProjectorWindow = process.argv.includes('--beamstudio-role=projector')
+
 // DMX API - StickTec 1019 P6 Mode
 const dmxAPI = {
     getFixtures: () => ipcRenderer.invoke('dmx:getFixtures'),
@@ -92,7 +113,17 @@ const ambilightAPI = {
 const audioAPI = {
     start: () => ipcRenderer.invoke('audio:start'),
     stop: () => ipcRenderer.invoke('audio:stop'),
-    setLevel: (levels) => ipcRenderer.invoke('audio:setLevel', levels)
+    setLevel: (levels) => ipcRenderer.invoke('audio:setLevel', levels),
+
+    // BS-005: relays AudioFrame from the main window (where useSystemAudio
+    // actually runs) to the projector window's separate renderer process,
+    // whose local useAudioStore never receives live analysis on its own.
+    broadcastFrame: (frame) => ipcRenderer.send('audio:frameBroadcast', frame),
+    onFrameBroadcast: (cb) => {
+        const listener = (_e, frame) => cb(frame)
+        ipcRenderer.on('audio:frameBroadcast', listener)
+        return () => ipcRenderer.removeListener('audio:frameBroadcast', listener)
+    }
 }
 
 // Scene API
@@ -128,6 +159,12 @@ const projectorAPI = {
     close: () => ipcRenderer.invoke('projector:close'),
     setBlackout: (value) => ipcRenderer.send('projector:setBlackout', value),
     setTestPattern: (value) => ipcRenderer.send('projector:setTestPattern', value),
+    setVisual: (visualId) => ipcRenderer.send('projector:setVisual', visualId),
+    onVisualChanged: (cb) => {
+        const listener = (_e, visualId) => cb(visualId)
+        ipcRenderer.on('projector:visualChanged', listener)
+        return () => ipcRenderer.removeListener('projector:visualChanged', listener)
+    },
     onBlackout: (cb) => {
         const listener = (_e, v) => cb(v)
         ipcRenderer.on('projector:blackout', listener)
@@ -151,27 +188,42 @@ const projectorAPI = {
 }
 
 // Expose APIs
+// BS-005: `electron`, `audio`, and `projector` are always exposed — the
+// projector window needs `audio` for the AudioFrame relay and `projector`
+// for blackout/test-pattern/visual/status control. `dmx`, `ambilight`,
+// `scene`, `theme`, `ai`, and `windowOps` are main-window-only: the projector
+// is a pure visual output and must never be able to touch DMX/ambilight
+// output ownership or main-window-only chrome.
 if (process.contextIsolated) {
     try {
         contextBridge.exposeInMainWorld('electron', electronAPI)
-        contextBridge.exposeInMainWorld('dmx', dmxAPI)
-        contextBridge.exposeInMainWorld('ambilight', ambilightAPI)
+        if (!isProjectorWindow) {
+            contextBridge.exposeInMainWorld('dmx', dmxAPI)
+            contextBridge.exposeInMainWorld('ambilight', ambilightAPI)
+        }
         contextBridge.exposeInMainWorld('audio', audioAPI)
-        contextBridge.exposeInMainWorld('scene', sceneAPI)
-        contextBridge.exposeInMainWorld('theme', themeAPI)
-        contextBridge.exposeInMainWorld('ai', aiAPI)
-        contextBridge.exposeInMainWorld('windowOps', windowOps)
+        if (!isProjectorWindow) {
+            contextBridge.exposeInMainWorld('scene', sceneAPI)
+            contextBridge.exposeInMainWorld('theme', themeAPI)
+            contextBridge.exposeInMainWorld('ai', aiAPI)
+            contextBridge.exposeInMainWorld('windowOps', windowOps)
+        }
         contextBridge.exposeInMainWorld('projector', projectorAPI)
     } catch (error) {
         console.error(error)
     }
 } else {
     window.electron = electronAPI
-    window.dmx = dmxAPI
-    window.ambilight = ambilightAPI
+    if (!isProjectorWindow) {
+        window.dmx = dmxAPI
+        window.ambilight = ambilightAPI
+    }
     window.audio = audioAPI
-    window.scene = sceneAPI
-    window.theme = themeAPI
-    window.windowOps = windowOps
+    if (!isProjectorWindow) {
+        window.scene = sceneAPI
+        window.theme = themeAPI
+        window.ai = aiAPI
+        window.windowOps = windowOps
+    }
     window.projector = projectorAPI
 }

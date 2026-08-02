@@ -1454,7 +1454,20 @@ function setupIPC() {
         }
     })
 
-    ipcMain.handle('dmx:setDynamicRendererActive', (_, { active, owner = 'renderer' }) => {
+    ipcMain.handle('dmx:setDynamicRendererActive', (event, { active, owner = 'renderer' }) => {
+        // Backend-side enforcement (mirrors isAsyncOutputSourceAllowed's spirit
+        // above): the projector window's own app code never sees window.dmx
+        // (see isProjectorWindow in src/preload/index.js), but that window
+        // runs with sandbox: false and DevTools reachable, so a DevTools
+        // console there still has raw ipcRenderer access and could call this
+        // handler directly to hijack dmxState.outputOwner. Only claiming
+        // ownership is the hijack vector, so only that path is rejected here
+        // — releasing ownership (active: false) is allowed through
+        // regardless of sender.
+        if (active && BrowserWindow.fromWebContents(event.sender) === projectorWindow) {
+            return { success: false, reason: 'projector window cannot claim DMX output ownership' }
+        }
+
         dmxState.dynamicRendererActive = active
         if (active) {
             setOutputOwner(owner)
@@ -1685,6 +1698,18 @@ function setupIPC() {
     })
     ipcMain.on('projector:setBlackout', (event, value) => projectorWindow?.webContents.send('projector:blackout', value))
     ipcMain.on('projector:setTestPattern', (event, value) => projectorWindow?.webContents.send('projector:testPattern', value))
+    ipcMain.on('projector:setVisual', (event, visualId) => projectorWindow?.webContents.send('projector:visualChanged', visualId))
+
+    // Relay AudioFrame from the main window's renderer process to every other
+    // window (i.e. the projector window). Each BrowserWindow is a separate
+    // renderer process with its own independent useAudioStore instance, so the
+    // projector never sees live analysis unless it's relayed over IPC.
+    // Small numeric AudioFrame payloads only — never heavy video/frame buffers.
+    ipcMain.on('audio:frameBroadcast', (event, frame) => {
+        BrowserWindow.getAllWindows().forEach(win => {
+            if (win.webContents.id !== event.sender.id) win.webContents.send('audio:frameBroadcast', frame)
+        })
+    })
 }
 
 // ============================================================================
@@ -1769,7 +1794,17 @@ function createProjectorWindow(displayId) {
             sandbox: false,
             contextIsolation: true,
             nodeIntegration: false,
-            backgroundThrottling: false
+            backgroundThrottling: false,
+            // Lets the preload script tell this window apart from the main
+            // window so it never gets the dmx/ambilight globals — see
+            // isProjectorWindow in src/preload/index.js. This makes the
+            // ACCIDENTAL DMX-ownership hijack from useFluidSimulation/
+            // dmxStore's normal (optional-chained) calls impossible. A
+            // deliberate DevTools-driven bypass is still possible since this
+            // window runs unsandboxed; that path is closed by the
+            // sender-identity guard in the dmx:setDynamicRendererActive
+            // handler below, not by this preload restriction.
+            additionalArguments: ['--beamstudio-role=projector']
         }
     })
 
