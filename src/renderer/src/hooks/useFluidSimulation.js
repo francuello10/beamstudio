@@ -788,6 +788,7 @@ export function useFluidSimulation() {
                 const ext = gl.getExtension('WEBGL_lose_context')
                 if (ext) ext.loseContext()
             }
+            glRef.current = null
         }
     }, [])
 
