@@ -48,11 +48,11 @@ La revisión GStack previa fue absorbida como evidencia histórica. Los hallazgo
 
 | Hallazgo | Estado actual | Tarea dueña |
 |---|---|---|
-| `CHANNEL_MAP` residual en `startDynamicScene()` | Riesgo DMX real, validado por código | `BS-002` |
-| `energies` fuera de scope en `useSystemAudio()` | Riesgo de runtime en audio DSP | `BS-004` |
-| `removeAllListeners` en cleanup de preload | Puede cortar listeners de otros consumidores | `BS-001` |
-| Falta de scripts `test`/`lint`/`check` | El repo solo expone `dev`, `build`, `dist` | `BS-001` |
-| Persistencia de fixtures/settings | Debe verificarse contra el código actual antes de cambiar | `BS-000`, `BS-002` |
+| `CHANNEL_MAP` residual en `startDynamicScene()` | Riesgo DMX real, validado por código | `BS-001` |
+| `energies` fuera de scope en `useSystemAudio()` | Riesgo de runtime en audio DSP | `BS-002` |
+| `removeAllListeners` en cleanup de preload | Puede cortar listeners de otros consumidores | `BS-000` |
+| Falta de scripts `test`/`lint`/`check` | El repo solo expone `dev`, `build`, `dist` | `BS-000` |
+| Persistencia de fixtures/settings | Debe verificarse contra el código actual antes de cambiar | `BS-000`, `BS-001` |
 | Extracción de módulos desde `main/index.js` | Deseable, pero peligrosa antes de evidencia | Post-M0 o slices chicas luego de checks |
 
 Esto evita duplicar planes: GStack queda como origen de hallazgos, Revival queda como plan operativo.

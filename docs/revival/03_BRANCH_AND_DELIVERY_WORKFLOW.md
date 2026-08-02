@@ -17,26 +17,22 @@ Crear desde `main` actualizado:
 ```bash
 git switch main
 git pull --ff-only
-git switch -c chore/revival-baseline
+git switch -c chore/bs-000-baseline-diagnostics
 ```
 
-Cerrar BS-000 y BS-001 antes de abrir ramas de features.
+Cerrar BS-000 antes de abrir ramas de hardware o features; cerrar BS-001 antes de tocar escenas, audio-reactividad o visuales.
 
 ## 3. Convención de ramas
 
 ```text
-chore/bs-000-revival-baseline
-chore/bs-001-quality-diagnostics
-fix/bs-002-dmx-regression
-feat/bs-003-audio-source-manager
-fix/bs-004-audio-dsp
-refactor/bs-005-scene-engine
-feat/bs-006-sound-scenes-v2
-fix/bs-007-ambilight-qa
-feat/bs-008-projector-output
-feat/bs-009-visual-library
-feat/bs-010-projection-mapping
-feat/bs-011-now-playing
+chore/bs-000-baseline-diagnostics
+fix/bs-001-dmx-regression
+feat/bs-002-audioframe
+refactor/bs-003-scene-engine
+fix/bs-004-ambilight-qa
+feat/bs-005-projector-visuals
+feat/bs-006-projection-mapping
+feat/bs-007-now-playing
 ```
 
 ## 4. Commits

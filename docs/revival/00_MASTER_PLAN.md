@@ -83,11 +83,11 @@ Sus hallazgos quedan incorporados en Revival, pero su orden de ejecución no que
 ```text
 GStack TEMP docs
     │
-    ├── baseline/smoke/checks ───────► BS-000 + BS-001
-    ├── preload listener cleanup ─────► BS-001
-    ├── CHANNEL_MAP residual ─────────► BS-002
-    ├── audio energies bug ───────────► BS-004
-    ├── fixture/settings persistence ─► verificar en BS-000/BS-002
+    ├── baseline/smoke/checks ───────► BS-000
+    ├── preload listener cleanup ─────► BS-000
+    ├── CHANNEL_MAP residual ─────────► BS-001
+    ├── audio energies bug ───────────► BS-002
+    ├── fixture/settings persistence ─► verificar en BS-000/BS-001
     └── main/index.js extraction ─────► post-hardening, slices pequeñas
 ```
 
@@ -542,63 +542,53 @@ No dividir `src/main/index.js` en una sola tarea. Extraer módulos solamente cua
 
 ### M0 — Revival
 
-#### BS-000 — Baseline reproducible
+#### BS-000 — Baseline, quality gates y diagnóstico
 
-- rama;
 - instalación limpia;
 - build;
 - logs;
 - inventario;
-- snapshot de comportamiento.
-
-#### BS-001 — Quality gates y diagnóstico
-
-- scripts de check;
+- snapshot de comportamiento;
+- scripts `check`, `lint` y `doctor`;
 - captura de errores;
-- `doctor`;
 - higiene de archivos;
-- actualización mínima de docs.
+- cleanup seguro de listeners IPC.
 
-#### BS-002 — Regresión DMX
+#### BS-001 — Regresión DMX
 
 - reparar Fixture Profiles;
+- eliminar `CHANNEL_MAP` residual;
 - probar manual;
 - probar escenas estáticas/dinámicas;
 - probar drivers;
-- validar apagado y reconexión.
+- validar apagado y reconexión;
+- verificar persistencia real de fixtures/settings antes de cambiarla.
 
-#### BS-003 — Audio Source Manager
+#### BS-002 — Audio Source Manager y AudioFrame
 
 - enumerar dispositivos;
 - elegir monitor de salida;
 - persistir selección;
 - medidores de diagnóstico;
-- reconexión.
-
-#### BS-004 — Estabilización del DSP
-
+- reconexión;
 - corregir `energies`;
 - definir `AudioFrame`;
 - normalización;
 - silencio;
-- cleanup;
-- evitar renders a 60 Hz innecesarios.
+- cleanup.
 
-#### BS-005 — Scene Engine de dueño único
+#### BS-003 — Scene Engine y Sound Reactive Scenes V2
 
 - eliminar competencia entre main y renderer;
 - transiciones de modo;
 - lifecycle;
-- prioridad de salidas.
-
-#### BS-006 — Sound Reactive Scenes V2
-
+- prioridad de salidas;
 - cuatro escenas;
 - calibración;
 - presets;
 - prueba con canciones de referencia.
 
-#### BS-007 — Ambilight QA
+#### BS-004 — Ambilight QA
 
 - captura Wayland;
 - zonas;
@@ -609,17 +599,14 @@ No dividir `src/main/index.js` en una sola tarea. Extraer módulos solamente cua
 
 ### M1 — Projector Visuals
 
-#### BS-008 — Projector Output MVP
+#### BS-005 — Projector Output y Visual Library MVP
 
 - detectar displays;
 - ventana fullscreen;
 - selector;
 - blackout;
 - patrón de test;
-- reconexión.
-
-#### BS-009 — Visual Library MVP
-
+- reconexión;
 - Fluid;
 - partículas;
 - túnel;
@@ -628,7 +615,7 @@ No dividir `src/main/index.js` en una sola tarea. Extraer módulos solamente cua
 
 ### M2 — Projection Mapping
 
-#### BS-010 — Mapping básico
+#### BS-006 — Mapping básico
 
 - grid;
 - quad warp;
@@ -638,7 +625,7 @@ No dividir `src/main/index.js` en una sola tarea. Extraer módulos solamente cua
 
 ### M3 — Integraciones
 
-#### BS-011 — Now Playing
+#### BS-007 — Now Playing
 
 Prioridad técnica:
 

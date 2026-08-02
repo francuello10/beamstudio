@@ -9,20 +9,16 @@
       "BS-001",
       "BS-002",
       "BS-003",
-      "BS-004",
-      "BS-005",
-      "BS-006",
-      "BS-007"
+      "BS-004"
     ],
     "M1": [
-      "BS-008",
-      "BS-009"
+      "BS-005"
     ],
     "M2": [
-      "BS-010"
+      "BS-006"
     ],
     "M3": [
-      "BS-011"
+      "BS-007"
     ]
   },
   "first_task": "BS-000",
@@ -32,5 +28,36 @@
     "TEMP_IMPLEMENTATION_PLAN_GSTACK_AUTOPLAN_2026-04-04.md"
   ],
   "source_of_truth": "docs/revival/**",
-  "notes": "GStack temporary review files were absorbed into Revival docs and can be removed from repository root."
+  "notes": "GStack temporary review files were absorbed into Revival docs and can be removed from repository root.",
+  "active_task_count": 8,
+  "task_consolidation": {
+    "BS-000": [
+      "old BS-000",
+      "old BS-001"
+    ],
+    "BS-001": [
+      "old BS-002"
+    ],
+    "BS-002": [
+      "old BS-003",
+      "old BS-004"
+    ],
+    "BS-003": [
+      "old BS-005",
+      "old BS-006"
+    ],
+    "BS-004": [
+      "old BS-007"
+    ],
+    "BS-005": [
+      "old BS-008",
+      "old BS-009"
+    ],
+    "BS-006": [
+      "old BS-010"
+    ],
+    "BS-007": [
+      "old BS-011"
+    ]
+  }
 }

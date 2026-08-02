@@ -22,14 +22,14 @@ Los archivos temporales de raíz `TEMP_IMPLEMENTATION_PLAN_GSTACK_AUTOPLAN_2026-
 
 | Hallazgo de GStack | Destino en Revival | Decisión |
 |---|---|---|
-| Baseline, smoke y evidencia antes de refactorizar | `BS-000`, `BS-001` | Se mantiene y se vuelve obligatorio. |
-| `energies` fuera de scope en el hook de audio | `BS-004` | Se corrige con el contrato `AudioFrame`; solo adelantar si bloquea baseline. |
-| Cleanup de IPC con `removeAllListeners` | `BS-001` | Entra como hardening seguro de preload/listeners. |
-| `CHANNEL_MAP` residual en escenas DMX | `BS-002` | Entra en regresión DMX, sin tocar timing del worker. |
-| Persistencia de fixtures/settings | `BS-002` y verificación de baseline | Verificar estado real antes de implementar; no asumir que el plan viejo sigue vigente. |
+| Baseline, smoke y evidencia antes de refactorizar | `BS-000` | Se mantiene y se vuelve obligatorio. |
+| `energies` fuera de scope en el hook de audio | `BS-002` | Se corrige con el contrato `AudioFrame`; solo adelantar si bloquea baseline. |
+| Cleanup de IPC con `removeAllListeners` | `BS-000` | Entra como hardening seguro de preload/listeners. |
+| `CHANNEL_MAP` residual en escenas DMX | `BS-001` | Entra en regresión DMX, sin tocar timing del worker. |
+| Persistencia de fixtures/settings | `BS-001` y verificación de baseline | Verificar estado real antes de implementar; no asumir que el plan viejo sigue vigente. |
 | Extracción de `main/index.js` e IPC modules | Después de M0 o como slices chicas | No mezclar refactor estructural con reparación de hardware. |
 
-Criterio final: GStack aportó hallazgos válidos, pero su secuencia vieja queda reemplazada por `BS-000 → BS-001 → BS-002 → BS-003 → BS-004...`. Si esos archivos `TEMP_*` aparecen en raíz, pueden borrarse después de confirmar que esta sección existe.
+Criterio final: GStack aportó hallazgos válidos, pero su secuencia vieja queda reemplazada por `BS-000 → BS-001 → BS-002 → BS-003...`. Si esos archivos `TEMP_*` aparecen en raíz, pueden borrarse después de confirmar que esta sección existe.
 
 ## Regla principal
 
@@ -56,12 +56,27 @@ La prioridad no es “modernizar por modernizar”. La prioridad es demostrar qu
 ## Orden obligatorio sugerido
 
 ```text
-BS-000 → BS-001 → BS-002 → BS-003 → BS-004 → BS-005 → BS-006 → BS-007
-                                                                  ↓
-                                         BS-008 → BS-009 → BS-010
-                                                                  ↓
-                                                              BS-011
+BS-000 → BS-001 → BS-002 → BS-003 → BS-004
+                                      ↓
+                                  BS-005 → BS-006
+                                      ↓
+                                  BS-007
 ```
+
+## Tareas consolidadas
+
+Revival usa 8 tareas activas en vez de 12. La consolidación reduce overhead sin mezclar subsistemas peligrosos.
+
+| Tarea | Absorbe | Resultado |
+|---|---|---|
+| `BS-000` | old `BS-000` + old `BS-001` | Baseline, evidence, checks y doctor. |
+| `BS-001` | old `BS-002` | DMX validado y reparaciones conservadoras. |
+| `BS-002` | old `BS-003` + old `BS-004` | Fuente real de audio + `AudioFrame`. |
+| `BS-003` | old `BS-005` + old `BS-006` | `SceneEngine` único + escenas musicales V2. |
+| `BS-004` | old `BS-007` | Ambilight probado y calibrado. |
+| `BS-005` | old `BS-008` + old `BS-009` | Output de proyector + visuales MVP. |
+| `BS-006` | old `BS-010` | Projection mapping básico. |
+| `BS-007` | old `BS-011` | Now Playing provider-neutral y spikes. |
 
 ## Estado de las tareas
 

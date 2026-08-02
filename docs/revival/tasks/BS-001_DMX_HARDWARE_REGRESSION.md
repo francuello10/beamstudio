@@ -1,17 +1,18 @@
 ---
-id: BS-002
+id: BS-001
 title: "Regresión y reparación del núcleo DMX"
 status: proposed
 priority: P0
 size: L
 milestone: M0
-depends_on: ["BS-000", "BS-001"]
+depends_on: ["BS-000"]
 owner:
 branch:
 pr:
+absorbs: ["old BS-002", "GStack CHANNEL_MAP residual", "GStack fixture/settings persistence verification"]
 ---
 
-# BS-002 — Regresión y reparación del núcleo DMX
+# BS-001 — Regresión y reparación del núcleo DMX
 
 ## Objetivo
 
@@ -19,35 +20,26 @@ Dejar comprobados el control manual, perfiles, escenas no musicales, blackout, f
 
 ## Por qué existe
 
-Es la base física del producto. El refactor de perfiles dejó referencias obsoletas y pudo romper rutas que antes funcionaban.
+DMX es la base física del producto. Cualquier feature audiovisual depende de que los fixtures respondan bien y de que no haya referencias obsoletas después de Fixture Profiles V2.
 
 ## Evidencia del estado actual
 
-- `startDynamicScene()` conserva una referencia a `CHANNEL_MAP.DIM`.
+- `startDynamicScene()` conserva referencias a `CHANNEL_MAP.DIM`.
 - Fixture Profiles V2 sustituyó el mapa global por perfiles.
 - La ruta Linux usa SerialPort, no D2XX.
 - El estado activo de escena puede no asignarse antes de responder por IPC.
+- GStack marcó persistencia de fixtures/settings, pero debe verificarse contra el código actual antes de implementar.
 
 ## Alcance
 
-- Eliminar referencias obsoletas.
-- Centralizar acceso a canales por perfil.
+- Buscar y eliminar referencias obsoletas a `CHANNEL_MAP`.
+- Centralizar acceso a offsets/canales por perfil.
 - Corregir estado de escena.
+- Hacer `stopDynamicScene` idempotente.
 - Validar P06 en tres barras.
 - Validar start/stop y reconexión.
+- Verificar persistencia real de fixture patch y settings antes de tocarla.
 - Mantener Windows D2XX y Art-Net sin cambios innecesarios.
-
-## Pasos sugeridos
-
-- [ ] Buscar todas las referencias `CHANNEL_MAP`.
-- [ ] Crear helpers seguros para offset/dimmer por perfil.
-- [ ] Asegurar que `startDynamicScene` asigne estado.
-- [ ] Hacer `stopDynamicScene` idempotente.
-- [ ] Comprobar que reset no deja timers.
-- [ ] Probar canales de cada fixture.
-- [ ] Probar blackout y restauración.
-- [ ] Probar 15 minutos.
-- [ ] Documentar permisos Linux/udev si son necesarios.
 
 ## Criterios de aceptación
 
@@ -57,6 +49,7 @@ Es la base física del producto. El refactor de perfiles dejó referencias obsol
 - [ ] Solo existe un intervalo de escena.
 - [ ] Stop deja salida en estado definido.
 - [ ] No se bloquea el worker.
+- [ ] Fixture patch persiste o queda documentado el gap exacto.
 - [ ] QA-101 a QA-112 pasan o quedan con causa documentada.
 
 ## Pruebas manuales
@@ -81,22 +74,10 @@ Es la base física del producto. El refactor de perfiles dejó referencias obsol
 - Sound reactive.
 - Nuevos perfiles.
 - UI completa del fixture patch.
+- Cambiar Hz o timings DMX sin evidencia.
 
 ## Riesgos y notas
 
 - Hardware DMX requiere cambios conservadores.
-- Nunca aumentar Hz o timings sin evidencia.
 - Conservar fallback Art-Net.
-
-## Evidencia de cierre
-
-```md
-- Commit:
-- PR:
-- OS:
-- Hardware:
-- QA ejecutadas:
-- Logs:
-- Capturas/video:
-- Resultado:
-```
+- Nunca aumentar Hz, break, MAB o pacing sin medición y rollback claro.
