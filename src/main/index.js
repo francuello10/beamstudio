@@ -1742,6 +1742,11 @@ function setupIPC() {
     ipcMain.on('projector:setBlackout', (event, value) => projectorWindow?.webContents.send('projector:blackout', value))
     ipcMain.on('projector:setTestPattern', (event, value) => projectorWindow?.webContents.send('projector:testPattern', value))
     ipcMain.on('projector:setVisual', (event, visualId) => projectorWindow?.webContents.send('projector:visualChanged', visualId))
+    // BS-007 phase 2: Now Playing overlay toggle - relayed the exact same
+    // one-way way as setBlackout/setTestPattern above. The projector window
+    // runs its own useNowPlaying() poll (see ProjectorApp.jsx) for the actual
+    // metadata; this channel only carries the on/off toggle.
+    ipcMain.on('projector:setNowPlayingOverlay', (event, value) => projectorWindow?.webContents.send('projector:nowPlayingOverlayChanged', value))
 
     // Projection Mapping (BS-006) — relayed the same way as
     // projector:setBlackout: the main window's Edit Mapping toggle sends
@@ -2009,14 +2014,20 @@ const getLinuxMedia = async () => {
     // MPRIS player (playerctl v2.4.1): both {{position}} and {{mpris:length}}
     // are microseconds - e.g. position=4096000 matched `playerctl position`
     // reporting 4.096 seconds for the same track.
+    // BS-007 phase 2: appended {{xesam:album}} - also confirmed present on
+    // this machine against a real live Spotify session via `playerctl
+    // metadata` (along with xesam:albumArtist/discNumber/trackNumber/url,
+    // none of which are consumed here). There is NO composer/songwriter
+    // MPRIS field - Spotify's MPRIS integration does not expose one, so it
+    // is deliberately not requested/returned here.
     const output = await execPromise(
-        "playerctl metadata --format '{{title}}|{{artist}}|{{position}}|{{mpris:length}}|{{mpris:artUrl}}'"
+        "playerctl metadata --format '{{title}}|{{artist}}|{{position}}|{{mpris:length}}|{{mpris:artUrl}}|{{xesam:album}}'"
     )
     if (!output || !output.includes('|')) {
         if (playbackStatus) return { title: '', artist: '', playbackStatus: playbackStatus.trim() }
         return null
     }
-    const [title, artist, positionRaw, lengthRaw, artUrlRaw] = output.split('|')
+    const [title, artist, positionRaw, lengthRaw, artUrlRaw, albumRaw] = output.split('|')
     const positionUs = Number(positionRaw)
     const lengthUs = Number(lengthRaw)
     return {
@@ -2026,7 +2037,9 @@ const getLinuxMedia = async () => {
         // New BS-007 fields - additive, not consumed by existing callers.
         positionSec: Number.isFinite(positionUs) && positionUs >= 0 ? positionUs / 1e6 : null,
         durationSec: Number.isFinite(lengthUs) && lengthUs > 0 ? lengthUs / 1e6 : null,
-        artUrl: artUrlRaw && artUrlRaw.trim() ? artUrlRaw.trim() : null
+        artUrl: artUrlRaw && artUrlRaw.trim() ? artUrlRaw.trim() : null,
+        // BS-007 phase 2: album name, additive - trims like title/artist.
+        album: (albumRaw || '').trim()
     }
 }
 

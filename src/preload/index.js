@@ -160,6 +160,9 @@ const projectorAPI = {
     setBlackout: (value) => ipcRenderer.send('projector:setBlackout', value),
     setTestPattern: (value) => ipcRenderer.send('projector:setTestPattern', value),
     setVisual: (visualId) => ipcRenderer.send('projector:setVisual', visualId),
+    // BS-007 phase 2: Now Playing overlay toggle - mirrors setBlackout/
+    // setTestPattern's exact one-way send/subscribe shape.
+    setNowPlayingOverlay: (value) => ipcRenderer.send('projector:setNowPlayingOverlay', value),
     onVisualChanged: (cb) => {
         const listener = (_e, visualId) => cb(visualId)
         ipcRenderer.on('projector:visualChanged', listener)
@@ -174,6 +177,11 @@ const projectorAPI = {
         const listener = (_e, v) => cb(v)
         ipcRenderer.on('projector:testPattern', listener)
         return () => ipcRenderer.removeListener('projector:testPattern', listener)
+    },
+    onNowPlayingOverlayChanged: (cb) => {
+        const listener = (_e, v) => cb(v)
+        ipcRenderer.on('projector:nowPlayingOverlayChanged', listener)
+        return () => ipcRenderer.removeListener('projector:nowPlayingOverlayChanged', listener)
     },
     onStatusChanged: (cb) => {
         const listener = (_e, payload) => cb(payload)
