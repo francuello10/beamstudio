@@ -121,6 +121,35 @@ const aiAPI = {
     listModels: (apiKey) => ipcRenderer.invoke('ai:listModels', { apiKey })
 }
 
+// Projector API (BS-005)
+const projectorAPI = {
+    listDisplays: () => ipcRenderer.invoke('projector:listDisplays'),
+    open: (displayId) => ipcRenderer.invoke('projector:open', displayId),
+    close: () => ipcRenderer.invoke('projector:close'),
+    setBlackout: (value) => ipcRenderer.send('projector:setBlackout', value),
+    setTestPattern: (value) => ipcRenderer.send('projector:setTestPattern', value),
+    onBlackout: (cb) => {
+        const listener = (_e, v) => cb(v)
+        ipcRenderer.on('projector:blackout', listener)
+        return () => ipcRenderer.removeListener('projector:blackout', listener)
+    },
+    onTestPattern: (cb) => {
+        const listener = (_e, v) => cb(v)
+        ipcRenderer.on('projector:testPattern', listener)
+        return () => ipcRenderer.removeListener('projector:testPattern', listener)
+    },
+    onStatusChanged: (cb) => {
+        const listener = (_e, payload) => cb(payload)
+        ipcRenderer.on('projector:statusChanged', listener)
+        return () => ipcRenderer.removeListener('projector:statusChanged', listener)
+    },
+    onDisplaysChanged: (cb) => {
+        const listener = (_e, displays) => cb(displays)
+        ipcRenderer.on('projector:displaysChanged', listener)
+        return () => ipcRenderer.removeListener('projector:displaysChanged', listener)
+    }
+}
+
 // Expose APIs
 if (process.contextIsolated) {
     try {
@@ -132,6 +161,7 @@ if (process.contextIsolated) {
         contextBridge.exposeInMainWorld('theme', themeAPI)
         contextBridge.exposeInMainWorld('ai', aiAPI)
         contextBridge.exposeInMainWorld('windowOps', windowOps)
+        contextBridge.exposeInMainWorld('projector', projectorAPI)
     } catch (error) {
         console.error(error)
     }
@@ -143,4 +173,5 @@ if (process.contextIsolated) {
     window.scene = sceneAPI
     window.theme = themeAPI
     window.windowOps = windowOps
+    window.projector = projectorAPI
 }
