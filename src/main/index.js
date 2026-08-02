@@ -219,7 +219,14 @@ async function createD2XXDriver(devicePath) {
 
             let isClosed = false
 
-            return new Promise((resolve, reject) => {
+            // Awaited here (not just returned) so the `finally` below - which
+            // releases the connectionPromise lock - only runs once this
+            // settles. A bare `return new Promise(...)` lets `finally` run
+            // as soon as the promise is constructed, not when it resolves,
+            // clearing the lock immediately and letting a fast-following
+            // concurrent connect attempt spawn a second worker against the
+            // same physical device before this one finishes connecting.
+            return await new Promise((resolve, reject) => {
                 worker.on('message', (msg) => {
                     if (msg.type === 'status' && msg.status === 'connected') {
                         logger.log('[DMX] Worker connected and transmitting')
@@ -243,13 +250,21 @@ async function createD2XXDriver(devicePath) {
                     }
                     if (msg.type === 'error') {
                         logger.error('[DMX Worker] Error:', msg.error)
-                        if (!isClosed) reject(new Error(msg.error))
+                        if (!isClosed) {
+                            isClosed = true
+                            worker.terminate()
+                            reject(new Error(msg.error))
+                        }
                     }
                 })
 
                 worker.on('error', (err) => {
                     logger.error('[DMX Worker] Critical Error:', err)
-                    if (!isClosed) reject(err)
+                    if (!isClosed) {
+                        isClosed = true
+                        worker.terminate()
+                        reject(err)
+                    }
                 })
 
                 worker.on('exit', (code) => {
@@ -292,7 +307,10 @@ async function createSerialPortDriver(devicePath) {
 
             let isClosed = false
 
-            return new Promise((resolve, reject) => {
+            // Awaited here (see createD2XXDriver's identical comment) so the
+            // connectionPromise lock isn't released by `finally` until this
+            // actually settles, not the instant the Promise is constructed.
+            return await new Promise((resolve, reject) => {
                 worker.on('message', (msg) => {
                     if (msg.type === 'status' && msg.status === 'connected') {
                         logger.log('[DMX Linux] Worker connected')
@@ -316,12 +334,22 @@ async function createSerialPortDriver(devicePath) {
                     }
                     if (msg.type === 'error') {
                         logger.error('[DMX Linux Worker] Error:', msg.error)
-                        if (!isClosed) reject(new Error(msg.error))
+                        if (!isClosed) {
+                            isClosed = true
+                            worker.terminate()
+                            reject(new Error(msg.error))
+                        }
                     }
                 })
 
-                worker.on('error', (err) => reject(err))
-                worker.on('exit', (code) => { if (code !== 0) logger.error(`[DMX Linux] Worker exit ${code}`) })
+                worker.on('error', (err) => {
+                    if (!isClosed) {
+                        isClosed = true
+                        worker.terminate()
+                        reject(err)
+                    }
+                })
+                worker.on('exit', (code) => { if (code !== 0 && !isClosed) logger.error(`[DMX Linux] Worker exit ${code}`) })
             })
 
         } catch (error) {
@@ -837,7 +865,11 @@ function setFixtureColor(idx, r, g, b, dim = 255) {
     const f = fixtures[idx]
     if (!f) return
     const profile = FIXTURE_PROFILES[f.mode] || FIXTURE_PROFILES['P06']
-    const isBlackout = dmxState.fixtureColors[idx]?.blackout
+    // Global blackout must hold against every continuous writer that funnels
+    // through here (ambilight, audio-reactive, dynamic scenes) - otherwise
+    // the next ambilight/audio frame silently overwrites blackout's zeroed
+    // channels within the same tick, and the kill switch doesn't actually kill.
+    const isBlackout = dmxState.blackout || dmxState.fixtureColors[idx]?.blackout
 
     if (!isBlackout && profile.map) {
         const base = f.startChannel - 1
@@ -867,7 +899,9 @@ function setAllFixturesColor(r, g, b, dim = 255) {
 function setFixtureChannel(idx, channel, value) {
     const f = fixtures[idx]
     if (!f) return
-    if (dmxState.fixtureColors[idx]?.blackout) return // Block updates if blackout
+    // See setFixtureColor's comment: global blackout must hold against every
+    // continuous writer that funnels through here, not just per-fixture blackout.
+    if (dmxState.blackout || dmxState.fixtureColors[idx]?.blackout) return
 
     const profile = FIXTURE_PROFILES[f.mode] || FIXTURE_PROFILES['P06']
     const offset = profile.map[channel.toUpperCase()]
@@ -953,13 +987,11 @@ function isAsyncOutputSourceAllowed(source = 'renderer') {
 function resetAll() {
     stopDynamicScene()
     dmxState.activeProgram = null
-    fixtures.forEach((f) => {
-        const base = f.startChannel - 1
-        const profile = FIXTURE_PROFILES[f.mode] || FIXTURE_PROFILES['P06']
-        for (let ch = 0; ch < profile.channels; ch++) {
-            dmxState.channels[base + ch] = 0
-        }
-    })
+    // Full-universe fill, not just each fixture's mapped channel range - a
+    // fixture reconfiguration or a scene covering more channels than are
+    // currently mapped could otherwise leave stale nonzero bytes forever
+    // outside any fixture's range, still being transmitted after "Reset All".
+    dmxState.channels.fill(0)
     dmxState.fixtureColors = fixtures.map(() => ({ r: 0, g: 0, b: 0, blackout: false }))
     transmitNow()  // Immediate send!
     broadcastColors()
@@ -967,6 +999,7 @@ function resetAll() {
 
 // Immediate DMX transmission - bypasses the 44Hz loop for instant response
 function transmitNow() {
+    if (!dmxDriver) return
     if (dmxState.blackout) {
         for (let i = 0; i < 512; i++) dmxDriver.setChannel(i, 0)
     } else {
@@ -1360,10 +1393,16 @@ function setupIPC() {
         if (active && !dmxState.blackout) {
             dmxState.savedState = [...dmxState.channels]
             stopDynamicScene()
+            // dmxState.channels is a view over the SharedArrayBuffer the DMX
+            // worker reads directly and continuously transmits (see
+            // serialWorker.js/dmxWorker.js) - setting the blackout flag alone
+            // never reached the wire, since nothing else zeroed the buffer.
+            dmxState.channels.fill(0)
         } else if (!active && dmxState.blackout && dmxState.savedState) {
             dmxState.channels.set(dmxState.savedState)
         }
         dmxState.blackout = active
+        broadcastColors()
         return { success: true, blackout: dmxState.blackout }
     })
 
@@ -1433,17 +1472,26 @@ function setupIPC() {
             if (i < 2 && !dmxState.flashCancelled) await new Promise(r => setTimeout(r, 1100))
         }
 
-        // Restore original state (transmit multiple times for reliability)
-        dmxState.channels.set(savedChannels)
-        dmxState.fixtureColors = [...savedColors]
+        // dmx:cancelFlash calls resetAll() synchronously the moment it sets
+        // flashCancelled, which runs to completion (including its own
+        // transmitNow()) before this suspended loop resumes - restoring
+        // savedChannels unconditionally here would silently undo that reset
+        // back to whatever was showing before the flash started. Only restore
+        // on natural completion, never after a cancellation.
+        const wasCancelled = dmxState.flashCancelled
+
+        if (!wasCancelled) {
+            // Restore original state (transmit multiple times for reliability)
+            dmxState.channels.set(savedChannels)
+            dmxState.fixtureColors = [...savedColors]
+            transmitNow()
+            await new Promise(r => setTimeout(r, 50))
+            transmitNow()
+            broadcastColors()
+        }
+
         dmxState.flashActive = false
         dmxState.flashCancelled = false
-
-        // Send restored state multiple times to ensure hardware receives it
-        transmitNow()
-        await new Promise(r => setTimeout(r, 50))
-        transmitNow()
-        broadcastColors()
 
         return { success: true }
     })
