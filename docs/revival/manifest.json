@@ -1,0 +1,30 @@
+{
+  "project": "BeamStudio Revival",
+  "repo": "francuello10/beamstudio",
+  "baseline": "d349cf18894dc48b3a3fe72e8b60adb3c3703187",
+  "generated_at": "2026-08-01",
+  "milestones": {
+    "M0": [
+      "BS-000",
+      "BS-001",
+      "BS-002",
+      "BS-003",
+      "BS-004",
+      "BS-005",
+      "BS-006",
+      "BS-007"
+    ],
+    "M1": [
+      "BS-008",
+      "BS-009"
+    ],
+    "M2": [
+      "BS-010"
+    ],
+    "M3": [
+      "BS-011"
+    ]
+  },
+  "first_task": "BS-000",
+  "primary_goal": "Validate and stabilize existing functionality before adding features."
+}
