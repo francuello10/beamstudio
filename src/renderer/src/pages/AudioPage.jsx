@@ -102,7 +102,7 @@ const AudioPage = () => {
                     </div>
 
                     <p className="subtitle" style={{ marginBottom: '18px' }}>
-                        Base look → DSP modulation → fixture-slot DMX mapping
+Mixer/base palette → audio boost → fixture-slot DMX mapping
                     </p>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '10px', marginBottom: '12px' }}>
@@ -168,7 +168,7 @@ const AudioPage = () => {
                                 cursor: 'pointer'
                             }}
                         >
-                            <Music2 size={14} /> Genre colors
+                            <Music2 size={14} /> Musical boost
                         </button>
                         <button
                             onClick={() => setBassPulseMode(true)}
@@ -182,7 +182,7 @@ const AudioPage = () => {
                                 cursor: 'pointer'
                             }}
                         >
-                            <Activity size={14} /> Bass pulse
+                            <Activity size={14} /> Bass boost
                         </button>
                     </div>
 
@@ -190,7 +190,7 @@ const AudioPage = () => {
                         <div style={{ ...compactCard, marginBottom: '14px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: autoGenre ? 0 : '12px' }}>
                                 <div style={{ textAlign: 'left' }}>
-                                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Palette</div>
+                                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Booster profile</div>
                                     <strong>{currentGenre}</strong>
                                 </div>
                                 <button
@@ -240,7 +240,7 @@ const AudioPage = () => {
                             Mapping behavior
                         </div>
                         <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
-                            Slot order follows the fixture patch. If you set REUNIÓN or another solid look first, Bass Pulse / Genre modulates that base color. RGB changes reactively; DIM keeps the current master dimmer; FUNC/SPD/FLASH are left untouched. Extra fixtures reuse the last slot color.
+                            Slot order follows the fixture patch. Set any solid look first — REUNIÓN, Quick Palettes, ColorWheel, or RGB faders — and audio boosts that base. RGB changes reactively; DIM keeps the current master dimmer; FUNC/SPD/FLASH are left untouched. Extra fixtures reuse the last slot color.
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
                             {mapping.map((item) => (

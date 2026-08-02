@@ -42,6 +42,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - Décimo slice activo en `main`: se corrigió la importación faltante de `useAudioStore` en `useSystemAudio`, validado por el usuario en Linux.
 - Onceavo slice activo: la UI de audio se simplificó para mostrar fuente activa, estado de señal, modo y mapeo por slot de fixture/DMX.
 - Doceavo slice activo: audio reactive dejó de ser un modo exclusivo y ahora puede modular un look base sólido como REUNIÓN.
+- Treceavo slice activo: el RGB manual del Mixer alimenta `audioBaseColors`, por lo que Quick Palettes, ColorWheel y faders RGB funcionan como base para el booster.
 
 ## Alcance
 
@@ -56,6 +57,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - Noise floor, normalización y valores válidos ante silencio.
 - Reducir renders React de alta frecuencia.
 - Modular colores base sólidos con Bass Pulse/Genre sin reemplazar conceptualmente el look activo.
+- Tratar audio reactive como booster sobre el RGB manual/base, no como una paleta mutuamente excluyente.
 - Cleanup completo de streams, tracks, animation frames y AudioContext.
 
 ## Criterios de aceptación
@@ -66,6 +68,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - [ ] Si falta el device, se informa error claro y fallback.
 - [ ] `AudioFrame` siempre tiene campos válidos.
 - [x] Bass Pulse/Genre pueden actuar sobre un color base sólido como REUNIÓN.
+- [x] Quick Palettes, ColorWheel y faders RGB del Mixer alimentan la base del booster audio-reactive.
 - [ ] Silencio no genera NaN, Infinity ni flashes erráticos.
 - [ ] El DSP no escribe DMX directamente salvo contrato explícito.
 - [ ] La UI no renderiza innecesariamente a 60 Hz.

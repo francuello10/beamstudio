@@ -112,6 +112,7 @@ function App() {
     const dispatchDmxAttributeUpdate = useDmxStore(state => state.dispatchDmxAttributeUpdate)
     const dispatchBulkDmxUpdate = useDmxStore(state => state.dispatchBulkDmxUpdate)
     const dmxFixtures = useDmxStore(state => state.dmxFixtures)
+    const dmxUniverseState = useDmxStore(state => state.dmxUniverseState)
 
     // Audio Store
     const setAudioBaseColors = useAudioStore(state => state.setAudioBaseColors)
@@ -131,6 +132,18 @@ function App() {
         const h1 = window.dmx?.onColorsUpdated(setPixelMapBuffer)
         return () => h1 && h1()
     }, [setPixelMapBuffer])
+
+
+    React.useEffect(() => {
+        const baseColor = {
+            r: dmxUniverseState.red || 0,
+            g: dmxUniverseState.green || 0,
+            b: dmxUniverseState.blue || 0
+        }
+        const hasBaseColor = baseColor.r + baseColor.g + baseColor.b > 0
+        const fixtureSlots = dmxFixtures.length ? dmxFixtures : [null, null, null]
+        setAudioBaseColors(hasBaseColor ? fixtureSlots.map(() => baseColor) : [])
+    }, [dmxUniverseState.red, dmxUniverseState.green, dmxUniverseState.blue, dmxFixtures, setAudioBaseColors])
 
     // Global Actions
     const handleReset = useCallback(async () => {
