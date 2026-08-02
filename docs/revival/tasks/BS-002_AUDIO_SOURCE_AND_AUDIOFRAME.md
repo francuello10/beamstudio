@@ -39,6 +39,8 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - Séptimo slice activo en `main`: la detección de género estable y la telemetría derivada también quedaron movidas a `AudioAnalyzer`.
 - Octavo slice activo en `main`: la colorización/reactividad quedó extraída a `src/renderer/src/audio/AudioReactiveRenderer.js`.
 - Noveno slice activo en `main`: Ambilight y Fluid consumen `audioFrame` como contrato principal en lugar de depender de campos sueltos.
+- Décimo slice activo en `main`: se corrigió la importación faltante de `useAudioStore` en `useSystemAudio`, validado por el usuario en Linux.
+- Onceavo slice activo: la UI de audio se simplificó para mostrar fuente activa, estado de señal, modo y mapeo por slot de fixture/DMX.
 
 ## Alcance
 
@@ -56,7 +58,8 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 
 ## Criterios de aceptación
 
-- [ ] Spotify/Tidal/YouTube mueven medidores con micrófono muteado.
+- [x] Audio mueve medidores en Linux con la fuente activa validada por el usuario.
+- [ ] Spotify/Tidal/YouTube mueven medidores con micrófono físico muteado en una prueba explícita por app.
 - [ ] La fuente seleccionada sobrevive reinicio.
 - [ ] Si falta el device, se informa error claro y fallback.
 - [ ] `AudioFrame` siempre tiene campos válidos.
