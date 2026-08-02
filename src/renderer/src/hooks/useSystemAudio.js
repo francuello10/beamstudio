@@ -181,7 +181,8 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 stream,
                 fallbackToDefault,
                 preferredInput,
-                requestedDeviceId
+                requestedDeviceId,
+                discoveredMonitorAfterPermission
             } = await requestAudioInputStream({
                 selectedDeviceId,
                 inputs,
@@ -207,6 +208,12 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 fallbackToDefault
             })
             setActiveSource(activeSourceRef.current)
+
+            if (!selectedDeviceId && discoveredMonitorAfterPermission) {
+                setSourceError(null)
+            } else if (!selectedDeviceId && !activeSourceRef.current.isMonitor) {
+                setSourceError('No system monitor/loopback input was detected. BeamStudio is listening to the default input, which may be the computer microphone.')
+            }
 
             const AudioContextClass = window.AudioContext || window.webkitAudioContext
             audioCtx.current = new AudioContextClass()

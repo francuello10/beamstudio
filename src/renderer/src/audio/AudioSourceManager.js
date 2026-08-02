@@ -1,5 +1,13 @@
 export const AUDIO_INPUT_STORAGE_KEY = 'beamstudio.audio.inputDeviceId'
 
+const MONITOR_INPUT_PATTERN = /monitor|loopback|stereo mix|what u hear|output.*monitor|monitor.*output|sink.*monitor/i
+
+const stopStream = (stream) => {
+    stream?.getTracks?.().forEach(track => track.stop())
+}
+
+const getStreamDeviceId = (stream) => stream?.getAudioTracks?.()[0]?.getSettings?.().deviceId || ''
+
 export const readStoredAudioInputId = () => {
     try {
         return localStorage.getItem(AUDIO_INPUT_STORAGE_KEY) || ''
@@ -24,7 +32,7 @@ export const listAudioInputs = async () => {
         .map((device, index) => ({
             deviceId: device.deviceId,
             label: device.label || `Audio Input ${index + 1}`,
-            isMonitor: /monitor|loopback|stereo mix/i.test(device.label || '')
+            isMonitor: MONITOR_INPUT_PATTERN.test(device.label || '')
         }))
 }
 
@@ -38,8 +46,9 @@ export const requestAudioInputStream = async ({
     inputs,
     constraints
 }) => {
-    const preferredInput = !selectedDeviceId ? getPreferredAudioInput(inputs) : null
-    const requestedDeviceId = selectedDeviceId || preferredInput?.deviceId || ''
+    let preferredInput = !selectedDeviceId ? getPreferredAudioInput(inputs) : null
+    let requestedDeviceId = selectedDeviceId || preferredInput?.deviceId || ''
+    let discoveredMonitorAfterPermission = false
 
     let stream
     let fallbackToDefault = false
@@ -51,6 +60,26 @@ export const requestAudioInputStream = async ({
                 : constraints,
             video: false
         })
+
+        // Linux/Chromium can hide device labels before permission is granted.
+        // If the first pass fell back to the default input, enumerate again after
+        // permission and switch to the monitor/loopback source when it appears.
+        if (!selectedDeviceId && !preferredInput) {
+            const unlockedInputs = await listAudioInputs()
+            const unlockedPreferredInput = getPreferredAudioInput(unlockedInputs)
+            const activeDeviceId = getStreamDeviceId(stream)
+
+            if (unlockedPreferredInput && unlockedPreferredInput.deviceId !== activeDeviceId) {
+                stopStream(stream)
+                preferredInput = unlockedPreferredInput
+                requestedDeviceId = unlockedPreferredInput.deviceId
+                discoveredMonitorAfterPermission = true
+                stream = await navigator.mediaDevices.getUserMedia({
+                    audio: { ...constraints, deviceId: { exact: requestedDeviceId } },
+                    video: false
+                })
+            }
+        }
     } catch (error) {
         if (!requestedDeviceId) throw error
 
@@ -65,7 +94,8 @@ export const requestAudioInputStream = async ({
         stream,
         fallbackToDefault,
         preferredInput,
-        requestedDeviceId
+        requestedDeviceId,
+        discoveredMonitorAfterPermission
     }
 }
 
@@ -85,6 +115,7 @@ export const resolveActiveAudioSource = ({
         label: matchedInput?.label
             || preferredInput?.label
             || (selectedDeviceId ? 'Selected audio input' : 'Default audio input'),
-        fallbackToDefault
+        fallbackToDefault,
+        isMonitor: !!matchedInput?.isMonitor || !!preferredInput?.isMonitor
     }
 }

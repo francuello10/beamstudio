@@ -113,7 +113,7 @@ Mixer/base palette → audio boost → fixture-slot DMX mapping
                             className="system-select"
                             style={{ padding: '10px 12px' }}
                         >
-                            <option value="">Default audio input</option>
+                            <option value="">Auto system monitor</option>
                             {availableInputs.map((input) => (
                                 <option key={input.deviceId} value={input.deviceId}>
                                     {input.isMonitor ? 'Monitor · ' : ''}{input.label}
@@ -135,7 +135,8 @@ Mixer/base palette → audio boost → fixture-slot DMX mapping
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center' }}>
                             <div>
                                 <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Active source</div>
-                                <strong>{reconnecting ? 'Reconnecting...' : (activeSource.label || 'Default audio input')}</strong>
+                                <strong>{reconnecting ? 'Reconnecting...' : (activeSource.label || 'Auto system monitor')}</strong>
+                                {activeSource.isMonitor ? <span style={{ color: '#8fffc2' }}> · system audio</span> : null}
                                 {activeSource.fallbackToDefault ? <span style={{ color: '#ffcc66' }}> · fallback</span> : null}
                             </div>
                             <div style={{ display: 'flex', gap: '8px' }}>
