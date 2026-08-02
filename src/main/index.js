@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, desktopCapturer, nativeTheme, screen } from 'electron' // Force Rebuild 01:10
+import { app, shell, BrowserWindow, ipcMain, desktopCapturer, nativeTheme, screen, session } from 'electron' // Force Rebuild 01:10
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -2053,6 +2053,38 @@ app.whenReady().then(async () => {
     electronApp.setAppUserModelId('com.francuello.beamstudio')
     app.on('browser-window-created', (_, window) => optimizer.watchWindowShortcuts(window))
     setupIPC()
+
+    // BS-004: required for navigator.mediaDevices.getDisplayMedia() to work
+    // at all — Electron rejects every getDisplayMedia() call with
+    // NotSupportedError unless a handler is registered here, regardless of
+    // the enable-features=WebRTCPipeWireCapturer flag above (confirmed via
+    // electron.d.ts: DisplayMediaRequestHandlerOpts.useSystemPicker is
+    // documented as "macOS Experimental" only in this Electron version, so it
+    // can't be relied on for the Linux/Wayland picker). On Linux, the handler
+    // requests a 'screen' source from desktopCapturer — with the PipeWire
+    // flag enabled, that call itself is what surfaces the native
+    // xdg-desktop-portal ScreenCast picker dialog.
+    session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {
+        // This handler is registered on the DEFAULT session, shared by every
+        // BrowserWindow (including the projector window, which never sets a
+        // separate partition) — so without this check, the projector's own
+        // renderer could also request display media and silently get one,
+        // even though it's supposed to be a locked-down pure-output window
+        // with no DMX/ambilight capability (same isolation intent as the
+        // isProjectorWindow preload gate). Reject any requesting frame whose
+        // URL carries the projector's ?role=projector query string.
+        if (request.frame?.url?.includes('role=projector')) {
+            callback({})
+            return
+        }
+        try {
+            const sources = await desktopCapturer.getSources({ types: ['screen'] })
+            callback({ video: sources[0] })
+        } catch (error) {
+            logger.error('[Ambilight] getDisplayMedia handler failed to get a screen source:', error)
+            callback({})
+        }
+    }, { useSystemPicker: true })
 
     // Projector display recovery (BS-005)
     screen.on('display-removed', (event, oldDisplay) => {

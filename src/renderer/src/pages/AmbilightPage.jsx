@@ -19,6 +19,15 @@ const AmbilightPage = () => {
     const audioTelemetryDSP = useAudioStore(state => state.audioTelemetryDSP)
     const setAudioTelemetryDSP = useAudioStore(state => state.setAudioTelemetryDSP)
 
+    // BS-004: on Linux/Wayland, desktopCapturer.getSources() returns
+    // empty-named entries (or none at all) — PipeWire withholds real
+    // window/screen titles from apps for compositor-level privacy. The
+    // custom-enumeration-then-select dropdown is unusable there, so Linux
+    // skips it entirely and lets the OS's own xdg-desktop-portal picker
+    // handle selection via getDisplayMedia() when the user clicks Ignite
+    // (see useGpuAmbilight.js). Non-Linux platforms keep the dropdown as-is.
+    const isLinux = window.platform === 'linux'
+
     // Local State
     const [sources, setSources] = useState([])
     const [selectedSource, setSelectedSource] = useState(null)
@@ -59,7 +68,11 @@ const AmbilightPage = () => {
         setRefreshing(false)
     }
 
-    useEffect(() => { refreshSources() }, [])
+    // BS-004: Linux never uses the dropdown, so it doesn't need the
+    // desktopCapturer enumeration on mount either — skipping it avoids a
+    // false "no sources found" error banner from an enumeration whose result
+    // this platform's flow doesn't consume at all.
+    useEffect(() => { if (!isLinux) refreshSources() }, [])
 
     const audioMode = useAudioStore(state => state.audioMode)
 
@@ -91,13 +104,23 @@ const AmbilightPage = () => {
             setActiveDynamicScene(null)
             setActiveFlag(null)
 
-            if (id) {
+            // Linux/Wayland has no pre-selected sourceId to gate on — the OS's
+            // own picker (triggered inside startAmbilight() via
+            // getDisplayMedia()) handles selection at click time. Non-Linux
+            // keeps requiring a pre-selected `id` from the dropdown.
+            if (id || isLinux) {
                 setCaptureError(null)
                 try {
                     await startAmbilight(id)
                     if (audioMode !== 'OFF') await startAudio()
                 } catch (e) {
-                    setCaptureError('GPU capture failed — try a different source')
+                    if (e?.name === 'NotAllowedError') {
+                        // User cancelled the native OS screen-picker dialog — a
+                        // normal, expected outcome, not a crash. Keep it calm.
+                        setCaptureError('Elección de pantalla cancelada — iniciá de nuevo cuando quieras compartir una pantalla.')
+                    } else {
+                        setCaptureError('GPU capture failed — try a different source')
+                    }
                 }
             }
         } finally {
@@ -135,41 +158,54 @@ const AmbilightPage = () => {
 
                     <div className="ambilight-controls" style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
                         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                            <select
-                                className="source-select"
-                                onChange={(e) => setSelectedSource(e.target.value)}
-                                disabled={capturing}
-                                style={{ flex: 1, margin: 0, height: '42px' }}
-                            >
-                                {sources.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                            </select>
+                            {isLinux ? (
+                                <div className="source-select-linux-note" style={{
+                                    flex: 1, height: '42px', display: 'flex', alignItems: 'center',
+                                    padding: '0 12px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px',
+                                    border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-secondary)',
+                                    fontSize: '12px'
+                                }}>
+                                    Wayland: se te va a pedir elegir la pantalla al iniciar
+                                </div>
+                            ) : (
+                                <select
+                                    className="source-select"
+                                    onChange={(e) => setSelectedSource(e.target.value)}
+                                    disabled={capturing}
+                                    style={{ flex: 1, margin: 0, height: '42px' }}
+                                >
+                                    {sources.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                </select>
+                            )}
 
                             <div className="status-badge" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0 12px', height: '42px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-secondary)', fontSize: '11px', whiteSpace: 'nowrap' }}>
                                 <Zap size={14} color="#FFD700" fill="#FFD700" />
                                 <span>AMD/NVIDIA GPU</span>
                             </div>
 
-                            <button
-                                onClick={refreshSources}
-                                disabled={capturing || refreshing}
-                                title="Refresh sources"
-                                style={{
-                                    width: '42px',
-                                    height: '42px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    background: 'rgba(255,255,255,0.05)',
-                                    borderRadius: '8px',
-                                    border: '1px solid rgba(255,255,255,0.1)',
-                                    color: 'var(--text-secondary)',
-                                    cursor: capturing ? 'not-allowed' : 'pointer',
-                                    transition: 'all 0.2s',
-                                    flexShrink: 0
-                                }}
-                            >
-                                <RefreshCw size={14} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
-                            </button>
+                            {!isLinux && (
+                                <button
+                                    onClick={refreshSources}
+                                    disabled={capturing || refreshing}
+                                    title="Refresh sources"
+                                    style={{
+                                        width: '42px',
+                                        height: '42px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        background: 'rgba(255,255,255,0.05)',
+                                        borderRadius: '8px',
+                                        border: '1px solid rgba(255,255,255,0.1)',
+                                        color: 'var(--text-secondary)',
+                                        cursor: capturing ? 'not-allowed' : 'pointer',
+                                        transition: 'all 0.2s',
+                                        flexShrink: 0
+                                    }}
+                                >
+                                    <RefreshCw size={14} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
+                                </button>
+                            )}
                         </div>
 
                         <div style={{ display: 'flex', gap: '12px', alignItems: 'stretch' }}>

@@ -138,26 +138,41 @@ export const useGpuAmbilight = (dispatchPixelMapUpdate) => {
         window.ambilight?.stop()
     }
 
+    // BS-004: Wayland/PipeWire returns empty-named sources (or none at all)
+    // from desktopCapturer.getSources() — see docs/revival/tasks/
+    // BS-004_AMBILIGHT_QA.md. On Linux there is no usable sourceId to pre-
+    // select, so this hook bypasses the classic Electron desktopCapturer +
+    // getUserMedia({ mandatory: { chromeMediaSource: 'desktop', ... } })
+    // pattern entirely and calls the standard getDisplayMedia() API instead.
+    // With `enable-features=WebRTCPipeWireCapturer` already set in
+    // src/main/index.js, this routes through Chromium's native
+    // xdg-desktop-portal ScreenCast picker — a real OS dialog — so no
+    // sourceId is needed at all. Non-Linux platforms are untouched and keep
+    // using the desktopCapturer-enumerated sourceId + getUserMedia flow.
     const start = async (sourceId) => {
-        if (!sourceId) {
+        const isLinux = window.platform === 'linux'
+
+        if (!isLinux && !sourceId) {
             console.error('[Ambilight GPU] No sourceId provided')
             return
         }
 
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                audio: false,
-                video: {
-                    mandatory: {
-                        chromeMediaSource: 'desktop',
-                        chromeMediaSourceId: sourceId,
-                        minWidth: 1280,
-                        maxWidth: 1920,
-                        minHeight: 720,
-                        maxHeight: 1080
+            const stream = isLinux
+                ? await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
+                : await navigator.mediaDevices.getUserMedia({
+                    audio: false,
+                    video: {
+                        mandatory: {
+                            chromeMediaSource: 'desktop',
+                            chromeMediaSourceId: sourceId,
+                            minWidth: 1280,
+                            maxWidth: 1920,
+                            minHeight: 720,
+                            maxHeight: 1080
+                        }
                     }
-                }
-            })
+                })
 
             if (!videoRef.current) {
                 videoRef.current = document.createElement('video')

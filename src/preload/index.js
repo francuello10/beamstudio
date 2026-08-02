@@ -254,6 +254,11 @@ const nowPlayingAPI = {
 if (process.contextIsolated) {
     try {
         contextBridge.exposeInMainWorld('electron', electronAPI)
+        // BS-004: plain string, not a function — lets renderer code branch on
+        // OS-specific capture flows (e.g. Ambilight's Wayland getDisplayMedia
+        // path vs. the desktopCapturer/getUserMedia path on other platforms)
+        // without adding a round-trip IPC call for something that never changes.
+        contextBridge.exposeInMainWorld('platform', process.platform)
         if (!isProjectorWindow) {
             contextBridge.exposeInMainWorld('dmx', dmxAPI)
             contextBridge.exposeInMainWorld('ambilight', ambilightAPI)
@@ -273,6 +278,7 @@ if (process.contextIsolated) {
     }
 } else {
     window.electron = electronAPI
+    window.platform = process.platform
     if (!isProjectorWindow) {
         window.dmx = dmxAPI
         window.ambilight = ambilightAPI
