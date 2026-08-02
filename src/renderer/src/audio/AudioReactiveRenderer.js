@@ -24,7 +24,10 @@ const quantizeKick = (energy, boostLevel, {
     baseSteps = 8,
     stepBoost = 1.35
 } = {}) => {
-    const trigger = Math.max(0, threshold - boostLevel * thresholdBoost)
+    // Boost should make accepted hits larger/brutal, not turn every low-mid
+    // wiggle into a trigger. Keep a real floor even at x4.
+    const boostBias = Math.max(0, boostLevel - 1)
+    const trigger = Math.max(threshold * 0.72, threshold - boostBias * thresholdBoost * 0.42)
     const normalized = clamp01((energy - trigger) / (0.88 - trigger))
     const shapedKick = Math.pow(normalized, Math.max(0.25, curve - boostLevel * curveBoost))
     const stepCount = Math.max(minSteps, Math.round(baseSteps - boostLevel * stepBoost))
@@ -147,7 +150,6 @@ export const buildGenreColors = (audioFrame) => {
     const lowMidRight = audioFrame.stereo.lowMidRight
     const lowMidMelodyLeft = clamp01(lowMidLeft + vocalPulse * 0.25)
     const lowMidMelodyRight = clamp01(lowMidRight + vocalPulse * 0.25)
-    const lowMidAvg = (lowMidLeft + lowMidRight) / 2
 
     if (genre === 'ELECTRO') {
         const bassGlow = centerBass * 0.85
@@ -167,10 +169,10 @@ export const buildGenreColors = (audioFrame) => {
     }
 
     if (genre === 'LATIN') {
-        const warmFactor = lowMidAvg * GENRE_PROFILES.LATIN.midWeight
+        const centerWarm = clamp01(centerBass * GENRE_PROFILES.LATIN.bassWeight)
         return [
             { r: Math.round(lowMidMelodyLeft * 180 + 15), g: Math.round(lowMidMelodyLeft * 100 + 10), b: Math.round(lowMidMelodyLeft * 30) },
-            { r: Math.round(warmFactor * 220 + 25), g: Math.round(warmFactor * 120 + 15), b: Math.round(centerBass * 40 + 10) },
+            { r: Math.round(centerWarm * 220 + 25), g: Math.round(centerWarm * 120 + 15), b: Math.round(centerWarm * 40 + 10) },
             { r: Math.round(lowMidMelodyRight * 180 + 15), g: Math.round(lowMidMelodyRight * 100 + 10), b: Math.round(lowMidMelodyRight * 30) }
         ]
     }

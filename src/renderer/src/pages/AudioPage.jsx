@@ -118,7 +118,7 @@ const AudioPage = () => {
                     </div>
 
                     <p className="subtitle" style={{ marginBottom: '18px' }}>
-Mixer/base palette → audio boost → Slot 2 bass center
+Mixer/base palette → audio boost → clean Slot 2 bass hits
                     </p>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '10px', marginBottom: '12px' }}>
@@ -306,7 +306,7 @@ Mixer/base palette → audio boost → Slot 2 bass center
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 1fr', gap: '12px', alignItems: 'end', marginBottom: '18px' }}>
                         <MiniBars label="LEFT" values={visualizerData.left} />
                         <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>SUB</div>
+                            <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>CENTER HIT</div>
                             <div style={{ color: 'var(--accent)', fontWeight: 800 }}>{percent(visualizerData.bass)}</div>
                         </div>
                         <MiniBars label="RIGHT" values={visualizerData.right} />

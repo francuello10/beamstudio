@@ -67,6 +67,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - Treinta y cuatroavo slice activo: el DSP extrae una envolvente vocal/melódica liviana del rango 180 Hz-3.2 kHz y la usa como guía rítmica lateral de menor prioridad que el bass, manteniendo Slot 2 exclusivo para bass/sub.
 - Treinta y cincoavo slice activo: Slot 2 quedó más estricto y físico: SUB 35-85 Hz + KICK 70-125 Hz, penalización 125-350 Hz y salida centro más quantizada/off-on para pegar más bruto sólo cuando hay bajo real.
 - Treinta y seisavo slice activo: Slot 2 usa un hit shaper con armado, hysteresis, hold y refractory para evitar mini-titilados; el centro dispara pocos golpes más fuertes y los laterales conservan seguimiento musical continuo.
+- Treinta y sieteavo slice activo: el boost x4 dejó de volver demasiado sensible al centro; Slot 2 exige pureza sub/kick contra upper-bass/low-mid, punch transiente, dominancia física y refractory largo en todos los perfiles de render, mientras el medidor UI muestra el hit real del centro.
 
 ## Alcance
 
@@ -113,6 +114,9 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - [x] Slot 2 usa bass físico por frecuencia: SUB 35-85 Hz, KICK 70-125 Hz y penalización upper-bass/low-mid 125-350 Hz.
 - [x] Slot 2 tiene salida más brusca/quantizada que los laterales para marcar vibración/kick real sin seguir voz, toms o guitarra.
 - [x] Slot 2 usa hit shaper anti mini-titilado: arma sólo tras reset, respeta refractory/hold y suelta con release controlado.
+- [x] El boost alto aumenta el impacto visual, pero no baja el detector de Slot 2 a falsos positivos de low-mid/upper-bass.
+- [x] Ningún perfil de género usa low-mid como intensidad de Slot 2; el centro consume `centerBassHit`.
+- [x] El medidor central de Audio UI muestra `CENTER HIT`, no un peak-hold de sub permanente.
 - [x] En pausa/silencio sostenido, BeamStudio congela la salida DMX audio y mantiene la escena fija sin pulso artificial.
 - [x] El detector de pausa ignora ruido constante: sólo considera actividad musical cuando hay transiente o energía por encima del piso adaptativo.
 - [x] Al iniciar audio con música pausada, BeamStudio calibra piso antes de mandar DMX para no mover luces por ruido base.
@@ -153,7 +157,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 
 ## Cierre final M0
 
-Estado final: `done`. BS-002 queda cerrada como motor audio-reactive usable: fuente monitor/loopback, no-mic fallback, `AudioFrame`, pausa real por playback status, guía vocal/melódica lateral, centro bass físico con hit shaper anti mini-titilado y boost configurable. La calibración artística futura pasa a regresión/feature flags, no bloquea M0.
+Estado final: `done`. BS-002 queda cerrada como motor audio-reactive usable: fuente monitor/loopback, no-mic fallback, `AudioFrame`, pausa real por playback status, guía vocal/melódica lateral, centro bass físico con hit shaper anti mini-titilado, gate limpio contra falsos positivos y boost configurable. La calibración artística futura pasa a regresión/feature flags, no bloquea M0.
 
 ### Evidencia principal
 
