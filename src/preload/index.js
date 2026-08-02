@@ -110,11 +110,14 @@ const ambilightAPI = {
 }
 
 // Audio API
+// Security hardening (post-BS-005 audit): start/stop/setLevel are the
+// ORIGINAL audio-reactive-DMX feature — audio:start seizes dynamic-scene
+// ownership and force-writes fixture dimmers, audio:setLevel writes
+// caller-supplied RGB straight to physical fixture colors. Those are
+// hardware-mutating, same class as dmx/ambilight, so they're only bundled
+// into this object for non-projector windows. broadcastFrame/onFrameBroadcast
+// are the safe AudioFrame relay and stay unconditional (see comment below).
 const audioAPI = {
-    start: () => ipcRenderer.invoke('audio:start'),
-    stop: () => ipcRenderer.invoke('audio:stop'),
-    setLevel: (levels) => ipcRenderer.invoke('audio:setLevel', levels),
-
     // BS-005: relays AudioFrame from the main window (where useSystemAudio
     // actually runs) to the projector window's separate renderer process,
     // whose local useAudioStore never receives live analysis on its own.
@@ -123,7 +126,12 @@ const audioAPI = {
         const listener = (_e, frame) => cb(frame)
         ipcRenderer.on('audio:frameBroadcast', listener)
         return () => ipcRenderer.removeListener('audio:frameBroadcast', listener)
-    }
+    },
+    ...(!isProjectorWindow && {
+        start: () => ipcRenderer.invoke('audio:start'),
+        stop: () => ipcRenderer.invoke('audio:stop'),
+        setLevel: (levels) => ipcRenderer.invoke('audio:setLevel', levels)
+    })
 }
 
 // Scene API
@@ -238,8 +246,9 @@ const nowPlayingAPI = {
 }
 
 // Expose APIs
-// BS-005: `electron`, `audio`, and `projector` are always exposed — the
-// projector window needs `audio` for the AudioFrame relay and `projector`
+// BS-005: `audio` and `projector` are always exposed — the projector window
+// needs `audio` for the AudioFrame relay (start/stop/setLevel are stripped
+// out of that object for the projector, see audioAPI above) and `projector`
 // for blackout/test-pattern/visual/status control. `dmx`, `ambilight`,
 // `scene`, `theme`, `ai`, and `windowOps` are main-window-only: the projector
 // is a pure visual output and must never be able to touch DMX/ambilight
@@ -251,15 +260,23 @@ const nowPlayingAPI = {
 // own Now Playing overlay now, and getSystemMedia is a read-only metadata
 // query with no DMX/hardware capability, so there's no isolation reason to
 // withhold it there.
+// Security hardening (post-BS-005 audit): `electron` is now gated the same
+// way as `dmx`/`ambilight` — its `ipcRenderer` sub-object is a raw pass-
+// through that accepts ANY IPC channel name (invoke/send/sendSync), which
+// would let the projector window bypass every one of the gates above by
+// calling e.g. `window.electron.ipcRenderer.invoke('dmx:setChannel', ...)`
+// directly. A repo-wide grep confirms no projector renderer code (or any
+// renderer code) currently reads `window.electron` at all, so withholding it
+// from the projector has no functional cost.
 if (process.contextIsolated) {
     try {
-        contextBridge.exposeInMainWorld('electron', electronAPI)
         // BS-004: plain string, not a function — lets renderer code branch on
         // OS-specific capture flows (e.g. Ambilight's Wayland getDisplayMedia
         // path vs. the desktopCapturer/getUserMedia path on other platforms)
         // without adding a round-trip IPC call for something that never changes.
         contextBridge.exposeInMainWorld('platform', process.platform)
         if (!isProjectorWindow) {
+            contextBridge.exposeInMainWorld('electron', electronAPI)
             contextBridge.exposeInMainWorld('dmx', dmxAPI)
             contextBridge.exposeInMainWorld('ambilight', ambilightAPI)
         }
@@ -277,9 +294,9 @@ if (process.contextIsolated) {
         console.error(error)
     }
 } else {
-    window.electron = electronAPI
     window.platform = process.platform
     if (!isProjectorWindow) {
+        window.electron = electronAPI
         window.dmx = dmxAPI
         window.ambilight = ambilightAPI
     }

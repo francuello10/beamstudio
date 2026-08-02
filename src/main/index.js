@@ -1688,24 +1688,25 @@ function setupIPC() {
         return { success: true, colors: dmxState.fixtureColors }
     })
 
+    // Security hardening: this used to write d.red/d.green/... directly into
+    // dmxState.channels (a Uint8Array view over a SharedArrayBuffer), with no
+    // clamp — out-of-range/NaN input from a corrupted scene file would wrap at
+    // the byte level for the real physical channel while dmxState.fixtureColors
+    // (what the UI reads back) kept the raw unclamped value, producing a
+    // UI/hardware mismatch. Now routed through the same setFixtureChannel/
+    // setFixtureColor helpers every other channel-mutating handler already
+    // uses, so the clamp and the UI-facing color state stay in sync.
     ipcMain.handle('scene:load', (_, sceneData) => {
         stopDynamicScene()
         dmxState.activeProgram = null
         setOutputOwner('manual')
-        fixtures.forEach((f, i) => {
-            const base = f.startChannel - 1
-            const profile = FIXTURE_PROFILES[f.mode] || FIXTURE_PROFILES['P06']
+        fixtures.forEach((_, i) => {
             const d = sceneData.fixtures?.[i] || sceneData
 
-            if (profile.map.RED !== undefined) dmxState.channels[base + profile.map.RED] = d.red || 0
-            if (profile.map.GREEN !== undefined) dmxState.channels[base + profile.map.GREEN] = d.green || 0
-            if (profile.map.BLUE !== undefined) dmxState.channels[base + profile.map.BLUE] = d.blue || 0
-            if (profile.map.FUNC !== undefined) dmxState.channels[base + profile.map.FUNC] = d.func || 0
-            if (profile.map.SPD !== undefined) dmxState.channels[base + profile.map.SPD] = d.spd || 0
-            if (profile.map.FLASH !== undefined) dmxState.channels[base + profile.map.FLASH] = d.flash || 0
-            if (profile.hasMasterDimmer && profile.map.DIM !== undefined) dmxState.channels[base + profile.map.DIM] = d.dim ?? 255
-
-            dmxState.fixtureColors[i] = { r: d.red || 0, g: d.green || 0, b: d.blue || 0 }
+            setFixtureChannel(i, 'FUNC', d.func || 0)
+            setFixtureChannel(i, 'SPD', d.spd || 0)
+            setFixtureChannel(i, 'FLASH', d.flash || 0)
+            setFixtureColor(i, d.red || 0, d.green || 0, d.blue || 0, d.dim ?? 255)
         })
         broadcastColors()
         return { success: true, colors: dmxState.fixtureColors }
