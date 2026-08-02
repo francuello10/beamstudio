@@ -2,7 +2,7 @@
 
 ### ✨ Características Principales
 
-- **Control DMX512 Profesional**: Soporte para interfaces USB (FTDI D2XX en Windows, SerialPort en Linux) y Art-Net
+- **Control DMX512 Profesional**: Soporte para interfaces USB (FTDI D2XX en Windows, SerialPort en Linux)
 - **Arquitectura de Estado Atómico**: Ultra-baja latencia (<2ms) para control de alta fidelidad
 - **Escenas Dinámicas**: 20+ escenas pre-programadas (Vibe, Rainbow, Fire, Aurora, etc.)
 - **Audio Reactivo**: Análisis espectral 2.1 con modo Deco para sistemas de alta gama

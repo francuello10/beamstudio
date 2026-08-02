@@ -135,7 +135,7 @@ M0 se considera terminado cuando:
 | Mapa P06 | RGB + función + velocidad + flash + dimmer |
 | Transporte Windows | FTDI D2XX mediante worker |
 | Transporte Linux | `serialport` por `/dev/ttyUSB*` mediante worker |
-| Alternativa | Art-Net |
+| Alternativa futura | Art-Net server/provider en otra máquina |
 
 > El diagrama histórico que describe D2XX directo sobre Ubuntu no coincide con el código actual. En Linux el código elige `serialport`; D2XX queda restringido a Windows.
 
@@ -180,7 +180,6 @@ M0 se considera terminado cuando:
 - WebGL2 mediante código propio.
 - `serialport` 13.
 - `ftdi-d2xx` 1.3.
-- `dmxnet` 0.9.
 - Google Generative AI SDK.
 - Framer Motion.
 - Tailwind CSS.
@@ -214,7 +213,6 @@ Se debe establecer un único esquema de versión de aplicación y tratar las ver
 
 - inicialización Electron;
 - creación de ventana;
-- driver Art-Net;
 - driver D2XX;
 - driver SerialPort;
 - workers;
@@ -273,8 +271,7 @@ Zustand / IPC
 Main DMX state (SharedArrayBuffer)
    │
    ├── D2XX worker — Windows
-   ├── Serial worker — Linux
-   └── Art-Net sender
+   └── Serial worker — Linux
    │
    ▼
 KMTronic → barras
@@ -311,7 +308,7 @@ El problema fundamental es que `getUserMedia` no selecciona explícitamente una 
 | Perfiles P06/P01/P02 | Sí | Cambio más reciente; no validado integralmente | Probar todos los caminos afectados |
 | D2XX Windows | Sí | No es el entorno principal actual | Mantener sin romper |
 | Serial Linux | Sí | Ruta principal esperada | Validar puerto, permisos y estabilidad |
-| Art-Net | Sí | Fallback | Smoke test |
+| Art-Net | No en runtime local | Diferido para futuro server/provider | No aplica en M0 |
 | Programas internos | Sí | No auditados recientemente | Probar |
 | Escenas dinámicas | Sí | Riesgo alto de regresión | Reparar primero |
 | Sound reactive | Sí | Usuario reporta respuesta floja | Rehacer entrada y calibración |

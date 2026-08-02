@@ -63,7 +63,7 @@ Arrancar `BS-001` ahora sobre `fix/bs-001-dmx-regression`. El riesgo manual dife
 - Validar P06 en tres barras.
 - Validar start/stop y reconexión.
 - Verificar persistencia real de fixture patch y settings antes de tocarla.
-- Mantener Windows D2XX y Art-Net sin cambios innecesarios.
+- Mantener Windows D2XX y Linux SerialPort sin cambios innecesarios.
 
 ## Criterios de aceptación
 
@@ -103,5 +103,5 @@ Arrancar `BS-001` ahora sobre `fix/bs-001-dmx-regression`. El riesgo manual dife
 ## Riesgos y notas
 
 - Hardware DMX requiere cambios conservadores.
-- Conservar fallback Art-Net.
+- Art-Net queda explícitamente fuera del runtime local actual para reducir complejidad.
 - Nunca aumentar Hz, break, MAB o pacing sin medición y rollback claro.

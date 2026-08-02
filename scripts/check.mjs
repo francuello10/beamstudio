@@ -75,6 +75,20 @@ checkPattern(
   'main:no-stale-CHANNEL_MAP'
 )
 
+checkPattern(
+  'src/main/index.js',
+  /\bdmxnet\b/,
+  false,
+  'main:no-artnet-runtime'
+)
+
+checkPattern(
+  'src/renderer/src/pages/SystemPage.jsx',
+  /Art-Net/,
+  false,
+  'renderer:no-artnet-toggle'
+)
+
 const failed = checks.filter(check => !check.pass)
 
 for (const check of checks) {

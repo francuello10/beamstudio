@@ -23,7 +23,7 @@ const SystemPage = () => {
     }
 
     // DMX Mode state
-    const [dmxMode, setDmxMode] = useState(config?.dmxMode || 'artnet')
+    const [dmxMode, setDmxMode] = useState(config?.dmxMode || 'usb')
     const [selectedPort, setSelectedPort] = useState(config?.nativeDevicePath || '')
     const [selectedDriver, setSelectedDriver] = useState('d2xx')
     const [serialPorts, setSerialPorts] = useState([])
@@ -97,22 +97,16 @@ const SystemPage = () => {
         setDmxFixtures(dmxFixtures.map(f => f.id === id ? { ...f, startChannel: Math.min(512, Math.max(1, val)) } : f))
     }
 
-    const handleModeChange = async (newMode) => {
-        if (newMode === dmxMode) return;
-        const confirmSwitch = window.confirm(`WARNING: Switching DMX mode to ${newMode.toUpperCase()} will momentarily interrupt communication. Proceed?`);
-        if (!confirmSwitch) return;
-
+    const handleReconnect = async () => {
         setIsConnecting(true)
         setConnectionStatus(null)
         try {
-            const result = await window.dmx?.setMode(newMode, selectedPort, selectedDriver)
+            const result = await window.dmx?.setMode('usb', selectedPort, selectedDriver)
             if (result.success) {
                 setDmxMode(result.mode)
                 setConnectionStatus({
                     type: 'success',
-                    message: newMode === 'usb' || newMode === 'native'
-                        ? `Connected (${result.driverType})`
-                        : 'Using Art-Net (QLC+)'
+                    message: `Connected (${result.driverType})`
                 })
             } else {
                 setConnectionStatus({ type: 'error', message: result.error || 'Failed to switch mode' })
@@ -189,7 +183,7 @@ const SystemPage = () => {
                 <div className="glass-card dmx-mode-card">
                     <div className="card-header-icon">
                         <Radio size={20} className="accent-text" />
-                        <h3>DMX Connection Mode</h3>
+                        <h3>DMX Connection</h3>
                         {connectionStatus && (
                             <span style={{
                                 marginLeft: 'auto',
@@ -205,59 +199,29 @@ const SystemPage = () => {
                             </span>
                         )}
                     </div>
-                    <div className="dmx-mode-toggle" style={{ marginTop: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                        <button
-                            className={`mode-btn ${dmxMode === 'artnet' ? 'active' : ''}`}
-                            onClick={() => handleModeChange('artnet')}
-                            style={{
-                                padding: '12px 20px',
-                                borderRadius: '8px',
-                                border: dmxMode === 'artnet' ? '2px solid var(--accent)' : '1px solid var(--border-color)',
-                                background: dmxMode === 'artnet' ? 'rgba(255, 0, 128, 0.15)' : 'rgba(255, 255, 255, 0.03)',
-                                color: 'white',
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                                transition: 'all 0.2s'
-                            }}
+                    <div
+                        className="native-config"
+                        style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}
+                    >
+                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                            Runtime path: <strong style={{ color: 'var(--accent)' }}>{dmxMode?.toUpperCase() || 'USB'}</strong>
+                        </div>
+                        <select
+                            value={selectedPort}
+                            onChange={(e) => setSelectedPort(e.target.value)}
+                            className="system-select"
+                            style={{ padding: '10px 12px' }}
                         >
-                            🌐 Art-Net
-                        </button>
+                            {serialPorts.map(p => <option key={p.path} value={p.path}>{p.displayName || p.path}</option>)}
+                        </select>
                         <button
-                            className={`mode-btn ${dmxMode !== 'artnet' ? 'active' : ''}`}
-                            onClick={() => handleModeChange('usb')}
-                            style={{
-                                padding: '12px 20px',
-                                borderRadius: '8px',
-                                border: dmxMode !== 'artnet' ? '2px solid var(--accent)' : '1px solid var(--border-color)',
-                                background: dmxMode !== 'artnet' ? 'rgba(255, 0, 128, 0.15)' : 'rgba(255, 255, 255, 0.03)',
-                                color: 'white',
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                                transition: 'all 0.2s'
-                            }}
+                            onClick={handleReconnect}
+                            className="action-button active"
+                            disabled={isConnecting}
                         >
-                            🔌 USB Direct
+                            {isConnecting ? '⏳ CONNECTING...' : '🔄 RECONNECT USB'}
                         </button>
                     </div>
-                    {dmxMode !== 'artnet' && (
-                        <div className="native-config" style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            <select
-                                value={selectedPort}
-                                onChange={(e) => setSelectedPort(e.target.value)}
-                                className="system-select"
-                                style={{ padding: '10px 12px' }}
-                            >
-                                {serialPorts.map(p => <option key={p.path} value={p.path}>{p.displayName || p.path}</option>)}
-                            </select>
-                            <button
-                                onClick={() => handleModeChange('usb')}
-                                className="action-button active"
-                                disabled={isConnecting}
-                            >
-                                {isConnecting ? '⏳ CONNECTING...' : '🔄 RECONNECT'}
-                            </button>
-                        </div>
-                    )}
                     {actualHz > 0 && (
                         <div style={{ marginTop: '12px', fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent)', animation: 'pulse 1s infinite' }} />

@@ -25,7 +25,7 @@
 |---|---:|---|---|---|
 | QA-101 | P0 | Detectar KMTronic | Dispositivo listado | NOT RUN |
 | QA-102 | P0 | Conectar Linux Serial | Worker conectado | NOT RUN |
-| QA-103 | P1 | Fallback Art-Net | Se puede activar sin crash | NOT RUN |
+| QA-103 | P1 | Runtime USB-only | No existe toggle ni fallback Art-Net en la app local | NOT RUN |
 | QA-104 | P0 | RGB fixture 1 | Solo barra d001 responde | NOT RUN |
 | QA-105 | P0 | RGB fixture 2 | Solo barra d008 responde | NOT RUN |
 | QA-106 | P0 | RGB fixture 3 | Solo barra d015 responde | NOT RUN |

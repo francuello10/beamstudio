@@ -32,7 +32,7 @@ To ensure DMX continuity when the application is minimized (e.g. while using oth
 ## 📡 DMX Implementation & Data Flow
 
 ### Transmission Engine (Main Process)
-- **`src/main/index.js`**: Orchestrates the D2XX Worker and Art-Net fallback.
+- **`src/main/index.js`**: Orchestrates the native USB DMX workers and runtime state.
 - **`src/main/dmxWorker.js`**: Dedicated high-precision thread for USB communication.
 - **Timing**: Calibrated Break (**2.0ms**) and MAB (**0.2ms**) for maximum hardware stability.
 

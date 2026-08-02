@@ -2,8 +2,6 @@ import { app, shell, BrowserWindow, ipcMain, desktopCapturer, nativeTheme } from
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import dmxnet from 'dmxnet'
-import { performance } from 'perf_hooks'
 import { readFileSync } from 'fs'
 
 import { Worker } from 'worker_threads'
@@ -43,7 +41,7 @@ dmxArray[0] = 0 // Start Code byte
 const dmxChannels = dmxArray.subarray(1)
 
 // =============================================================
-// DMX Driver Abstraction (Dual Mode: Art-Net or USB Direct)
+// DMX Driver Abstraction (Native USB Direct)
 // Cross-Platform: Ubuntu 24.04 / Windows 11
 // ============================================================================
 
@@ -75,38 +73,11 @@ function getAvailableDrivers() {
 }
 
 // Driver state - Singleton pattern with connection promise
-let dmxMode = 'artnet'  // 'artnet' | 'usb'
+let dmxMode = 'usb'
 let currentUsbDriver = process.platform === 'win32' ? 'd2xx' : 'serialport' // Default based on OS
 let nativeDevicePath = ''
 let dmxDriver = null
 let connectionPromise = null  // Tracks pending connection to prevent race conditions
-
-// Art-Net setup (always available as fallback)
-const dmxnetInstance = new dmxnet.dmxnet({
-    log: { level: 'error' },
-    oem: 0,
-    sName: 'BeamStudio',
-    lName: 'BeamStudio DMX Controller'
-})
-
-const artnetSender = dmxnetInstance.newSender({
-    ip: '255.255.255.255',
-    subnet: 0,
-    universe: 0,
-    net: 0,
-    port: 6454,
-    base_refresh_interval: 25
-})
-
-// Unified DMX Driver Interface
-function createArtNetDriver() {
-    return {
-        mode: 'artnet',
-        setChannel: (ch, val) => artnetSender.setChannel(ch, val),
-        transmit: () => artnetSender.transmit(),
-        close: () => { }  // Art-Net doesn't need cleanup
-    }
-}
 
 async function closeExistingDriver() {
     if (dmxDriver && typeof dmxDriver.close === 'function') {
@@ -119,9 +90,6 @@ async function closeExistingDriver() {
         dmxDriver = null
     }
 }
-
-// Initialize with Art-Net by default
-dmxDriver = createArtNetDriver()
 
 // List available ports (D2XX)
 // List available ports (Context Aware)
@@ -356,11 +324,12 @@ async function switchDmxMode(mode, devicePath = null, driverType = 'd2xx') {
         } else {
             return { success: false, error: 'Failed to connect to USB device (Check if it is in use or driver missing)', mode: dmxMode }
         }
-    } else {
-        await closeExistingDriver()
-        dmxDriver = createArtNetDriver()
-        dmxMode = 'artnet'
-        return { success: true, mode: 'artnet' }
+    }
+
+    return {
+        success: false,
+        error: 'Art-Net mode has been removed from the local BeamStudio runtime',
+        mode: dmxMode
     }
 }
 
@@ -919,9 +888,6 @@ function broadcastColors() {
 let dmxInterval = null
 let uiInterval = null // Throttled UI update
 let lastInternalColors = fixtures.map(() => ({ r: 0, g: 0, b: 0 }))
-let frameCount = 0
-let lastFpsTime = performance.now()
-
 // Optimized color comparison (no JSON.stringify overhead)
 function colorsChanged() {
     for (let i = 0; i < fixtures.length; i++) {
@@ -937,32 +903,6 @@ function colorsChanged() {
 function startDMXLoop() {
     if (dmxInterval) clearInterval(dmxInterval)
     if (uiInterval) clearInterval(uiInterval)
-
-    // Hardware Loop - Only for drivers that don't have their own loop (like Art-Net)
-    // The D2XX Worker handles its own high-precision timing.
-    if (dmxDriver.mode === 'artnet') {
-        const dmxMs = Math.round(1000 / dmxState.performance.dmxHz)
-        dmxInterval = setInterval(() => {
-            if (dmxState.blackout) {
-                for (let i = 0; i < 512; i++) dmxDriver.setChannel(i, 0)
-            } else {
-                for (let i = 0; i < 512; i++) dmxDriver.setChannel(i, dmxState.channels[i])
-            }
-            dmxDriver.transmit()
-            frameCount++
-
-            // Telemetry: Every 1 second
-            const now = performance.now()
-            if (now - lastFpsTime >= 1000) {
-                const actualHz = Math.round((frameCount * 1000) / (now - lastFpsTime))
-                BrowserWindow.getAllWindows().forEach(win => {
-                    win.webContents.send('dmx:telemetry', { actualHz })
-                })
-                frameCount = 0
-                lastFpsTime = now
-            }
-        }, dmxMs)
-    }
 
     // UI Broadcast Loop - Optimized (no JSON.stringify)
     const uiMs = Math.round(1000 / dmxState.performance.uiHz)
@@ -1101,7 +1041,7 @@ function setupIPC() {
         devicePath: nativeDevicePath,
         driver: currentUsbDriver, // Expose current driver type
         driverName: dmxDriver?.driverName || 'Unknown',
-        driverMode: dmxDriver?.mode || 'artnet'
+        driverMode: dmxDriver?.mode || 'usb'
     }))
 
     ipcMain.handle('dmx:listPorts', async () => {
@@ -1128,7 +1068,7 @@ function setupIPC() {
         dmxState.performance = { ...dmxState.performance, ...settings }
 
         // Update Worker if active
-        if (dmxDriver && dmxDriver.mode === 'd2xx' && dmxDriver.worker) {
+        if (dmxDriver?.worker) {
             dmxDriver.worker.postMessage({
                 type: 'updateSettings',
                 dmxHz: dmxState.performance.dmxHz
@@ -1742,15 +1682,15 @@ app.whenReady().then(async () => {
     app.on('browser-window-created', (_, window) => optimizer.watchWindowShortcuts(window))
     setupIPC()
 
-    // Auto-connect to D2XX by default (fall back to Art-Net)
+    // Auto-connect to the local USB DMX interface by default
     try {
-        logger.log('[DMX] Auto-connecting to D2XX...')
+        logger.log('[DMX] Auto-connecting to local USB DMX interface...')
         const result = await switchDmxMode('usb', null, 'd2xx')
         if (!result.success) {
-            logger.log('[DMX] D2XX not found, using Art-Net fallback')
+            logger.log('[DMX] USB auto-connect did not succeed:', result.error)
         }
     } catch (e) {
-        logger.log('[DMX] D2XX auto-connect failed:', e.message)
+        logger.log('[DMX] USB auto-connect failed:', e.message)
     }
 
     startDMXLoop()

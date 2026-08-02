@@ -1,7 +1,7 @@
 {
   "name": "beamstudio",
   "version": "1.0.0",
-  "description": "Advanced DMX Light Controller via Art-Net",
+  "description": "Advanced DMX Light Controller via USB Direct",
   "main": "./out/main/index.js",
   "author": "Antigravity Team",
   "scripts": {
@@ -16,7 +16,6 @@
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@google/generative-ai": "^0.24.1",
-    "dmxnet": "^0.9.0",
     "ftdi-d2xx": "^1.3.1",
     "serialport": "^13.0.0",
     "zustand": "^5.0.10"

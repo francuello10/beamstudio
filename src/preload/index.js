@@ -59,7 +59,7 @@ const dmxAPI = {
     setDynamicRendererActive: (active) => ipcRenderer.invoke('dmx:setDynamicRendererActive', active),
     updatePerformance: (settings) => ipcRenderer.invoke('dmx:updatePerformance', settings),
 
-    // DMX Mode Control (Art-Net vs Native USB)
+    // DMX Connection Control (USB runtime only)
     getMode: () => ipcRenderer.invoke('dmx:getMode'),
     listPorts: () => ipcRenderer.invoke('dmx:listPorts'),
     scanD2XX: () => ipcRenderer.invoke('dmx:scanD2XX'), // Diagnostic for non-VCP devices

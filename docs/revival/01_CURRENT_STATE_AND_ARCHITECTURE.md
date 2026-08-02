@@ -18,8 +18,7 @@
 └──────────────┬─────────────────────────────────────────────┘
                │
                ├── D2XX Worker (Windows)
-               ├── Serial Worker (Linux)
-               └── Art-Net
+               └── Serial Worker (Linux)
 ```
 
 ## 2. Componentes principales
@@ -67,7 +66,7 @@ Esto evita duplicar planes: GStack queda como origen de hallazgos, Revival queda
 - drivers separados por plataforma;
 - worker para D2XX;
 - worker para serial;
-- fallback Art-Net;
+- runtime local USB-only;
 - perfiles P06/P01/P02;
 - fixture patch persistente en userData;
 - dimmer, RGB, flash y macros;
