@@ -41,6 +41,22 @@
 | `services/geminiService.js` | IA | Congelado |
 | `utils/aiRuntime.js` | Compilación de escenas IA | Seguridad y robustez |
 
+
+## 2.1 Hallazgos heredados de GStack
+
+La revisión GStack previa fue absorbida como evidencia histórica. Los hallazgos técnicos que siguen vigentes se tratan así:
+
+| Hallazgo | Estado actual | Tarea dueña |
+|---|---|---|
+| `CHANNEL_MAP` residual en `startDynamicScene()` | Riesgo DMX real, validado por código | `BS-002` |
+| `energies` fuera de scope en `useSystemAudio()` | Riesgo de runtime en audio DSP | `BS-004` |
+| `removeAllListeners` en cleanup de preload | Puede cortar listeners de otros consumidores | `BS-001` |
+| Falta de scripts `test`/`lint`/`check` | El repo solo expone `dev`, `build`, `dist` | `BS-001` |
+| Persistencia de fixtures/settings | Debe verificarse contra el código actual antes de cambiar | `BS-000`, `BS-002` |
+| Extracción de módulos desde `main/index.js` | Deseable, pero peligrosa antes de evidencia | Post-M0 o slices chicas luego de checks |
+
+Esto evita duplicar planes: GStack queda como origen de hallazgos, Revival queda como plan operativo.
+
 ## 3. Estado por módulo
 
 ### 3.1 DMX core

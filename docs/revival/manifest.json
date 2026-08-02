@@ -26,5 +26,11 @@
     ]
   },
   "first_task": "BS-000",
-  "primary_goal": "Validate and stabilize existing functionality before adding features."
+  "primary_goal": "Validate and stabilize existing functionality before adding features.",
+  "absorbed_sources": [
+    "TEMP_REVIEW_GSTACK_2026-04-04.md",
+    "TEMP_IMPLEMENTATION_PLAN_GSTACK_AUTOPLAN_2026-04-04.md"
+  ],
+  "source_of_truth": "docs/revival/**",
+  "notes": "GStack temporary review files were absorbed into Revival docs and can be removed from repository root."
 }

@@ -70,6 +70,29 @@ El primer milestone debe responder con evidencia a estas preguntas:
 
 Hasta contestar eso, cualquier nueva feature aumenta la incertidumbre.
 
+
+### 2.1 Revisión GStack absorbida
+
+Antes de este paquete existían dos documentos temporales generados por GStack:
+
+- `TEMP_REVIEW_GSTACK_2026-04-04.md`;
+- `TEMP_IMPLEMENTATION_PLAN_GSTACK_AUTOPLAN_2026-04-04.md`.
+
+Sus hallazgos quedan incorporados en Revival, pero su orden de ejecución no queda vigente. GStack proponía empezar por fixes puntuales del hook de audio y cleanup IPC. Revival cambia la prioridad: primero evidencia reproducible, después checks/diagnóstico, después regresión DMX, y recién entonces audio DSP y features.
+
+```text
+GStack TEMP docs
+    │
+    ├── baseline/smoke/checks ───────► BS-000 + BS-001
+    ├── preload listener cleanup ─────► BS-001
+    ├── CHANNEL_MAP residual ─────────► BS-002
+    ├── audio energies bug ───────────► BS-004
+    ├── fixture/settings persistence ─► verificar en BS-000/BS-002
+    └── main/index.js extraction ─────► post-hardening, slices pequeñas
+```
+
+Decisión: `docs/revival/**` es la fuente de verdad. Los `TEMP_*` eran insumos de revisión y pueden eliminarse de la raíz para evitar dos roadmaps compitiendo.
+
 ### Definición de terminado de M0
 
 M0 se considera terminado cuando:
