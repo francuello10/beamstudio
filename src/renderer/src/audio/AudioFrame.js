@@ -7,6 +7,8 @@ export const createEmptyAudioFrame = () => ({
     },
     levels: {
         bass: 0,
+        vocal: 0,
+        melodyPulse: 0,
         mid: 0,
         high: 0,
         volume: 0,
@@ -24,6 +26,7 @@ export const createEmptyAudioFrame = () => ({
         lowEndDynamics: 0,
         transientDensity: 0,
         midRms: 0,
+        vocalDynamics: 0,
         stereoWidth: 0
     },
     status: {
@@ -54,6 +57,8 @@ export const createAudioFrame = ({
     },
     levels: {
         bass: Math.max(0, Math.min(1, levels?.bass || 0)),
+        vocal: Math.max(0, Math.min(1, levels?.vocal || 0)),
+        melodyPulse: Math.max(0, Math.min(1, levels?.melodyPulse || levels?.vocal || 0)),
         mid: Math.max(0, Math.min(1, levels?.mid || 0)),
         high: Math.max(0, Math.min(1, levels?.high || 0)),
         volume: Math.max(0, Math.min(1, levels?.volume || 0)),
@@ -77,6 +82,7 @@ export const createAudioFrame = ({
         lowEndDynamics: telemetry?.lowEndDynamics || 0,
         transientDensity: telemetry?.transientDensity || 0,
         midRms: telemetry?.midRms || 0,
+        vocalDynamics: telemetry?.vocalDynamics || 0,
         stereoWidth: telemetry?.stereoWidth || 0
     },
     status: {

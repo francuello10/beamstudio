@@ -14,6 +14,7 @@ import {
     computeLowMid,
     computeMidHigh,
     computeStereoWidth,
+    computeVocalMelodyProfile,
     detectStableGenre,
     extractBands
 } from '../audio/AudioAnalyzer'
@@ -103,8 +104,11 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
     const peakHoldR = useRef(new Array(16).fill(0))
     const peakHoldBass = useRef(0)
     const bassPulse = useRef(0)
+    const vocalPulse = useRef(0)
     const bassFloor = useRef(0)
     const previousBassRaw = useRef(0)
+    const vocalFloor = useRef(0)
+    const previousVocalRaw = useRef(0)
     const broadbandFloor = useRef(0)
     const previousBroadband = useRef(0)
     const lastMusicalActivityAt = useRef(0)
@@ -199,8 +203,11 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
         setAudioTelemetryDSP({ left: 0, center: 0, right: 0 })
         peakHoldBass.current = 0
         bassPulse.current = 0
+        vocalPulse.current = 0
         bassFloor.current = 0
         previousBassRaw.current = 0
+        vocalFloor.current = 0
+        previousVocalRaw.current = 0
         broadbandFloor.current = 0
         previousBroadband.current = 0
         lastMusicalActivityAt.current = 0
@@ -338,6 +345,15 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 })
                 bassFloor.current = bassProfile.floor
                 previousBassRaw.current = bassProfile.raw
+                const vocalProfile = computeVocalMelodyProfile(dataBass, {
+                    sampleRate: audioCtx.current?.sampleRate || 48000,
+                    fftSize: analyserBass.current?.fftSize || 2048,
+                    previousRaw: previousVocalRaw.current,
+                    adaptiveFloor: vocalFloor.current,
+                    boostLevel
+                })
+                vocalFloor.current = vocalProfile.floor
+                previousVocalRaw.current = vocalProfile.raw
                 const bassEnergy = bassProfile.energy
                 const peakState = applyPeakHold({
                     bandsL,
@@ -384,15 +400,20 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
 
                 // Sides: Mid/High energy (bands 4-15) — needed by BOTH Bass Pulse and Genre mode
                 const { midHighL, midHighR } = computeMidHigh(bandsL, bandsR)
+                const vocalCenterBias = Math.max(0, Math.min(1, 1 - Math.abs(midHighL - midHighR) / (midHighL + midHighR + 0.04)))
+                const vocalEnergy = Math.min(1, vocalProfile.energy * (0.72 + vocalCenterBias * 0.28))
+                const vocalDecay = Math.max(0.42, 0.76 - boostLevel * 0.07)
+                vocalPulse.current = Math.max(vocalEnergy, vocalPulse.current * vocalDecay)
+                const vocalOutput = vocalPulse.current
 
-                const spatial = buildSpatialResponse({ midHighL, bassSmooth: bassOutput, midHighR })
+                const spatial = buildSpatialResponse({ midHighL, bassSmooth: bassOutput, midHighR, vocalPulse: vocalOutput })
                 const spectral = buildSpectralResponse(bandsL, bandsR)
 
                 const energies = spatial
 
                 const highEnergy = spectral.slice(10).reduce((sum, value) => sum + value, 0) / 6
                 const midEnergy = spectral.slice(4, 10).reduce((sum, value) => sum + value, 0) / 6
-                const volume = Math.min(1.0, (bassOutput + midHighL + midHighR) / 3)
+                const volume = Math.min(1.0, (bassOutput + vocalOutput + midHighL + midHighR) / 4)
                 const broadband = Math.max(midEnergy, highEnergy, midHighL, midHighR)
                 const broadbandRise = Math.max(0, broadband - previousBroadband.current)
                 previousBroadband.current = broadband
@@ -404,10 +425,12 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 const broadbandAboveFloor = Math.max(0, broadband - (broadbandFloor.current + 0.045))
                 const transientActivity = Math.max(
                     bassProfile.transient,
+                    vocalProfile.transient,
                     broadbandRise * 6.5
                 )
                 const sustainedActivity = Math.max(
                     bassProfile.energy,
+                    vocalProfile.energy,
                     broadbandAboveFloor * 1.6
                 )
                 const calibrating = audioStartedAt.current === 0 || now - audioStartedAt.current < 900
@@ -423,6 +446,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                     peakHoldL: peakHoldL.current,
                     peakHoldR: peakHoldR.current,
                     midEnergy,
+                    vocalEnergy: silence ? 0 : vocalOutput,
                     stereoWidth
                 })
                 const frameSpatial = silence ? { left: 0, center: 0, right: 0 } : spatial
@@ -430,6 +454,8 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 const frameLevels = silence
                     ? {
                         bass: 0,
+                        vocal: 0,
+                        melodyPulse: 0,
                         mid: 0,
                         high: 0,
                         volume: 0,
@@ -437,6 +463,8 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                     }
                     : {
                         bass: bassOutput,
+                        vocal: vocalOutput,
+                        melodyPulse: vocalOutput,
                         mid: midEnergy,
                         high: highEnergy,
                         volume,
@@ -473,6 +501,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                     peakHoldR.current = new Array(16).fill(0)
                     peakHoldBass.current = 0
                     bassPulse.current = 0
+                    vocalPulse.current = 0
                     useAudioStore.getState().updateAudioAnalysis(
                         frameSpatial,
                         frameSpectral,
@@ -525,7 +554,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 setAudioTelemetryDSP(energies)
                 if (onAudioUpdate) onAudioUpdate(energies)
 
-                const globalEnergy = (bassEnergy + (midHighL + midHighR) / 2) / 2
+                const globalEnergy = (bassEnergy + vocalOutput * 0.75 + (midHighL + midHighR) / 2) / 2.75
                 const boostFactor = 0.2 + (globalEnergy * 0.9 * audioSensitivity)
                 setEnergyFactor(boostFactor)
                 smoothedOutput.current = applyModifierAndSmoothing({

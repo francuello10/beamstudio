@@ -75,6 +75,52 @@ export const computeBassProfile = (dataBass, {
 
 export const computeBassEnergy = (dataBass, options) => computeBassProfile(dataBass, options).energy
 
+export const computeVocalMelodyProfile = (data, {
+    sampleRate = 48000,
+    fftSize = 2048,
+    previousRaw = 0,
+    adaptiveFloor = 0,
+    boostLevel = 1
+} = {}) => {
+    if (!data?.length) {
+        return { energy: 0, raw: 0, floor: 0, body: 0, vowel: 0, presence: 0, air: 0, transient: 0 }
+    }
+
+    // Lightweight vocal/lead-melody envelope for live lighting.
+    // This is not AI stem separation; it follows the vocal/melodic midrange
+    // contour in a mixed track and keeps Slot 2 reserved for true bass.
+    const lowNoise = averageFrequencyBand(data, sampleRate, fftSize, 35, 180)
+    const body = averageFrequencyBand(data, sampleRate, fftSize, 180, 420)
+    const vowel = averageFrequencyBand(data, sampleRate, fftSize, 420, 1100)
+    const presence = averageFrequencyBand(data, sampleRate, fftSize, 1100, 3200)
+    const air = averageFrequencyBand(data, sampleRate, fftSize, 3200, 6200)
+
+    const leadCore = Math.max(
+        vowel * 1.14 + presence * 0.58,
+        body * 0.78 + presence * 0.74
+    )
+    const noisePenalty = Math.min(0.55, lowNoise * 0.38 + air * 0.22)
+    const raw = clamp01(leadCore - noisePenalty)
+
+    const floor = adaptiveFloor <= 0.0001 && previousRaw <= 0.0001
+        ? raw
+        : raw > adaptiveFloor
+            ? adaptiveFloor * 0.94 + raw * 0.06
+            : adaptiveFloor * 0.82 + raw * 0.18
+
+    const sensitivity = Math.max(0.5, Math.min(4, boostLevel || 1))
+    const gate = Math.max(0.018, floor * (1.12 - sensitivity * 0.035) + (0.04 - sensitivity * 0.006))
+    const aboveFloor = Math.max(0, raw - gate)
+    const rise = Math.max(0, raw - previousRaw)
+    const transient = clamp01(rise * 6.4)
+    const sustained = clamp01(aboveFloor * 2.15)
+    const shaped = sustained * 0.58 + transient * 0.88
+    const curve = Math.max(0.42, 0.84 - sensitivity * 0.055)
+    const energy = clamp01(Math.pow(shaped, curve))
+
+    return { energy, raw, floor, body, vowel, presence, air, transient }
+}
+
 export const applyPeakHold = ({
     bandsL,
     bandsR,
@@ -120,10 +166,10 @@ export const computeMidHigh = (bandsL, bandsR) => ({
     midHighR: bandsR.slice(4).reduce((a, b) => a + b, 0) / 12
 })
 
-export const buildSpatialResponse = ({ midHighL, bassSmooth, midHighR }) => ({
-    left: Math.min(1.0, midHighL * 1.2),
+export const buildSpatialResponse = ({ midHighL, bassSmooth, midHighR, vocalPulse = 0 }) => ({
+    left: Math.min(1.0, midHighL * 1.15 + vocalPulse * 0.42),
     center: Math.min(1.0, bassSmooth * 1.0),
-    right: Math.min(1.0, midHighR * 1.2)
+    right: Math.min(1.0, midHighR * 1.15 + vocalPulse * 0.42)
 })
 
 export const buildSpectralResponse = (bandsL, bandsR) => {
@@ -142,6 +188,7 @@ export const buildFrameTelemetry = ({
     peakHoldL,
     peakHoldR,
     midEnergy,
+    vocalEnergy = 0,
     stereoWidth
 }) => {
     const avgEnergy = (bandsL.reduce((a, b) => a + b, 0) + bandsR.reduce((a, b) => a + b, 0)) / 32
@@ -153,6 +200,7 @@ export const buildFrameTelemetry = ({
         lowEndDynamics: Math.round(Math.sqrt(bassEnergy) * 100),
         transientDensity: Math.round(transientRatio * 50),
         midRms: Math.round(midEnergy * 100),
+        vocalDynamics: Math.round(Math.sqrt(vocalEnergy) * 100),
         stereoWidth: Math.round(stereoWidth * 100)
     }
 }

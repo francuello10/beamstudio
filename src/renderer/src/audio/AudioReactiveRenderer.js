@@ -103,11 +103,12 @@ const lerpAudioColor = (current, target, factor) => {
 
 export const buildBassPulseColors = (audioFrame) => {
     const bassBrightness = Math.pow(audioFrame.levels.bass, 0.8)
+    const vocalPulse = Math.pow(clamp01(audioFrame.levels.vocal || audioFrame.levels.melodyPulse || 0), 0.7)
     const ambientFloor = 0.05
     const centerIntensity = Math.max(ambientFloor, bassBrightness)
     const bassSideBleed = bassBrightness * 0.28
-    const leftIntensity = Math.max(ambientFloor, Math.min(1, Math.pow(audioFrame.stereo.midHighLeft, 0.9) + bassSideBleed))
-    const rightIntensity = Math.max(ambientFloor, Math.min(1, Math.pow(audioFrame.stereo.midHighRight, 0.9) + bassSideBleed))
+    const leftIntensity = Math.max(ambientFloor, Math.min(1, Math.pow(audioFrame.stereo.midHighLeft, 0.9) + vocalPulse * 0.45 + bassSideBleed))
+    const rightIntensity = Math.max(ambientFloor, Math.min(1, Math.pow(audioFrame.stereo.midHighRight, 0.9) + vocalPulse * 0.45 + bassSideBleed))
 
     return {
         bassBrightness,
@@ -136,49 +137,54 @@ export const buildGenreColors = (audioFrame) => {
     const bass = audioFrame.levels.bass
     const left = audioFrame.stereo.midHighLeft
     const right = audioFrame.stereo.midHighRight
+    const vocalPulse = clamp01(audioFrame.levels.vocal || audioFrame.levels.melodyPulse || 0)
+    const leftMelody = clamp01(left + vocalPulse * 0.38)
+    const rightMelody = clamp01(right + vocalPulse * 0.38)
     const lowMidLeft = audioFrame.stereo.lowMidLeft
     const lowMidRight = audioFrame.stereo.lowMidRight
+    const lowMidMelodyLeft = clamp01(lowMidLeft + vocalPulse * 0.32)
+    const lowMidMelodyRight = clamp01(lowMidRight + vocalPulse * 0.32)
     const lowMidAvg = (lowMidLeft + lowMidRight) / 2
 
     if (genre === 'ELECTRO') {
         const bassGlow = bass * 0.85
         return [
-            { r: Math.round(left * 180 + 20), g: Math.round(left * 50 + 10), b: Math.round(left * 200 + 30) },
+            { r: Math.round(leftMelody * 180 + 20), g: Math.round(leftMelody * 50 + 10), b: Math.round(leftMelody * 200 + 30) },
             { r: Math.round(200 * bassGlow + 40), g: Math.round(80 * bassGlow + 15), b: Math.round(120 * bassGlow + 30) },
-            { r: Math.round(right * 180 + 20), g: Math.round(right * 50 + 10), b: Math.round(right * 200 + 30) }
+            { r: Math.round(rightMelody * 180 + 20), g: Math.round(rightMelody * 50 + 10), b: Math.round(rightMelody * 200 + 30) }
         ]
     }
 
     if (genre === 'ROCK') {
         return [
-            { r: Math.round(left * 180 + 15), g: Math.round(left * 100 + 10), b: Math.round(left * 20) },
+            { r: Math.round(leftMelody * 180 + 15), g: Math.round(leftMelody * 100 + 10), b: Math.round(leftMelody * 20) },
             { r: Math.round(220 * bass + 20), g: Math.round(130 * bass + 15), b: Math.round(20 * bass + 5) },
-            { r: Math.round(right * 180 + 15), g: Math.round(right * 100 + 10), b: Math.round(right * 20) }
+            { r: Math.round(rightMelody * 180 + 15), g: Math.round(rightMelody * 100 + 10), b: Math.round(rightMelody * 20) }
         ]
     }
 
     if (genre === 'LATIN') {
         const warmFactor = lowMidAvg * GENRE_PROFILES.LATIN.midWeight
         return [
-            { r: Math.round(lowMidLeft * 180 + 15), g: Math.round(lowMidLeft * 100 + 10), b: Math.round(lowMidLeft * 30) },
+            { r: Math.round(lowMidMelodyLeft * 180 + 15), g: Math.round(lowMidMelodyLeft * 100 + 10), b: Math.round(lowMidMelodyLeft * 30) },
             { r: Math.round(warmFactor * 220 + 25), g: Math.round(warmFactor * 120 + 15), b: Math.round(bass * 40 + 10) },
-            { r: Math.round(lowMidRight * 180 + 15), g: Math.round(lowMidRight * 100 + 10), b: Math.round(lowMidRight * 30) }
+            { r: Math.round(lowMidMelodyRight * 180 + 15), g: Math.round(lowMidMelodyRight * 100 + 10), b: Math.round(lowMidMelodyRight * 30) }
         ]
     }
 
     if (genre === 'CINEMA') {
         const cinemaBase = bass * 0.8
         return [
-            { r: Math.round(left * 120 + 15), g: Math.round(left * 50 + 10), b: Math.round(left * 200 + 25) },
+            { r: Math.round(leftMelody * 120 + 15), g: Math.round(leftMelody * 50 + 10), b: Math.round(leftMelody * 200 + 25) },
             { r: Math.round(cinemaBase * 160 + 20), g: Math.round(cinemaBase * 60 + 10), b: Math.round(cinemaBase * 200 + 30) },
-            { r: Math.round(right * 120 + 15), g: Math.round(right * 50 + 10), b: Math.round(right * 200 + 25) }
+            { r: Math.round(rightMelody * 120 + 15), g: Math.round(rightMelody * 50 + 10), b: Math.round(rightMelody * 200 + 25) }
         ]
     }
 
     return [
-        { r: Math.round(left * 20 + 5), g: Math.round(left * 120 + 15), b: Math.round(left * 170 + 25) },
+        { r: Math.round(leftMelody * 20 + 5), g: Math.round(leftMelody * 120 + 15), b: Math.round(leftMelody * 170 + 25) },
         { r: Math.round(bass * 30 + 5), g: Math.round(bass * 100 + 20), b: Math.round(bass * 160 + 30) },
-        { r: Math.round(right * 20 + 5), g: Math.round(right * 120 + 15), b: Math.round(right * 170 + 25) }
+        { r: Math.round(rightMelody * 20 + 5), g: Math.round(rightMelody * 120 + 15), b: Math.round(rightMelody * 170 + 25) }
     ]
 }
 
@@ -199,12 +205,13 @@ export const applyModifierAndSmoothing = ({
         nextTargetColors = sourceColors.map((color, index) => {
             const rawBass = clamp01(audioFrame.levels.bass)
             const bass = Math.pow(rawBass, 0.62)
+            const vocalPulse = Math.pow(clamp01(audioFrame.levels.vocal || audioFrame.levels.melodyPulse || 0), 0.62)
             if (index === 1) {
                 return buildCenterBassKickColor(color, rawBass, boostLevel)
             }
 
             const sideEnergy = index === 0 ? audioFrame.stereo.midHighLeft : audioFrame.stereo.midHighRight
-            const sideWithBassBleed = Math.min(1, Math.pow(sideEnergy, 0.72) + bass * 0.28)
+            const sideWithBassBleed = Math.min(1, Math.pow(sideEnergy, 0.72) + vocalPulse * 0.48 + bass * 0.24)
             return buildSidePartyKickColor(color, sideWithBassBleed, bass, boostLevel)
         })
     }
