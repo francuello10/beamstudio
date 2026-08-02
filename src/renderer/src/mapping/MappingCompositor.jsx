@@ -139,10 +139,20 @@ export function computeQuadWarpVertices(corners) {
 
     const dx1 = x1 - x2, dx2 = x3 - x2, dx3 = x0 - x1 + x2 - x3
     const dy1 = y1 - y2, dy2 = y3 - y2, dy3 = y0 - y1 + y2 - y3
+    const denom = dx1 * dy2 - dx2 * dy1
 
     let a11, a12, a13, a21, a22, a23
-    if (dx3 === 0 && dy3 === 0) {
+    if ((dx3 === 0 && dy3 === 0) || Math.abs(denom) < 1e-9) {
         // Affine case (parallelogram) — no perspective term needed.
+        // Also the degenerate-quad fallback: two (or more) corners dragged
+        // into a near-collinear/coincident configuration via the ordinary
+        // CornerHandle drag UI (each corner is only clamped to [0,1]
+        // independently in handleCornerPointerMove, nothing prevents this)
+        // drive denom toward 0, which would otherwise produce NaN/Infinity
+        // a13/a23 feeding the vertex buffer every frame. Skipping the
+        // perspective term here — same epsilon (1e-9) as the sibling guards
+        // in projectQuadPoint/unprojectScreenPoint — keeps the output finite
+        // instead of blanking the surface with zero feedback to the operator.
         a13 = 0
         a23 = 0
         a11 = x1 - x0
@@ -150,7 +160,6 @@ export function computeQuadWarpVertices(corners) {
         a12 = y1 - y0
         a22 = y2 - y1
     } else {
-        const denom = dx1 * dy2 - dx2 * dy1
         a13 = (dx3 * dy2 - dx2 * dy3) / denom
         a23 = (dx1 * dy3 - dx3 * dy1) / denom
         a11 = x1 - x0 + a13 * x1
