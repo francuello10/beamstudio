@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Music } from 'lucide-react'
 
 // BS-007 phase 2: local mm:ss formatter, same style as SystemPage.jsx's -
@@ -32,6 +32,13 @@ const formatSeconds = (totalSeconds) => {
  */
 const NowPlayingOverlay = ({ nowPlaying }) => {
     const isEmpty = !nowPlaying || nowPlaying.state === 'no-player'
+    // BS-007 bugfix: same broken-image fallback as SystemPage.jsx's Now
+    // Playing card - a failed <img> load falls back to the Music icon
+    // placeholder instead of a broken-image glyph. Reset per-track.
+    const [artFailed, setArtFailed] = useState(false)
+    useEffect(() => {
+        setArtFailed(false)
+    }, [nowPlaying?.artwork])
 
     return (
         <div
@@ -63,10 +70,11 @@ const NowPlayingOverlay = ({ nowPlaying }) => {
                         maxWidth: '640px'
                     }}
                 >
-                    {nowPlaying.artwork ? (
+                    {nowPlaying.artwork && !artFailed ? (
                         <img
                             src={nowPlaying.artwork}
                             alt=""
+                            onError={() => setArtFailed(true)}
                             style={{
                                 width: '340px',
                                 height: '340px',

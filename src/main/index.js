@@ -1983,6 +1983,20 @@ const execPromise = (cmd) => new Promise((resolve) => {
     })
 })
 
+// BS-007 bugfix: '|' is NOT a safe field delimiter - real track titles/artists
+// (YouTube video titles especially) commonly contain a literal '|', which
+// shifts every subsequent field by one position (e.g. mpris:artUrl landing in
+// the album slot, or a Windows title's '|' pushing playbackStatus out of the
+// 'playing'/'paused'/'stopped' set entirely, silently falling through to
+// 'no-player'). The ASCII Unit Separator (0x1F) is built for exactly this -
+// delimiting fields in text that may itself contain any printable character -
+// and real metadata essentially never contains a raw control character.
+// Verified live on this machine: `playerctl metadata --format` with this
+// separator embedded in a single-quoted shell string passes the literal 0x1F
+// byte through child_process.exec unmodified (confirmed via `od -c` against
+// a real Spotify MPRIS session).
+const METADATA_FIELD_SEPARATOR = '\x1f'
+
 const getWindowsMedia = async () => {
     const psScript = `
         try {
@@ -1990,15 +2004,16 @@ const getWindowsMedia = async () => {
             if ($ctl) {
                 $info = $ctl.TryGetMediaPropertiesAsync().GetAwaiter().GetResult()
                 $playback = $ctl.GetPlaybackInfo().PlaybackStatus
-                Write-Output "$($info.Title)|$($info.Artist)|$playback"
+                $sep = [char]0x1F
+                Write-Output "$($info.Title)$sep$($info.Artist)$sep$playback"
             }
         } catch {}
     `
     // Encode command for PowerShell
     const cmd = `powershell -NoProfile -NonInteractive -Command "${psScript.replace(/\n/g, ' ')}"`
     const output = await execPromise(cmd)
-    if (!output || !output.includes('|')) return null
-    const [title, artist, playbackStatus] = output.split('|')
+    if (!output || !output.includes(METADATA_FIELD_SEPARATOR)) return null
+    const [title, artist, playbackStatus] = output.split(METADATA_FIELD_SEPARATOR)
     return {
         title: title.trim(),
         artist: artist.trim(),
@@ -2022,13 +2037,13 @@ const getLinuxMedia = async () => {
     // MPRIS field - Spotify's MPRIS integration does not expose one, so it
     // is deliberately not requested/returned here.
     const output = await execPromise(
-        "playerctl metadata --format '{{title}}|{{artist}}|{{position}}|{{mpris:length}}|{{mpris:artUrl}}|{{xesam:album}}'"
+        `playerctl metadata --format '{{title}}${METADATA_FIELD_SEPARATOR}{{artist}}${METADATA_FIELD_SEPARATOR}{{position}}${METADATA_FIELD_SEPARATOR}{{mpris:length}}${METADATA_FIELD_SEPARATOR}{{mpris:artUrl}}${METADATA_FIELD_SEPARATOR}{{xesam:album}}'`
     )
-    if (!output || !output.includes('|')) {
+    if (!output || !output.includes(METADATA_FIELD_SEPARATOR)) {
         if (playbackStatus) return { title: '', artist: '', playbackStatus: playbackStatus.trim() }
         return null
     }
-    const [title, artist, positionRaw, lengthRaw, artUrlRaw, albumRaw] = output.split('|')
+    const [title, artist, positionRaw, lengthRaw, artUrlRaw, albumRaw] = output.split(METADATA_FIELD_SEPARATOR)
     const positionUs = Number(positionRaw)
     const lengthUs = Number(lengthRaw)
     return {

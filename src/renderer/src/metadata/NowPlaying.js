@@ -48,6 +48,21 @@ export const normalizeNowPlayingState = (rawPlaybackStatus) => {
 }
 
 /**
+ * Normalizes a raw `artUrl`-style string into a value safe to render in an
+ * <img src>. Only http(s) URLs are accepted - anything else (a bare `file://`
+ * path some players like VLC may report, or any other scheme) is treated as
+ * "no artwork" rather than a broken image, since the CSP's `img-src` doesn't
+ * allow it anyway and this lets the iTunes fallback lookup in
+ * useNowPlaying.js still kick in instead of the code believing valid art
+ * already exists when it can't actually be displayed.
+ */
+const normalizeArtworkUrl = (artwork) => {
+    if (typeof artwork !== 'string') return null
+    const trimmed = artwork.trim()
+    return /^https?:\/\//i.test(trimmed) ? trimmed : null
+}
+
+/**
  * createNowPlaying - normalizer/factory for the NowPlaying contract.
  *
  * Accepts either an already-normalized `state` (one of NOW_PLAYING_STATES) or
@@ -72,9 +87,10 @@ export const createNowPlaying = ({
     album: typeof album === 'string' ? album.trim() : '',
     // Artwork via MPRIS `mpris:artUrl`: reliably present for some players
     // (e.g. Spotify) but not guaranteed across every MPRIS-compatible player
-    // or desktop environment, so this stays null unless a real URL string
-    // was actually provided upstream - never a placeholder/guess.
-    artwork: typeof artwork === 'string' && artwork.trim() ? artwork.trim() : null,
+    // or desktop environment, so this stays null unless a real http(s) URL
+    // was actually provided upstream - never a placeholder/guess, and never a
+    // non-http(s) scheme (see normalizeArtworkUrl).
+    artwork: normalizeArtworkUrl(artwork),
     state: NOW_PLAYING_STATES.has(state) ? state : normalizeNowPlayingState(playbackStatus),
     progress:
         progress &&

@@ -41,6 +41,14 @@ const SystemPage = () => {
     // from audio-reactive (see src/renderer/src/metadata/NowPlaying.js).
     useNowPlaying()
     const nowPlaying = useNowPlayingStore(state => state.nowPlaying)
+    // BS-007 bugfix: a failed <img> load (dead link, or a CSP-disallowed
+    // scheme that slipped past NowPlaying.js's normalization) must fall back
+    // to the Music icon placeholder instead of showing a broken-image glyph.
+    // Reset per-track so a new track with its own artwork gets a fresh try.
+    const [nowPlayingArtFailed, setNowPlayingArtFailed] = useState(false)
+    useEffect(() => {
+        setNowPlayingArtFailed(false)
+    }, [nowPlaying.artwork])
 
     const funcRanges = config?.funcRanges || []
     const perf = config?.performance || { dmxHz: 44, uiHz: 60, ambiFps: 60 }
@@ -198,10 +206,11 @@ const SystemPage = () => {
                         ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                                    {nowPlaying.artwork ? (
+                                    {nowPlaying.artwork && !nowPlayingArtFailed ? (
                                         <img
                                             src={nowPlaying.artwork}
                                             alt=""
+                                            onError={() => setNowPlayingArtFailed(true)}
                                             style={{
                                                 width: '72px',
                                                 height: '72px',

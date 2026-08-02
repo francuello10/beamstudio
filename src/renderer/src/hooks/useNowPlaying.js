@@ -29,10 +29,16 @@ const NOW_PLAYING_POLL_INTERVAL_MS = 1500
  */
 export const useNowPlaying = () => {
     const setNowPlaying = useNowPlayingStore((state) => state.setNowPlaying)
-    // Single-slot cache keyed by "artist|title": most MPRIS players (VLC,
-    // browser tabs, etc.) never send mpris:artUrl, so this avoids re-hitting
-    // the iTunes Search API every 1.5s poll for the same track — only fires
-    // once per track change, and only when MPRIS itself provided no art.
+    // Single-slot cache keyed by JSON.stringify([artist, title, album]): most
+    // MPRIS players (VLC, browser tabs, etc.) never send mpris:artUrl, so this
+    // avoids re-hitting the iTunes Search API every 1.5s poll for the same
+    // track — only fires once per track change, and only when MPRIS itself
+    // provided no art. JSON.stringify properly escapes any character (a raw
+    // "artist|title" string concat had the same unescaped-delimiter collision
+    // bug as the main-process metadata parsing: an artist/title containing a
+    // literal '|' could collide with a different track); including album also
+    // means a live/studio re-release sharing artist+title no longer
+    // incorrectly shares a cache slot.
     const fallbackArtworkRef = useRef({ key: null, url: null })
 
     useEffect(() => {
@@ -57,7 +63,9 @@ export const useNowPlaying = () => {
                 }
 
                 const hasProgress = Number.isFinite(media.positionSec) && Number.isFinite(media.durationSec)
-                const trackKey = media.title || media.artist ? `${media.artist || ''}|${media.title || ''}` : null
+                const trackKey = media.title || media.artist
+                    ? JSON.stringify([media.artist || '', media.title || '', media.album || ''])
+                    : null
 
                 let artwork = media.artUrl || null
                 if (!artwork && trackKey) {
