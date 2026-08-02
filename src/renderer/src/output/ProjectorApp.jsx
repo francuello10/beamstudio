@@ -5,6 +5,7 @@ import ParticleFieldVisual from '../visuals/ParticleFieldVisual'
 import TunnelGridVisual from '../visuals/TunnelGridVisual'
 import KaleidoscopeVisual from '../visuals/KaleidoscopeVisual'
 import CeilingDomeVisual from '../visuals/CeilingDomeVisual'
+import PoseSkeletonVisual from '../visuals/PoseSkeletonVisual'
 import { DEFAULT_VISUAL_ID } from '../visuals/visualRegistry'
 import MappingCompositor, { DEFAULT_SURFACE } from '../mapping/MappingCompositor'
 import { useNowPlaying } from '../hooks/useNowPlaying'
@@ -20,7 +21,8 @@ const VISUAL_COMPONENTS = {
     particleField: ParticleFieldVisual,
     tunnelGrid: TunnelGridVisual,
     kaleidoscope: KaleidoscopeVisual,
-    ceilingDome: CeilingDomeVisual
+    ceilingDome: CeilingDomeVisual,
+    poseSkeleton: PoseSkeletonVisual
 }
 
 /**
@@ -182,14 +184,19 @@ const ProjectorApp = () => {
                 instead of any of them being shown directly.
                 visibility:hidden (NOT display:none) keeps it reliably
                 rendering as a WebGL2 texture source across Chromium
-                versions. Deliberate ceiling: up to 5 concurrent WebGL2
-                contexts here (one per distinct visual — visualRegistry.js
-                defines exactly 5 today), not an unbounded number. */}
+                versions. Deliberate ceiling: one mounted source per visual
+                id from visualRegistry.js, not an unbounded surface count. */}
             <div style={{ position: 'absolute', visibility: 'hidden', width: '100vw', height: '100vh' }}>
                 {Array.from(everMountedVisualIdsRef.current).map((visualId) => {
                     const VisualComponent = VISUAL_COMPONENTS[visualId]
                     if (!VisualComponent) return null
-                    return <VisualComponent key={visualId} ref={getCanvasRef(visualId)} />
+                    return (
+                        <VisualComponent
+                            key={visualId}
+                            ref={getCanvasRef(visualId)}
+                            active={distinctVisualIds.has(visualId)}
+                        />
+                    )
                 })}
             </div>
 

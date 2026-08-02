@@ -10,7 +10,8 @@ export const VISUALS = [
     { id: 'particleField', label: 'Particle Field' },
     { id: 'tunnelGrid', label: 'Tunnel Grid' },
     { id: 'kaleidoscope', label: 'Kaleidoscope' },
-    { id: 'ceilingDome', label: 'Ceiling Dome' }
+    { id: 'ceilingDome', label: 'Ceiling Dome' },
+    { id: 'poseSkeleton', label: 'Pose Skeleton' }
 ]
 
 export const DEFAULT_VISUAL_ID = VISUALS[0].id
