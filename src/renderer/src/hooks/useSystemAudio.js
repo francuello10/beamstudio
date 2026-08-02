@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { multiplyBrightness, lerpColor, GENRE_PROFILES } from '../utils/palettes'
+import { createAudioFrame } from '../audio/AudioFrame'
 
 const AUDIO_INPUT_STORAGE_KEY = 'beamstudio.audio.inputDeviceId'
 
@@ -88,6 +89,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
         { r: 0, g: 0, b: 0 },
         { r: 0, g: 0, b: 0 }
     ])
+    const activeSourceRef = useRef({ deviceId: '', label: '', fallbackToDefault: false })
 
     const refreshInputs = useCallback(async () => {
         if (!navigator.mediaDevices?.enumerateDevices) return []
@@ -148,6 +150,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
             { r: 0, g: 0, b: 0 },
             { r: 0, g: 0, b: 0 }
         ]
+        activeSourceRef.current = { deviceId: '', label: '', fallbackToDefault: false }
         window.audio?.stop()
     }, [])
 
@@ -165,6 +168,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
             }
 
             let stream
+            let fallbackToDefault = false
             try {
                 stream = await navigator.mediaDevices.getUserMedia({
                     audio: selectedDeviceId
@@ -175,6 +179,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
             } catch (err) {
                 if (!selectedDeviceId) throw err
 
+                fallbackToDefault = true
                 setSourceError('Selected audio input is unavailable. BeamStudio fell back to the default input.')
                 stream = await navigator.mediaDevices.getUserMedia({
                     audio: baseAudioConstraints,
@@ -183,7 +188,14 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
             }
 
             streamRef.current = stream
-            await refreshInputs().catch(() => { })
+            const inputs = await refreshInputs().catch(() => [])
+            const actualDeviceId = stream.getAudioTracks?.()[0]?.getSettings?.().deviceId || selectedDeviceId || ''
+            const matchedInput = inputs.find(input => input.deviceId === actualDeviceId)
+            activeSourceRef.current = {
+                deviceId: actualDeviceId,
+                label: matchedInput?.label || (selectedDeviceId ? 'Selected audio input' : 'Default audio input'),
+                fallbackToDefault
+            }
 
             const AudioContextClass = window.AudioContext || window.webkitAudioContext
             audioCtx.current = new AudioContextClass()
@@ -294,14 +306,15 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                     const counts = { ELECTRO: 0, ROCK: 0, CHILL: 0, LATIN: 0, CINEMA: 0 }
                     genreHistory.current.forEach(g => counts[g]++)
                     const stable = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]
-
-                    setDetectedGenre(stable)
-                    setTelemetry({
+                    const currentTelemetry = {
                         lowEndDynamics: Math.round(bassRMS * 100),
                         transientDensity: Math.round(transientRatio * 50),
                         midRms: Math.round(midRms * 100),
                         stereoWidth: Math.round(stereoWidth * 100)
-                    })
+                    }
+
+                    setDetectedGenre(stable)
+                    setTelemetry(currentTelemetry)
                 }
 
                 // Sides: Mid/High energy (bands 4-15) — needed by BOTH Bass Pulse and Genre mode
@@ -375,8 +388,36 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
 
                 const energies = spatial
 
+                const highEnergy = spectral.slice(10).reduce((sum, value) => sum + value, 0) / 6
+                const midEnergy = spectral.slice(4, 10).reduce((sum, value) => sum + value, 0) / 6
+                const volume = Math.min(1.0, (bassSmooth + midHighL + midHighR) / 3)
+                const frameTelemetry = {
+                    lowEndDynamics: Math.round(Math.sqrt(bassEnergy) * 100),
+                    transientDensity: Math.round((((bandsL.reduce((a, b) => a + b, 0) + bandsR.reduce((a, b) => a + b, 0)) / 32) > 0.01
+                        ? Math.max(...peakHoldL.current, ...peakHoldR.current) / ((bandsL.reduce((a, b) => a + b, 0) + bandsR.reduce((a, b) => a + b, 0)) / 32)
+                        : 0) * 50),
+                    midRms: Math.round(midEnergy * 100),
+                    stereoWidth: Math.round(stereoWidth * 100)
+                }
+
+                const audioFrame = createAudioFrame({
+                    timestamp: Date.now(),
+                    source: activeSourceRef.current,
+                    levels: {
+                        bass: bassSmooth,
+                        mid: midEnergy,
+                        high: highEnergy,
+                        volume,
+                        stereoWidth
+                    },
+                    spatial,
+                    spectral,
+                    telemetry: frameTelemetry,
+                    genre: autoGenre ? detectedGenre : manualGenre
+                })
+
                 // 3. ATOMIC UPDATE
-                useAudioStore.getState().updateAudioAnalysis(spatial, spectral)
+                useAudioStore.getState().updateAudioAnalysis(spatial, spectral, audioFrame)
 
                 // Legacy Internal State (keep for now to not break old consumers immediately if any)
                 setAudioTelemetryDSP(energies)

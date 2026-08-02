@@ -31,6 +31,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - El hook mezcla análisis, React state, colorización y control DMX.
 - No existe un contrato único consumido por escenas y visuales.
 - Primer slice activo en `main`: selección explícita de `audioinput` persistida en renderer + fix del bug `energies` fuera de scope.
+- Segundo slice activo en `main`: `audioFrame` normalizado publicado en `audioStore` para consumo futuro por escenas, Ambilight y visuales.
 
 ## Alcance
 
