@@ -4,8 +4,9 @@ export const buildBassPulseColors = (audioFrame) => {
     const bassBrightness = Math.pow(audioFrame.levels.bass, 0.8)
     const ambientFloor = 0.05
     const centerIntensity = Math.max(ambientFloor, bassBrightness)
-    const leftIntensity = Math.max(ambientFloor, Math.pow(audioFrame.stereo.midHighLeft, 0.9))
-    const rightIntensity = Math.max(ambientFloor, Math.pow(audioFrame.stereo.midHighRight, 0.9))
+    const bassSideBleed = bassBrightness * 0.28
+    const leftIntensity = Math.max(ambientFloor, Math.min(1, Math.pow(audioFrame.stereo.midHighLeft, 0.9) + bassSideBleed))
+    const rightIntensity = Math.max(ambientFloor, Math.min(1, Math.pow(audioFrame.stereo.midHighRight, 0.9) + bassSideBleed))
 
     return {
         bassBrightness,
@@ -94,9 +95,11 @@ export const applyModifierAndSmoothing = ({
         const boostLevel = Math.max(0.5, Math.min(2.5, audioSensitivity || 1))
         nextTargetColors = inputColors.map((color, index) => {
             const sideEnergy = index === 0 ? audioFrame.stereo.midHighLeft : audioFrame.stereo.midHighRight
+            const bass = Math.pow(audioFrame.levels.bass, 0.62)
+            const sideWithBassBleed = Math.min(1, Math.pow(sideEnergy, 0.72) + bass * 0.22)
             const factor = index === 1
-                ? (0.25 + Math.pow(audioFrame.levels.bass, 0.62) * 1.95 * boostLevel)
-                : (0.35 + Math.pow(sideEnergy, 0.72) * 1.15 * boostLevel)
+                ? (0.18 + bass * 2.25 * boostLevel)
+                : (0.32 + sideWithBassBleed * 1.15 * boostLevel)
             return multiplyBrightness(color, factor)
         })
     }

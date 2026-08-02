@@ -75,21 +75,21 @@ const AudioPage = () => {
         {
             label: 'Slot 1',
             fixture: dmxFixtures[0]?.name || 'Fixture 1',
-            driver: bassPulseMode ? 'left mids / highs' : `${currentGenre} palette + left mids`,
+            driver: bassPulseMode ? 'left channel + slight bass' : `${currentGenre} profile + left channel`,
             level: audioFrame.spatial.left,
             color: pixelMapBuffer[0]
         },
         {
             label: 'Slot 2',
             fixture: dmxFixtures[1]?.name || 'Fixture 2',
-            driver: bassPulseMode ? 'bass / sub pulse' : `${currentGenre} palette + bass`,
+            driver: bassPulseMode ? 'bass only / sub pulse' : `${currentGenre} profile + bass only`,
             level: audioFrame.spatial.center,
             color: pixelMapBuffer[1]
         },
         {
             label: 'Slot 3',
             fixture: dmxFixtures[2]?.name || 'Fixture 3',
-            driver: bassPulseMode ? 'right mids / highs' : `${currentGenre} palette + right mids`,
+            driver: bassPulseMode ? 'right channel + slight bass' : `${currentGenre} profile + right channel`,
             level: audioFrame.spatial.right,
             color: pixelMapBuffer[2]
         }
@@ -265,7 +265,7 @@ Mixer/base palette → audio boost → fixture-slot DMX mapping
                             Mapping behavior
                         </div>
                         <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
-                            Slot order follows the fixture patch. Full music boost follows the whole spectrum/profile; Bass boost emphasizes low-end pulses. Set any solid look first — REUNIÓN, Quick Palettes, ColorWheel, RGB faders, or scenes — and audio boosts that base. RGB changes reactively; DIM keeps the current master dimmer; FUNC/SPD/FLASH are left untouched. Extra fixtures reuse the last slot color.
+                            Slot order follows the fixture patch. Slot 2 is the bass/center slot. Full music boost follows the whole spectrum/profile; Bass boost keeps Slot 2 exclusive to bass and gives Slot 1/3 a smaller bass bleed. Set any solid look first — REUNIÓN, Quick Palettes, ColorWheel, RGB faders, or scenes — and audio boosts that base. RGB changes reactively; DIM keeps the current master dimmer; FUNC/SPD/FLASH are left untouched. Extra fixtures reuse the last slot color.
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
                             {mapping.map((item) => (
