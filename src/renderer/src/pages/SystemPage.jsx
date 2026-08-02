@@ -14,6 +14,15 @@ const NOW_PLAYING_STATE_LABELS = {
     'no-player': 'No hay reproductor activo'
 }
 
+// BS-007 phase 2: small local mm:ss formatter for the progress bar labels -
+// no new dependency needed for this.
+const formatSeconds = (totalSeconds) => {
+    if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return '0:00'
+    const mins = Math.floor(totalSeconds / 60)
+    const secs = Math.floor(totalSeconds % 60)
+    return `${mins}:${String(secs).padStart(2, '0')}`
+}
+
 const AUDIO_SLOT_ROLES = [
     { label: 'Audio Slot 1', role: 'LEFT SIDE', color: '#00f2fe' },
     { label: 'Audio Slot 2', role: 'BASS CENTER', color: '#ffcc66' },
@@ -187,22 +196,82 @@ const SystemPage = () => {
                                 No hay reproductor activo.
                             </p>
                         ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                <strong style={{ fontSize: '14px', color: 'white' }}>
-                                    {nowPlaying.title || 'Sin título'}
-                                </strong>
-                                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                                    {nowPlaying.artist || 'Artista desconocido'}
-                                </span>
-                                <span style={{
-                                    fontSize: '11px',
-                                    fontWeight: 700,
-                                    color: nowPlaying.state === 'playing' ? 'var(--accent)' : 'var(--text-secondary)'
-                                }}>
-                                    {NOW_PLAYING_STATE_LABELS[nowPlaying.state] || NOW_PLAYING_STATE_LABELS['no-player']}
-                                    {' · '}
-                                    {nowPlaying.provider}
-                                </span>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                    {nowPlaying.artwork ? (
+                                        <img
+                                            src={nowPlaying.artwork}
+                                            alt=""
+                                            style={{
+                                                width: '72px',
+                                                height: '72px',
+                                                borderRadius: '10px',
+                                                objectFit: 'cover',
+                                                border: '1px solid var(--border-color)',
+                                                flexShrink: 0
+                                            }}
+                                        />
+                                    ) : (
+                                        <div style={{
+                                            width: '72px',
+                                            height: '72px',
+                                            borderRadius: '10px',
+                                            border: '1px solid var(--border-color)',
+                                            background: 'rgba(255,255,255,0.04)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            flexShrink: 0
+                                        }}>
+                                            <Music size={28} style={{ opacity: 0.35 }} />
+                                        </div>
+                                    )}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+                                        <strong style={{ fontSize: '14px', color: 'white' }}>
+                                            {nowPlaying.title || 'Sin título'}
+                                        </strong>
+                                        <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                            {nowPlaying.artist || 'Artista desconocido'}
+                                        </span>
+                                        {nowPlaying.album && (
+                                            <span style={{ fontSize: '11px', color: 'var(--text-secondary)', opacity: 0.8 }}>
+                                                {nowPlaying.album}
+                                            </span>
+                                        )}
+                                        <span style={{
+                                            fontSize: '11px',
+                                            fontWeight: 700,
+                                            color: nowPlaying.state === 'playing' ? 'var(--accent)' : 'var(--text-secondary)'
+                                        }}>
+                                            {NOW_PLAYING_STATE_LABELS[nowPlaying.state] || NOW_PLAYING_STATE_LABELS['no-player']}
+                                            {' · '}
+                                            {nowPlaying.provider}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {nowPlaying.progress && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <div style={{
+                                            width: '100%',
+                                            height: '4px',
+                                            borderRadius: '2px',
+                                            background: 'rgba(255,255,255,0.08)',
+                                            overflow: 'hidden'
+                                        }}>
+                                            <div style={{
+                                                width: `${Math.min(100, (nowPlaying.progress.positionSec / nowPlaying.progress.durationSec) * 100)}%`,
+                                                height: '100%',
+                                                background: 'var(--accent)',
+                                                borderRadius: '2px'
+                                            }} />
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-secondary)' }}>
+                                            <span>{formatSeconds(nowPlaying.progress.positionSec)}</span>
+                                            <span>{formatSeconds(nowPlaying.progress.durationSec)}</span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
