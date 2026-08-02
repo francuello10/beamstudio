@@ -55,6 +55,8 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - Veintitresavo slice activo: Slot 2 dejó de usar flash blanco/cálido; ahora usa contraste de intensidad sobre el color base para que x2.5 se note sin convertir la luz central en blanco fijo.
 - Veinticuatroavo slice activo: Slot 2 ahora manda un overlay de DIM por audio además de RGB, sin smoothing extra en main, y restaura dimmers al apagar audio para que el bajo se vea físicamente en la barra central.
 - Veinticincoavo slice activo: BeamStudio filtra/rechaza micrófonos dentro de la app, limpia selecciones guardadas no-monitor, mantiene sólo fuentes speaker monitor/loopback y amplía el boost hasta x4 con saltos de 0.5 y respuesta cuantizada más brusca.
+- Veintiseisavo slice activo: el boost pasó a criterio 4D/fiesta electrónica para hardware no-AAA: bass decay más corto, analyser bass más rápido, saltos DIM/RGB cuantizados y overlay de DIM también en laterales con menor intensidad que el centro.
+- Veintisieteavo slice activo: el filtro de fuentes audio acepta monitores explícitos y fuentes genéricas `Default`/PipeWire/Pulse que no digan mic/webcam/camera, para no bloquear Linux cuando el monitor no trae label descriptivo.
 
 ## Alcance
 
@@ -95,6 +97,8 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - [x] Slot 2 puede modular master DIM como overlay temporal de audio y restaura los dimmers capturados al apagar audio.
 - [x] BeamStudio no lista ni acepta micrófonos como fuente de audio reactivo; sólo usa speaker monitor/loopback desde la app.
 - [x] Boost level llega a x4 con saltos más amplios y respuesta de kick cuantizada para una sensación más brusca/inmersiva.
+- [x] La salida audio modula DIM/RGB en los tres slots: Slot 2 pega más al bajo y laterales acompañan con saltos de fiesta electrónica.
+- [x] En Linux, BeamStudio puede usar fuente genérica `Default`/PipeWire/Pulse como system audio si no está etiquetada como micrófono/cámara.
 - [ ] Silencio no genera NaN, Infinity ni flashes erráticos.
 - [ ] El DSP no escribe DMX directamente salvo contrato explícito.
 - [ ] La UI no renderiza innecesariamente a 60 Hz.

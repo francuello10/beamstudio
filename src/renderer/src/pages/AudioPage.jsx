@@ -126,7 +126,7 @@ Mixer/base palette → audio boost → Slot 2 bass center
                             <option value="">Auto speaker monitor</option>
                             {availableInputs.map((input) => (
                                 <option key={input.deviceId} value={input.deviceId}>
-                                    Speaker monitor · {input.label}
+                                    {input.isMonitor ? 'Speaker monitor · ' : 'System default · '}{input.label}
                                 </option>
                             ))}
                         </select>
@@ -146,7 +146,7 @@ Mixer/base palette → audio boost → Slot 2 bass center
                             <div>
                                 <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Active source</div>
                                 <strong>{reconnecting ? 'Reconnecting...' : (activeSource.label || 'Auto speaker monitor')}</strong>
-                                {activeSource.isMonitor ? <span style={{ color: '#8fffc2' }}> · system audio</span> : null}
+                                {activeSource.isMonitor || activeSource.isGenericSystem ? <span style={{ color: '#8fffc2' }}> · system audio</span> : null}
                             </div>
                             <div style={{ display: 'flex', gap: '8px' }}>
                                 <span style={{ color: audioFrame.status.silence ? '#ffcc66' : '#8fffc2', fontSize: '12px' }}>
@@ -172,7 +172,7 @@ Mixer/base palette → audio boost → Slot 2 bass center
                                 <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Boost level</div>
                                 <strong>x{audioBoostLevel.toFixed(1)}</strong>
                             </div>
-                            <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Higher = wider, harsher jumps</span>
+                            <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Higher = bigger 4D party jumps</span>
                         </div>
                         <input
                             type="range"
@@ -276,7 +276,7 @@ Mixer/base palette → audio boost → Slot 2 bass center
                             </span>
                         </div>
                         <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
-                            Full Music Boost uses the whole profile. Bass Boost makes Slot 2 react only to bass/sub, while Slot 1 and Slot 3 follow L/R with a smaller bass bleed. RGB changes reactively; Slot 2 can pulse DIM while audio is on and restores it when stopped; FUNC/SPD/FLASH are left untouched.
+                            Full Music Boost uses the whole profile. Bass Boost makes Slot 2 react only to bass/sub, while Slot 1 and Slot 3 follow L/R with a smaller bass bleed. RGB and DIM pulse reactively while audio is on and restore when stopped; FUNC/SPD/FLASH are left untouched.
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
                             {mapping.map((item) => (

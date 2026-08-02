@@ -2,6 +2,7 @@ export const AUDIO_INPUT_STORAGE_KEY = 'beamstudio.audio.inputDeviceId'
 
 const MONITOR_INPUT_PATTERN = /monitor|loopback|stereo mix|what u hear|output.*monitor|monitor.*output|sink.*monitor|monitor.*speaker|speaker.*monitor|parlante|altavoz|salida.*audio/i
 const MICROPHONE_INPUT_PATTERN = /microphone|microfono|micrófono|\bmic\b|webcam|camera/i
+const GENERIC_SYSTEM_INPUT_PATTERN = /^default$|pipewire|pulse|pulseaudio/i
 
 const stopStream = (stream) => {
     stream?.getTracks?.().forEach(track => track.stop())
@@ -30,9 +31,16 @@ export const writeStoredAudioInputId = (deviceId) => {
     } catch { }
 }
 
+export const isExplicitMicrophoneLabel = (label = '') => MICROPHONE_INPUT_PATTERN.test(label)
+
 export const isSystemAudioInputLabel = (label = '') => {
-    if (!label) return false
-    return MONITOR_INPUT_PATTERN.test(label) && !MICROPHONE_INPUT_PATTERN.test(label)
+    if (!label || isExplicitMicrophoneLabel(label)) return false
+    return MONITOR_INPUT_PATTERN.test(label)
+}
+
+export const isGenericSystemAudioInputLabel = (label = '') => {
+    if (!label || isExplicitMicrophoneLabel(label)) return false
+    return GENERIC_SYSTEM_INPUT_PATTERN.test(label)
 }
 
 export const listAudioInputs = async () => {
@@ -42,20 +50,24 @@ export const listAudioInputs = async () => {
     return devices
         .filter(device => device.kind === 'audioinput')
         .map((device, index) => {
-            const label = device.label || `Audio Input ${index + 1}`
+            const rawLabel = device.label || ''
+            const label = rawLabel || `Audio Input ${index + 1}`
             return {
                 deviceId: device.deviceId,
                 label,
-                isMonitor: isSystemAudioInputLabel(label),
-                isMicrophone: MICROPHONE_INPUT_PATTERN.test(label)
+                isMonitor: isSystemAudioInputLabel(rawLabel),
+                isGenericSystem: isGenericSystemAudioInputLabel(rawLabel),
+                isMicrophone: isExplicitMicrophoneLabel(rawLabel)
             }
         })
-        .filter(input => input.isMonitor)
+        .filter(input => input.isMonitor || input.isGenericSystem)
 }
 
 export const getPreferredAudioInput = (inputs) => {
     if (!Array.isArray(inputs) || inputs.length === 0) return null
-    return inputs.find(input => input.isMonitor) || null
+    return inputs.find(input => input.isMonitor)
+        || inputs.find(input => input.isGenericSystem)
+        || null
 }
 
 export const requestAudioInputStream = async ({
@@ -71,8 +83,8 @@ export const requestAudioInputStream = async ({
     let fallbackToDefault = false
 
     try {
-        if (selectedDeviceId && !inputs.some(input => input.deviceId === selectedDeviceId && input.isMonitor)) {
-            throw createSystemAudioSourceError('Selected audio device is not a system monitor/loopback source.')
+        if (selectedDeviceId && !inputs.some(input => input.deviceId === selectedDeviceId && (input.isMonitor || input.isGenericSystem))) {
+            throw createSystemAudioSourceError('Selected audio device is not a speaker monitor/loopback source.')
         }
 
         stream = await navigator.mediaDevices.getUserMedia({
@@ -139,6 +151,7 @@ export const resolveActiveAudioSource = ({
             || preferredInput?.label
             || (selectedDeviceId ? 'Selected system monitor' : 'Auto speaker monitor'),
         fallbackToDefault,
-        isMonitor: !!matchedInput?.isMonitor || !!preferredInput?.isMonitor
+        isMonitor: !!matchedInput?.isMonitor || !!preferredInput?.isMonitor,
+        isGenericSystem: !!matchedInput?.isGenericSystem || !!preferredInput?.isGenericSystem
     }
 }

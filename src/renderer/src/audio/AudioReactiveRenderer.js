@@ -2,25 +2,75 @@ import { multiplyBrightness, lerpColor, GENRE_PROFILES } from '../utils/palettes
 
 const clamp01 = (value) => Math.max(0, Math.min(1, value))
 
-const buildCenterBassKickColor = (color, rawBass, boostLevel) => {
-    // Keep Slot 2 in the selected/base hue. White accents clip too easily on DMX
-    // fixtures and look like a stuck center light instead of an audio kick.
-    const threshold = Math.max(0.01, 0.18 - boostLevel * 0.04)
-    const normalized = clamp01((rawBass - threshold) / (0.86 - threshold))
-    const curve = Math.max(0.32, 0.86 - boostLevel * 0.14)
-    const shapedKick = Math.pow(normalized, curve)
-    const stepCount = Math.max(3, Math.round(9 - boostLevel * 1.4))
-    const kick = shapedKick <= 0 ? 0 : Math.min(1, Math.ceil(shapedKick * stepCount) / stepCount)
-    const floor = clamp01(0.22 - boostLevel * 0.05)
-    const ceiling = 1
-    const intensity = floor + kick * (ceiling - floor)
-    const dimFloor = Math.max(0, Math.round(52 - boostLevel * 13))
-    const dim = Math.round(dimFloor + kick * (255 - dimFloor))
+const quantizeKick = (energy, boostLevel, {
+    threshold = 0.14,
+    thresholdBoost = 0.035,
+    curve = 0.78,
+    curveBoost = 0.12,
+    minSteps = 3,
+    baseSteps = 8,
+    stepBoost = 1.35
+} = {}) => {
+    const trigger = Math.max(0, threshold - boostLevel * thresholdBoost)
+    const normalized = clamp01((energy - trigger) / (0.88 - trigger))
+    const shapedKick = Math.pow(normalized, Math.max(0.25, curve - boostLevel * curveBoost))
+    const stepCount = Math.max(minSteps, Math.round(baseSteps - boostLevel * stepBoost))
+    return shapedKick <= 0 ? 0 : Math.min(1, Math.ceil(shapedKick * stepCount) / stepCount)
+}
+
+const withAudioDim = (color, kick, boostLevel, {
+    floor = 0.16,
+    floorBoost = 0.04,
+    dimFloor = 44,
+    dimFloorBoost = 12
+} = {}) => {
+    const intensityFloor = clamp01(floor - boostLevel * floorBoost)
+    const intensity = intensityFloor + kick * (1 - intensityFloor)
+    const dimBase = Math.max(0, Math.round(dimFloor - boostLevel * dimFloorBoost))
+    const dim = Math.round(dimBase + kick * (255 - dimBase))
 
     return {
         ...multiplyBrightness(color, intensity),
         dim
     }
+}
+
+const buildCenterBassKickColor = (color, rawBass, boostLevel) => {
+    // Keep Slot 2 in the selected/base hue. For this hardware the physical 4D
+    // effect comes from brutal DIM jumps, not subtle RGB-only modulation.
+    const kick = quantizeKick(rawBass, boostLevel, {
+        threshold: 0.13,
+        thresholdBoost: 0.04,
+        curve: 0.7,
+        curveBoost: 0.12,
+        minSteps: 2,
+        baseSteps: 6,
+        stepBoost: 1
+    })
+    return withAudioDim(color, kick, boostLevel, {
+        floor: 0.12,
+        floorBoost: 0.035,
+        dimFloor: 32,
+        dimFloorBoost: 9
+    })
+}
+
+const buildSidePartyKickColor = (color, energy, bass, boostLevel) => {
+    const kick = quantizeKick(Math.min(1, energy + bass * 0.36), boostLevel, {
+        threshold: 0.18,
+        thresholdBoost: 0.03,
+        curve: 0.82,
+        curveBoost: 0.1,
+        minSteps: 3,
+        baseSteps: 8,
+        stepBoost: 1.15
+    })
+    return withAudioDim(color, kick, boostLevel, {
+        floor: 0.18,
+        floorBoost: 0.035,
+        dimFloor: 58,
+        dimFloorBoost: 10
+    })
 }
 
 const lerpAudioColor = (current, target, factor) => {
@@ -124,9 +174,11 @@ export const applyModifierAndSmoothing = ({
 }) => {
     let nextTargetColors = targetColors
 
-    if (modifierMode && inputColors && inputColors.length >= 3) {
+    const sourceColors = inputColors && inputColors.length >= 3 ? inputColors : targetColors
+
+    if (modifierMode && sourceColors && sourceColors.length >= 3) {
         const boostLevel = Math.max(0.5, Math.min(4, audioSensitivity || 1))
-        nextTargetColors = inputColors.map((color, index) => {
+        nextTargetColors = sourceColors.map((color, index) => {
             const rawBass = clamp01(audioFrame.levels.bass)
             const bass = Math.pow(rawBass, 0.62)
             if (index === 1) {
@@ -134,9 +186,8 @@ export const applyModifierAndSmoothing = ({
             }
 
             const sideEnergy = index === 0 ? audioFrame.stereo.midHighLeft : audioFrame.stereo.midHighRight
-            const sideWithBassBleed = Math.min(1, Math.pow(sideEnergy, 0.72) + bass * 0.22)
-            const factor = 0.32 + sideWithBassBleed * 1.15 * boostLevel
-            return multiplyBrightness(color, factor)
+            const sideWithBassBleed = Math.min(1, Math.pow(sideEnergy, 0.72) + bass * 0.28)
+            return buildSidePartyKickColor(color, sideWithBassBleed, bass, boostLevel)
         })
     }
 
@@ -144,7 +195,7 @@ export const applyModifierAndSmoothing = ({
         ? Math.min(0.95, 0.58 + Math.max(0.5, Math.min(4, audioSensitivity || 1)) * 0.1)
         : 0.24
     return nextTargetColors.map((targetColor, index) => {
-        const slotLerpSpeed = modifierMode && index === 1 ? 1 : lerpSpeed
+        const slotLerpSpeed = modifierMode ? (index === 1 ? 1 : Math.max(0.9, lerpSpeed)) : lerpSpeed
         return lerpAudioColor(currentColors[index], targetColor, slotLerpSpeed)
     })
 }

@@ -175,7 +175,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
             const inputs = await refreshInputs().catch(() => [])
             let systemSelectedDeviceId = selectedDeviceId
 
-            if (systemSelectedDeviceId && !inputs.some(input => input.deviceId === systemSelectedDeviceId)) {
+            if (systemSelectedDeviceId && !inputs.some(input => input.deviceId === systemSelectedDeviceId && (input.isMonitor || input.isGenericSystem))) {
                 systemSelectedDeviceId = ''
                 setSelectedDeviceIdState('')
                 writeStoredAudioInputId('')
@@ -216,9 +216,9 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 preferredInput,
                 fallbackToDefault
             })
-            if (!activeSourceRef.current.isMonitor) {
+            if (!activeSourceRef.current.isMonitor && !activeSourceRef.current.isGenericSystem) {
                 stream.getTracks().forEach(track => track.stop())
-                throw createSystemAudioSourceError('Active input is not a system monitor/loopback source. BeamStudio ignored it instead of using a microphone.')
+                throw createSystemAudioSourceError('Active input is not a speaker monitor/loopback source. BeamStudio ignored it instead of using a microphone.')
             }
 
             setActiveSource(activeSourceRef.current)
@@ -254,7 +254,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
             splitter.connect(merger, 1, 1)
             analyserBass.current = audioCtx.current.createAnalyser()
             analyserBass.current.fftSize = 256
-            analyserBass.current.smoothingTimeConstant = 0.18 // [T2] Fast enough for visible bass kicks
+            analyserBass.current.smoothingTimeConstant = 0.08 // [T2] Brutal 4D kicks for non-AAA fixtures
             merger.connect(analyserBass.current)
 
             setActive(true)
@@ -287,7 +287,9 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
 
                 // Output bass must be rhythmic, not a slow VU hold. Peak hold is useful
                 // for meters, but it flattens the physical center light into “always on”.
-                bassPulse.current = Math.max(bassEnergy, bassPulse.current * 0.82)
+                const boostLevel = Math.max(0.5, Math.min(4, audioSensitivity || 1))
+                const bassDecay = Math.max(0.48, 0.78 - boostLevel * 0.075)
+                bassPulse.current = Math.max(bassEnergy, bassPulse.current * bassDecay)
                 const bassOutput = bassPulse.current
                 const stereoWidth = computeStereoWidth(bandsL, bandsR)
                 const { lowMidL, lowMidR, lowMidAvg } = computeLowMid(bandsL, bandsR)
