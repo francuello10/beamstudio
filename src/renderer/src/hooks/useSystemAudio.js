@@ -239,13 +239,13 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
             // LEFT Analyser — organic smoothing for deco mids/highs
             analyserL.current = audioCtx.current.createAnalyser()
             analyserL.current.fftSize = 512
-            analyserL.current.smoothingTimeConstant = 0.65 // [T1] Deco: organic, less nervous
+            analyserL.current.smoothingTimeConstant = 0.28 // [T1] Party mode: visible side jumps
             splitter.connect(analyserL.current, 0)
 
             // RIGHT Analyser
             analyserR.current = audioCtx.current.createAnalyser()
             analyserR.current.fftSize = 512
-            analyserR.current.smoothingTimeConstant = 0.65 // [T1] Match L channel
+            analyserR.current.smoothingTimeConstant = 0.28 // [T1] Match L channel party response
             splitter.connect(analyserR.current, 1)
 
             // BASS Analyser (Mono Mix L+R)

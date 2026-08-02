@@ -2,6 +2,19 @@ import { multiplyBrightness, lerpColor, GENRE_PROFILES } from '../utils/palettes
 
 const clamp01 = (value) => Math.max(0, Math.min(1, value))
 
+const normalizeAudioPowerColor = (color, fallback = { r: 255, g: 64, b: 180 }) => {
+    const source = color || fallback
+    const maxChannel = Math.max(source.r || 0, source.g || 0, source.b || 0)
+    if (maxChannel <= 0) return fallback
+
+    const gain = 255 / maxChannel
+    return {
+        r: Math.min(255, Math.round((source.r || 0) * gain)),
+        g: Math.min(255, Math.round((source.g || 0) * gain)),
+        b: Math.min(255, Math.round((source.b || 0) * gain))
+    }
+}
+
 const quantizeKick = (energy, boostLevel, {
     threshold = 0.14,
     thresholdBoost = 0.035,
@@ -22,15 +35,18 @@ const withAudioDim = (color, kick, boostLevel, {
     floor = 0.16,
     floorBoost = 0.04,
     dimFloor = 44,
-    dimFloorBoost = 12
+    dimFloorBoost = 12,
+    fallbackColor
 } = {}) => {
     const intensityFloor = clamp01(floor - boostLevel * floorBoost)
     const intensity = intensityFloor + kick * (1 - intensityFloor)
     const dimBase = Math.max(0, Math.round(dimFloor - boostLevel * dimFloorBoost))
     const dim = Math.round(dimBase + kick * (255 - dimBase))
 
+    const powerColor = normalizeAudioPowerColor(color, fallbackColor)
+
     return {
-        ...multiplyBrightness(color, intensity),
+        ...multiplyBrightness(powerColor, intensity),
         dim
     }
 }
@@ -48,10 +64,11 @@ const buildCenterBassKickColor = (color, rawBass, boostLevel) => {
         stepBoost: 1
     })
     return withAudioDim(color, kick, boostLevel, {
-        floor: 0.12,
-        floorBoost: 0.035,
-        dimFloor: 32,
-        dimFloorBoost: 9
+        floor: 0.08,
+        floorBoost: 0.025,
+        dimFloor: 20,
+        dimFloorBoost: 6,
+        fallbackColor: { r: 255, g: 48, b: 96 }
     })
 }
 
@@ -66,10 +83,11 @@ const buildSidePartyKickColor = (color, energy, bass, boostLevel) => {
         stepBoost: 1.15
     })
     return withAudioDim(color, kick, boostLevel, {
-        floor: 0.18,
-        floorBoost: 0.035,
-        dimFloor: 58,
-        dimFloorBoost: 10
+        floor: 0.1,
+        floorBoost: 0.02,
+        dimFloor: 36,
+        dimFloorBoost: 7,
+        fallbackColor: energy >= 0.5 ? { r: 64, g: 220, b: 255 } : { r: 120, g: 64, b: 255 }
     })
 }
 

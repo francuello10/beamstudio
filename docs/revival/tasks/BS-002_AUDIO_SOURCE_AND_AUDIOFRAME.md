@@ -57,6 +57,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - Veinticincoavo slice activo: BeamStudio filtra/rechaza micrófonos dentro de la app, limpia selecciones guardadas no-monitor, mantiene sólo fuentes speaker monitor/loopback y amplía el boost hasta x4 con saltos de 0.5 y respuesta cuantizada más brusca.
 - Veintiseisavo slice activo: el boost pasó a criterio 4D/fiesta electrónica para hardware no-AAA: bass decay más corto, analyser bass más rápido, saltos DIM/RGB cuantizados y overlay de DIM también en laterales con menor intensidad que el centro.
 - Veintisieteavo slice activo: el filtro de fuentes audio acepta monitores explícitos y fuentes genéricas `Default`/PipeWire/Pulse que no digan mic/webcam/camera, para no bloquear Linux cuando el monitor no trae label descriptivo.
+- Veintiochoavo slice activo: las bases RGB ahora se normalizan a potencia alta para audio; el color elegido define hue, no límite de brillo, y los bajos mueven DIM/RGB con saltos más visibles en fixtures no-AAA.
 
 ## Alcance
 
@@ -99,6 +100,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - [x] Boost level llega a x4 con saltos más amplios y respuesta de kick cuantizada para una sensación más brusca/inmersiva.
 - [x] La salida audio modula DIM/RGB en los tres slots: Slot 2 pega más al bajo y laterales acompañan con saltos de fiesta electrónica.
 - [x] En Linux, BeamStudio puede usar fuente genérica `Default`/PipeWire/Pulse como system audio si no está etiquetada como micrófono/cámara.
+- [x] El audio normaliza colores base a potencia alta para que un frame previo oscuro no deje las luces casi quietas.
 - [ ] Silencio no genera NaN, Infinity ni flashes erráticos.
 - [ ] El DSP no escribe DMX directamente salvo contrato explícito.
 - [ ] La UI no renderiza innecesariamente a 60 Hz.
