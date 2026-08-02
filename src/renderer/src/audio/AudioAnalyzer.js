@@ -11,10 +11,40 @@ export const extractBands = (data, count = 16) => {
     return bands
 }
 
+const clamp01 = (value) => Math.max(0, Math.min(1, value))
+
 export const computeBassEnergy = (dataBass) => {
-    let bassEnergy = 0
-    for (let i = 0; i < 3; i++) bassEnergy += dataBass[i]
-    return bassEnergy / 3 / 255
+    if (!dataBass?.length) return 0
+
+    // Skip bin 0 so the center/bass slot reacts to musical low-end pulses,
+    // not DC / analyser floor. Use a small weighted window because fftSize=256
+    // makes the first musical bass bins broad.
+    const bassWeights = [1.4, 1.2, 0.9, 0.6, 0.4]
+    let bassSum = 0
+    let weightSum = 0
+
+    for (let i = 0; i < bassWeights.length; i++) {
+        const bin = i + 1
+        if (bin >= dataBass.length) break
+        const weight = bassWeights[i]
+        bassSum += dataBass[bin] * weight
+        weightSum += weight
+    }
+
+    if (weightSum === 0) return 0
+
+    const bassAvg = bassSum / weightSum
+    const floorStart = Math.min(8, dataBass.length)
+    const floorEnd = Math.min(18, dataBass.length)
+    let floorAvg = 0
+
+    if (floorEnd > floorStart) {
+        for (let i = floorStart; i < floorEnd; i++) floorAvg += dataBass[i]
+        floorAvg /= floorEnd - floorStart
+    }
+
+    const lowPulse = Math.max(0, bassAvg - floorAvg * 0.35) / 255
+    return clamp01(Math.pow(lowPulse * 1.65, 0.75))
 }
 
 export const applyPeakHold = ({

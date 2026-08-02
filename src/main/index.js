@@ -853,6 +853,20 @@ function getFixtureMasterDimValue(fixture) {
     return dmxState.channels[fixture.startChannel - 1 + profile.map.DIM] || 0
 }
 
+function ensureAudioStartVisibility() {
+    fixtures.forEach((fixture, index) => {
+        if (dmxState.fixtureColors[index]?.blackout) return
+
+        const profile = getFixtureProfile(fixture)
+        if (!profile.hasMasterDimmer || profile.map.DIM === undefined) return
+
+        const dimIndex = fixture.startChannel - 1 + profile.map.DIM
+        if ((dmxState.channels[dimIndex] || 0) === 0) {
+            dmxState.channels[dimIndex] = 255
+        }
+    })
+}
+
 function setOutputOwner(owner = 'manual') {
     dmxState.outputOwner = owner
 }
@@ -1535,19 +1549,15 @@ function setupIPC() {
         })
     })
 
-    // @ai-constraints Set DIM=255 for all fixtures when starting audio reactive mode
+    // @ai-constraints Audio start must make each master-dimmer fixture visible once.
     ipcMain.handle('audio:start', () => {
         stopDynamicScene()
         dmxState.activeProgram = null
         dmxState.audioReactiveActive = true
 
-        // Cold start fix: If Dimmer is 0, set to 255 to ensure visibility
-        const isCold = fixtures.every(f => {
-            const profile = FIXTURE_PROFILES[f.mode] || FIXTURE_PROFILES['P06']
-            if (!profile.hasMasterDimmer || profile.map.DIM === undefined) return false
-            return dmxState.channels[f.startChannel - 1 + profile.map.DIM] === 0
-        })
-        if (isCold) setAllFixturesChannel('dim', 255)
+        // Seed only fixtures whose own master dimmer is still closed. Later audio frames
+        // keep respecting the current dimmer value so intentional grand-master changes hold.
+        ensureAudioStartVisibility()
 
         return { success: true }
     })
