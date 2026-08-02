@@ -29,6 +29,7 @@ const ConsoleMixerPage = ({ onReset }) => {
     const setAudioTelemetryDSP = useAudioStore(state => state.setAudioTelemetryDSP)
     const audioTelemetryDSP = useAudioStore(state => state.audioTelemetryDSP)
     const setAudioData = useAudioStore(state => state.setAudioData)
+    const setAudioActive = useAudioStore(state => state.setAudioActive)
     const audioBoostLevel = useAudioStore(state => state.audioBoostLevel)
     const setAudioBoostLevel = useAudioStore(state => state.setAudioBoostLevel)
 
@@ -78,12 +79,14 @@ const ConsoleMixerPage = ({ onReset }) => {
     const handleAudioReactiveToggle = async () => {
         if (audioReactive) {
             setAudioReactive(false)
+            setAudioActive(false)
             setModifierMode(false)
             stopAudio()
             // Turn off dynamic flag so manual faders regain full control without modulation
             window.dmx?.setDynamicRendererActive(false, 'audio')
         } else {
             setAudioReactive(true)
+            setAudioActive(true)
             setModifierMode(true) // ENABLE MODIFIER MODE (Boosts input colors)
             // Enable dynamic renderer so updates are prioritized
             window.dmx?.setDynamicRendererActive(true, 'audio')
@@ -95,11 +98,12 @@ const ConsoleMixerPage = ({ onReset }) => {
     React.useEffect(() => {
         return () => {
             if (audioReactive) {
+                setAudioActive(false)
                 stopAudio()
                 window.dmx?.setDynamicRendererActive(false, 'audio')
             }
         }
-    }, [audioReactive, stopAudio])
+    }, [audioReactive, setAudioActive, stopAudio])
 
     const handleChannelChange = useCallback((channel, value) => {
         dispatchDmxAttributeUpdate(channel, value)
@@ -115,7 +119,7 @@ const ConsoleMixerPage = ({ onReset }) => {
 
         // Rapid IPC send for colors
         const selectedIds = dmxFixtures.filter(f => f.selected).map(f => f.id)
-        if (selectedIds.length > 0) {
+        if (!audioReactive && selectedIds.length > 0) {
             window.dmx?.setChannelsAsync(selectedIds, updates)
         }
     }

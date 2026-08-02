@@ -1,4 +1,5 @@
 import { useDmxStore } from '../store/dmxStore'
+import { useAudioStore } from '../store/audioStore'
 import { CORE_TIMING } from '../../../shared/hardware-specs'
 
 /**
@@ -40,10 +41,11 @@ class DmxScheduler {
         const fixtures = state.dmxFixtures
         const selectedIds = fixtures.filter(f => f.selected).map(f => f.id)
 
-        // Identify if we are in a mode where colors are handled by the backend (Main Process)
+        // Identify if we are in a mode where RGB is handled by a renderer/audio layer.
         const isDynamicMode = !!(state.activeDynamicScene || state.activeFlag)
+        const isAudioBoostMode = !!useAudioStore.getState().audioActive
 
-        if (isDynamicMode) {
+        if (isDynamicMode || isAudioBoostMode) {
             // SYNC ONLY SPECIFIC CONTROL ATTRIBUTES (No RGB to avoid flickering)
             const controlAttrs = ['dim', 'spd', 'flash', 'func']
             const updates = {}

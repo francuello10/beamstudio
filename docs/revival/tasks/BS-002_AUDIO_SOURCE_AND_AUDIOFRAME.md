@@ -47,6 +47,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - Quinceavo slice activo: el modo automático rechaza el micrófono; si no hay monitor/loopback, no arranca y muestra error claro.
 - Dieciseisavo slice activo: guardar escenas AI ya no apaga el audio boost y la UI distingue Full Music Boost de Bass Boost.
 - Diecisieteavo slice activo: `audioBoostLevel` global permite ajustar el nivel del booster y la respuesta por defecto quedó más brusca/punchy.
+- Dieciochoavo slice activo: con audio boost activo, el Mixer/ColorWheel actualizan la base RGB sin mandar RGB manual directo que pise la capa audio.
 
 ## Alcance
 
@@ -77,6 +78,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - [x] Quick Palettes, ColorWheel y faders RGB del Mixer alimentan la base del booster audio-reactive.
 - [x] El audio boost no se apaga al guardar escenas AI.
 - [x] El nivel de boost es configurable globalmente y afecta Mixer, Audio y Dynamic Scenes.
+- [x] ColorWheel y Quick Palettes no apagan ni pisan visualmente el boost cuando está activo.
 - [ ] Silencio no genera NaN, Infinity ni flashes erráticos.
 - [ ] El DSP no escribe DMX directamente salvo contrato explícito.
 - [ ] La UI no renderiza innecesariamente a 60 Hz.

@@ -28,6 +28,7 @@ const DynamicScenesPageV2 = () => {
     const audioTelemetryDSP = useAudioStore(state => state.audioTelemetryDSP)
     const setAudioTelemetryDSP = useAudioStore(state => state.setAudioTelemetryDSP)
     const setAudioData = useAudioStore(state => state.setAudioData)
+    const setAudioActive = useAudioStore(state => state.setAudioActive)
     const audioBoostLevel = useAudioStore(state => state.audioBoostLevel)
     const setAudioBoostLevel = useAudioStore(state => state.setAudioBoostLevel)
 
@@ -165,10 +166,12 @@ const DynamicScenesPageV2 = () => {
     const handleAudioReactiveToggle = async () => {
         if (audioReactive) {
             setAudioReactive(false)
+            setAudioActive(false)
             setModifierMode(false)
             stopAudio()
         } else {
             setAudioReactive(true)
+            setAudioActive(true)
             setModifierMode(true)
             await startAudio()
         }
@@ -390,7 +393,7 @@ const DynamicScenesPageV2 = () => {
                             </div>
                             <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
                                 <button onClick={saveAiScene} className="surprise-btn-small" style={{ background: '#0fdbc2', padding: '6px 10px' }}>SAVE</button>
-                                <button onClick={() => { setPreviewScene(null); setAudioReactive(false); }} className="surprise-btn-small" style={{ background: 'rgba(255,255,255,0.1)', padding: '6px 10px' }}>X</button>
+                                <button onClick={() => { setPreviewScene(null); }} className="surprise-btn-small" style={{ background: 'rgba(255,255,255,0.1)', padding: '6px 10px' }}>X</button>
                             </div>
                         </div>
                     )}

@@ -37,6 +37,7 @@ const AudioPage = () => {
 
     const setAudioTelemetryDSP = useAudioStore(state => state.setAudioTelemetryDSP)
     const setAudioData = useAudioStore(state => state.setAudioData)
+    const setAudioActive = useAudioStore(state => state.setAudioActive)
     const audioFrame = useAudioStore(state => state.audioFrame)
     const audioBaseColors = useAudioStore(state => state.audioBaseColors)
     const setAudioBaseColors = useAudioStore(state => state.setAudioBaseColors)
@@ -58,7 +59,8 @@ const AudioPage = () => {
 
     React.useEffect(() => {
         setAudioData({ audioActive: active, activeAudioSource: activeSource })
-    }, [active, activeSource, setAudioData])
+        setAudioActive(active)
+    }, [active, activeSource, setAudioActive, setAudioData])
 
     const handleStart = React.useCallback(async () => {
         const currentColors = normalizeColors(pixelMapBuffer)
