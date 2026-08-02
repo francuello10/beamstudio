@@ -1,8 +1,14 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { multiplyBrightness, lerpColor, GENRE_PROFILES } from '../utils/palettes'
 import { createAudioFrame } from '../audio/AudioFrame'
-
-const AUDIO_INPUT_STORAGE_KEY = 'beamstudio.audio.inputDeviceId'
+import {
+    listAudioInputs,
+    getPreferredAudioInput,
+    readStoredAudioInputId,
+    resolveActiveAudioSource,
+    requestAudioInputStream,
+    writeStoredAudioInputId
+} from '../audio/AudioSourceManager'
 
 /**
  * useSystemAudio v6.1 — Expert Deco Tuning for Thonet & Vander Ratsel 2.1
@@ -24,13 +30,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
     const [active, setActive] = useState(false)
     const [reconnecting, setReconnecting] = useState(false)
     const [availableInputs, setAvailableInputs] = useState([])
-    const [selectedDeviceId, setSelectedDeviceIdState] = useState(() => {
-        try {
-            return localStorage.getItem(AUDIO_INPUT_STORAGE_KEY) || ''
-        } catch {
-            return ''
-        }
-    })
+    const [selectedDeviceId, setSelectedDeviceIdState] = useState(() => readStoredAudioInputId())
     const [sourceError, setSourceError] = useState(null)
     const [activeSource, setActiveSource] = useState({ deviceId: '', label: '', fallbackToDefault: false })
     const [autoGenre, setAutoGenre] = useState(true)
@@ -96,33 +96,15 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
     const activeSourceRef = useRef({ deviceId: '', label: '', fallbackToDefault: false })
 
     const refreshInputs = useCallback(async () => {
-        if (!navigator.mediaDevices?.enumerateDevices) return []
-
-        const devices = await navigator.mediaDevices.enumerateDevices()
-        const inputs = devices
-            .filter(device => device.kind === 'audioinput')
-            .map((device, index) => ({
-                deviceId: device.deviceId,
-                label: device.label || `Audio Input ${index + 1}`,
-                isMonitor: /monitor|loopback|stereo mix/i.test(device.label || '')
-            }))
-
+        const inputs = await listAudioInputs()
         setAvailableInputs(inputs)
         return inputs
-    }, [])
-
-    const getPreferredInput = useCallback((inputs) => {
-        if (!Array.isArray(inputs) || inputs.length === 0) return null
-        return inputs.find(input => input.isMonitor) || null
     }, [])
 
     const setSelectedDeviceId = useCallback((deviceId) => {
         setSelectedDeviceIdState(deviceId)
         setSourceError(null)
-        try {
-            if (deviceId) localStorage.setItem(AUDIO_INPUT_STORAGE_KEY, deviceId)
-            else localStorage.removeItem(AUDIO_INPUT_STORAGE_KEY)
-        } catch { }
+        writeStoredAudioInputId(deviceId)
     }, [])
 
     useEffect(() => {
@@ -171,7 +153,6 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
             stop()
             setSourceError(null)
             const inputs = await refreshInputs().catch(() => [])
-            const preferredInput = !selectedDeviceId ? getPreferredInput(inputs) : null
 
             const baseAudioConstraints = {
                 echoCancellation: false,
@@ -180,40 +161,35 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 latency: 0
             }
 
-            let stream
-            let fallbackToDefault = false
-            const requestedDeviceId = selectedDeviceId || preferredInput?.deviceId || ''
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({
-                    audio: requestedDeviceId
-                        ? { ...baseAudioConstraints, deviceId: { exact: requestedDeviceId } }
-                        : baseAudioConstraints,
-                    video: false
-                })
-            } catch (err) {
-                if (!requestedDeviceId) throw err
+            const {
+                stream,
+                fallbackToDefault,
+                preferredInput,
+                requestedDeviceId
+            } = await requestAudioInputStream({
+                selectedDeviceId,
+                inputs,
+                constraints: baseAudioConstraints
+            }).catch(async (err) => {
+                throw err
+            })
 
-                fallbackToDefault = true
+            if (fallbackToDefault && requestedDeviceId) {
                 setSourceError(selectedDeviceId
                     ? 'Selected audio input is unavailable. BeamStudio fell back to the default input.'
                     : 'Preferred monitor input is unavailable. BeamStudio fell back to the default input.')
-                stream = await navigator.mediaDevices.getUserMedia({
-                    audio: baseAudioConstraints,
-                    video: false
-                })
             }
 
             streamRef.current = stream
             const refreshedInputs = await refreshInputs().catch(() => [])
-            const actualDeviceId = stream.getAudioTracks?.()[0]?.getSettings?.().deviceId || requestedDeviceId || ''
-            const matchedInput = refreshedInputs.find(input => input.deviceId === actualDeviceId)
-            activeSourceRef.current = {
-                deviceId: actualDeviceId,
-                label: matchedInput?.label
-                    || preferredInput?.label
-                    || (selectedDeviceId ? 'Selected audio input' : 'Default audio input'),
+            activeSourceRef.current = resolveActiveAudioSource({
+                stream,
+                refreshedInputs,
+                requestedDeviceId,
+                selectedDeviceId,
+                preferredInput,
                 fallbackToDefault
-            }
+            })
             setActiveSource(activeSourceRef.current)
 
             const AudioContextClass = window.AudioContext || window.webkitAudioContext
@@ -596,7 +572,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
             console.error('[Audio DSP] Failed:', err)
             stop()
         }
-    }, [refreshInputs, getPreferredInput, selectedDeviceId, sendDmxBatch, stop, autoGenre, detectedGenre, manualGenre, onAudioUpdate, audioSensitivity])
+    }, [refreshInputs, selectedDeviceId, sendDmxBatch, stop, autoGenre, detectedGenre, manualGenre, onAudioUpdate, audioSensitivity])
 
     // Cleanup on unmount
     useEffect(() => () => stop(), [stop])

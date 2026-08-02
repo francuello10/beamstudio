@@ -34,6 +34,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - Segundo slice activo en `main`: `audioFrame` normalizado publicado en `audioStore` para consumo futuro por escenas, Ambilight y visuales.
 - Tercer slice activo en `main`: preferencia automática por monitor/loopback + reconexión inicial ante `devicechange` y visibilidad de la fuente activa real en UI.
 - Cuarto slice activo en `main`: `AudioFrame.status` publica silencio/clipping y la UI de audio muestra diagnóstico básico de señal.
+- Quinto slice activo en `main`: la gestión de fuentes quedó extraída a `src/renderer/src/audio/AudioSourceManager.js` para empezar a desacoplar `useSystemAudio`.
 
 ## Alcance
 
