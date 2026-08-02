@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react'
 import { useAudioStore } from '../store/audioStore'
 import FluidNeonVisual from '../visuals/FluidNeonVisual'
+import ParticleFieldVisual from '../visuals/ParticleFieldVisual'
 import { DEFAULT_VISUAL_ID } from '../visuals/visualRegistry'
 
 // BS-005: maps a visual id from visualRegistry to its component. Adding one
-// of the next 3 visuals (Particle Field, Tunnel/Grid, Kaleidoscope) is just
-// another entry here plus a registry entry in visualRegistry.js.
-const VISUAL_COMPONENTS = { fluidNeon: FluidNeonVisual }
+// of the next 2 visuals (Tunnel/Grid, Kaleidoscope) is just another entry
+// here plus a registry entry in visualRegistry.js.
+const VISUAL_COMPONENTS = { fluidNeon: FluidNeonVisual, particleField: ParticleFieldVisual }
 
 /**
  * ProjectorApp — fullscreen renderer mounted on `?role=projector`.
