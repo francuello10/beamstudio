@@ -61,6 +61,7 @@ const MODEL_FILENAMES = {
  *   installed version.
  * @param {number} [options.numPoses=1] — max simultaneous poses to track.
  * @param {'CPU'|'GPU'} [options.delegate='GPU'] — inference backend.
+ * @param {string} [options.cameraDeviceId] — optional videoinput deviceId.
  * @param {(result: import('@mediapipe/tasks-vision').PoseLandmarkerResult) => void} [options.onResults]
  *   optional callback fired every processed frame, in addition to
  *   `latestResultRef`.
@@ -72,6 +73,7 @@ export function usePoseLandmarker(options = {}) {
         wasmBasePath = DEFAULT_WASM_BASE_PATH,
         numPoses = 1,
         delegate = 'GPU',
+        cameraDeviceId,
         onResults
     } = options
 
@@ -166,7 +168,11 @@ export function usePoseLandmarker(options = {}) {
         try {
             if (!streamRef.current) {
                 const acquiredStream = await navigator.mediaDevices.getUserMedia({
-                    video: { width: 1280, height: 720 },
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        ...(cameraDeviceId ? { deviceId: { exact: cameraDeviceId } } : {})
+                    },
                     audio: false
                 })
 
@@ -212,7 +218,7 @@ export function usePoseLandmarker(options = {}) {
         } finally {
             if (startTokenRef.current === startToken) startingRef.current = false
         }
-    }, [loadModel, detectLoop, releaseStream])
+    }, [loadModel, detectLoop, releaseStream, cameraDeviceId])
 
     // ── Stop: halt the loop, release the camera, keep the model warm ──
     const stop = useCallback(() => {

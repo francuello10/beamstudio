@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Projector, Power, EyeOff, Crosshair, RefreshCw, Check, AlertCircle, Move, Layers, Plus, Trash2, Save, FolderOpen, Music, RotateCw, Palette } from 'lucide-react'
+import { Projector, Power, EyeOff, Crosshair, RefreshCw, Check, AlertCircle, Move, Layers, Plus, Trash2, Save, FolderOpen, Music, RotateCw, Palette, Camera } from 'lucide-react'
 import { VISUALS, DEFAULT_VISUAL_ID } from '../visuals/visualRegistry'
 import { DEFAULT_SURFACE, createInsetSurface } from '../mapping/MappingCompositor'
 
@@ -15,6 +15,7 @@ import { DEFAULT_SURFACE, createInsetSurface } from '../mapping/MappingComposito
 // has no sync support added in this pass — so the toggle below is hidden for
 // both instead of being shown as a no-op.
 const COLOR_SYNC_VISUAL_IDS = ['particleField', 'tunnelGrid', 'kaleidoscope']
+const POSE_CAMERA_STORAGE_KEY = 'beamstudio.poseCameraDeviceId'
 
 /**
  * ProjectorPage — operator control surface for the fullscreen projector
@@ -64,6 +65,10 @@ const ProjectorPage = () => {
     const [selectedSurfaceId, setSelectedSurfaceId] = useState(DEFAULT_SURFACE.id)
     const [presetName, setPresetName] = useState('')
     const [presets, setPresets] = useState([])
+    const [poseCameraDeviceId, setPoseCameraDeviceId] = useState(() => localStorage.getItem(POSE_CAMERA_STORAGE_KEY) || '')
+    const [cameraDevices, setCameraDevices] = useState([])
+    const [cameraStatus, setCameraStatus] = useState('Camera access not checked yet.')
+    const [cameraRefreshing, setCameraRefreshing] = useState(false)
 
     const refreshDisplays = async () => {
         setRefreshing(true)
@@ -143,6 +148,53 @@ const ProjectorPage = () => {
         window.projector?.setVisualColorSync(next)
     }
 
+    const refreshCameras = async ({ requestAccess = false } = {}) => {
+        if (!navigator.mediaDevices?.enumerateDevices) {
+            setCameraStatus('Camera APIs are not available in this renderer.')
+            return
+        }
+
+        setCameraRefreshing(true)
+        let permissionStream = null
+        try {
+            if (requestAccess) {
+                permissionStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+            }
+
+            const devices = await navigator.mediaDevices.enumerateDevices()
+            const videoInputs = devices.filter(device => device.kind === 'videoinput')
+            setCameraDevices(videoInputs)
+
+            setPoseCameraDeviceId((current) => {
+                const next = current && videoInputs.some(device => device.deviceId === current) ? current : ''
+                localStorage.setItem(POSE_CAMERA_STORAGE_KEY, next)
+                window.projector?.setPoseCameraDeviceId(next || null)
+                return next
+            })
+
+            if (videoInputs.length === 0) {
+                setCameraStatus('No webcam detected.')
+            } else if (videoInputs.some(device => device.label)) {
+                setCameraStatus(`Camera access ready. ${videoInputs.length} webcam${videoInputs.length === 1 ? '' : 's'} found.`)
+            } else {
+                setCameraStatus('Webcams found, but labels are hidden until access is granted.')
+            }
+        } catch (error) {
+            setCameraStatus(error?.name === 'NotAllowedError'
+                ? 'Camera access denied. Allow webcam access and try again.'
+                : `Camera access failed: ${error?.message || 'unknown error'}`)
+        } finally {
+            permissionStream?.getTracks().forEach(track => track.stop())
+            setCameraRefreshing(false)
+        }
+    }
+
+    const handlePoseCameraSelect = (deviceId) => {
+        setPoseCameraDeviceId(deviceId)
+        localStorage.setItem(POSE_CAMERA_STORAGE_KEY, deviceId)
+        window.projector?.setPoseCameraDeviceId(deviceId || null)
+    }
+
     const handleMappingEditModeToggle = () => {
         const next = !mappingEditMode
         setMappingEditMode(next)
@@ -194,6 +246,12 @@ const ProjectorPage = () => {
 
     useEffect(() => {
         refreshPresets()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
+    useEffect(() => {
+        refreshCameras()
+        window.projector?.setPoseCameraDeviceId(poseCameraDeviceId || null)
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
@@ -395,6 +453,41 @@ const ProjectorPage = () => {
                                 </div>
                             </div>
                         )}
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
+                                <Camera size={16} />
+                                Pose Tracking Webcam
+                            </label>
+                            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                <select
+                                    className="system-select"
+                                    value={poseCameraDeviceId}
+                                    onChange={(event) => handlePoseCameraSelect(event.target.value)}
+                                    style={{ flex: 1, margin: 0, height: '42px' }}
+                                >
+                                    <option value="">Default webcam</option>
+                                    {cameraDevices.map((device, index) => (
+                                        <option key={device.deviceId || index} value={device.deviceId}>
+                                            {device.label || `Webcam ${index + 1}`}
+                                        </option>
+                                    ))}
+                                </select>
+                                <button
+                                    onClick={() => refreshCameras({ requestAccess: true })}
+                                    disabled={cameraRefreshing}
+                                    title="Grant webcam access and refresh cameras"
+                                    className="action-button active"
+                                    style={{ margin: 0, height: '42px', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}
+                                >
+                                    <Camera size={16} />
+                                    {cameraRefreshing ? 'Checking...' : 'Check Webcam'}
+                                </button>
+                            </div>
+                            <span style={{ fontSize: '11px', opacity: 0.7 }}>
+                                {cameraStatus}
+                            </span>
+                        </div>
 
                         <div style={{ display: 'flex', gap: '12px' }}>
                             <div

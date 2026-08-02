@@ -186,6 +186,7 @@ const projectorAPI = {
     // same way every other cross-window toggle already is, into the
     // projector window's own local useAudioStore.visualColorSyncEnabled.
     setVisualColorSync: (value) => ipcRenderer.send('projector:setVisualColorSync', value),
+    setPoseCameraDeviceId: (deviceId) => ipcRenderer.send('projector:setPoseCameraDeviceId', deviceId),
     onBlackout: (cb) => {
         const listener = (_e, v) => cb(v)
         ipcRenderer.on('projector:blackout', listener)
@@ -205,6 +206,11 @@ const projectorAPI = {
         const listener = (_e, v) => cb(v)
         ipcRenderer.on('projector:visualColorSyncChanged', listener)
         return () => ipcRenderer.removeListener('projector:visualColorSyncChanged', listener)
+    },
+    onPoseCameraDeviceIdChanged: (cb) => {
+        const listener = (_e, v) => cb(v)
+        ipcRenderer.on('projector:poseCameraDeviceIdChanged', listener)
+        return () => ipcRenderer.removeListener('projector:poseCameraDeviceIdChanged', listener)
     },
     onStatusChanged: (cb) => {
         const listener = (_e, payload) => cb(payload)

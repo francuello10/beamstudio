@@ -40,6 +40,7 @@ const ProjectorApp = () => {
     // BS-006: quad-warp mapping edit mode, driven remotely from ProjectorPage
     // the same way blackout/testPattern already are.
     const [mappingEditMode, setMappingEditMode] = useState(false)
+    const [poseCameraDeviceId, setPoseCameraDeviceId] = useState(null)
     // BS-008: this window's own read-only mirror of the surfaces array — the
     // same mapping:getSurfaces/onSurfacesChanged pull-and-subscribe pattern
     // ProjectorPage.jsx already uses for its own surfaces mirror. Needed here
@@ -64,6 +65,7 @@ const ProjectorApp = () => {
         const unsubTestPattern = window.projector?.onTestPattern(setTestPattern)
         const unsubMappingEditMode = window.mapping?.onEditModeChanged(setMappingEditMode)
         const unsubNowPlayingOverlay = window.projector?.onNowPlayingOverlayChanged(setNowPlayingOverlay)
+        const unsubPoseCameraDeviceId = window.projector?.onPoseCameraDeviceIdChanged(setPoseCameraDeviceId)
         // Ecosystem Color-Sync: unlike the toggles above, this one has no
         // local React state of its own here - it's written straight into
         // this window's own local useAudioStore (the store instance the
@@ -84,6 +86,7 @@ const ProjectorApp = () => {
             setBlackout(state.blackout)
             setTestPattern(state.testPattern)
             setNowPlayingOverlay(state.nowPlayingOverlay)
+            setPoseCameraDeviceId(state.poseCameraDeviceId || null)
             if (state.visualColorSyncEnabled !== undefined) {
                 useAudioStore.getState().setVisualColorSyncEnabled(state.visualColorSyncEnabled)
             }
@@ -97,6 +100,7 @@ const ProjectorApp = () => {
             unsubTestPattern?.()
             unsubMappingEditMode?.()
             unsubNowPlayingOverlay?.()
+            unsubPoseCameraDeviceId?.()
             unsubVisualColorSync?.()
         }
     }, [])
@@ -195,6 +199,7 @@ const ProjectorApp = () => {
                             key={visualId}
                             ref={getCanvasRef(visualId)}
                             active={distinctVisualIds.has(visualId)}
+                            cameraDeviceId={poseCameraDeviceId || undefined}
                         />
                     )
                 })}

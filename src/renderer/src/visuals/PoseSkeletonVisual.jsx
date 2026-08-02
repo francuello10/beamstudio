@@ -46,13 +46,15 @@ const LINE_COLOR = 'rgba(0, 229, 255, 0.85)'
  * @param {string} [props.modelBasePath] — forwarded to usePoseLandmarker;
  *   see that hook's JSDoc for the default and why it must be overridden per
  *   host app.
+ * @param {string} [props.cameraDeviceId] — optional videoinput deviceId.
  */
-const PoseSkeletonVisual = forwardRef(({ active = true, modelVariant = 'lite', modelBasePath } = {}, forwardedRef) => {
+const PoseSkeletonVisual = forwardRef(({ active = true, modelVariant = 'lite', modelBasePath, cameraDeviceId } = {}, forwardedRef) => {
     const canvasRef = useRef(null)
     const rafRef = useRef(null)
 
     const { videoRef, start, stop, latestResultRef, error } = usePoseLandmarker({
         modelVariant,
+        cameraDeviceId,
         ...(modelBasePath ? { modelBasePath } : {})
     })
 
@@ -113,7 +115,7 @@ const PoseSkeletonVisual = forwardRef(({ active = true, modelVariant = 'lite', m
         start()
         return () => stop()
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [active])
+    }, [active, cameraDeviceId])
 
     if (error) {
         console.error('[PoseSkeletonVisual] pose landmarker error:', error)

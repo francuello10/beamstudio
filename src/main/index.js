@@ -66,10 +66,19 @@ let lastKnownProjectorState = {
     testPattern: false,
     nowPlayingOverlay: false,
     mappingEditMode: false,
+    poseCameraDeviceId: null,
     // Ecosystem Color-Sync ("Sync colors with lights") toggle - same
     // relay-and-cache shape as the fields above. Defaults true to match
     // useAudioStore's own visualColorSyncEnabled default.
     visualColorSyncEnabled: true
+}
+
+function isBeamStudioWebContents(webContents) {
+    return BrowserWindow.getAllWindows().some(win => win.webContents.id === webContents.id)
+}
+
+function isProjectorWebContents(webContents) {
+    return projectorWindow && !projectorWindow.isDestroyed() && projectorWindow.webContents.id === webContents.id
 }
 
 function readMappingPresets() {
@@ -1856,6 +1865,15 @@ function setupIPC() {
         projectorWindow?.webContents.send('projector:visualColorSyncChanged', enabled)
     })
 
+    // Pose Skeleton webcam selection. The main window owns the operator UI,
+    // the projector window owns the actual visual/camera hook, so the chosen
+    // deviceId is cached and relayed exactly like the other projector toggles.
+    ipcMain.on('projector:setPoseCameraDeviceId', (event, deviceId) => {
+        const normalizedDeviceId = typeof deviceId === 'string' && deviceId.trim() ? deviceId : null
+        lastKnownProjectorState.poseCameraDeviceId = normalizedDeviceId
+        projectorWindow?.webContents.send('projector:poseCameraDeviceIdChanged', normalizedDeviceId)
+    })
+
     // Projection Mapping (BS-006) — relayed the same way as
     // projector:setBlackout: the main window's Edit Mapping toggle sends
     // this, the projector window listens for it to show/hide corner handles.
@@ -2219,6 +2237,35 @@ app.whenReady().then(async () => {
     electronApp.setAppUserModelId('com.francuello.beamstudio')
     app.on('browser-window-created', (_, window) => optimizer.watchWindowShortcuts(window))
     setupIPC()
+
+    // Camera/audio permissions are explicit instead of relying on Electron's
+    // default prompt behavior. This keeps webcam pose tracking and the
+    // existing audio capture paths working only for BeamStudio-owned windows,
+    // while still denying media requests from anything outside the app.
+    session.defaultSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+        const trustedWindow = isBeamStudioWebContents(webContents)
+        if (!trustedWindow) {
+            callback(false)
+            return
+        }
+
+        if (permission === 'media') {
+            const mediaTypes = Array.isArray(details?.mediaTypes) ? details.mediaTypes : []
+            if (isProjectorWebContents(webContents)) {
+                callback(mediaTypes.includes('video') && !mediaTypes.includes('audio'))
+                return
+            }
+            callback(mediaTypes.includes('video') || mediaTypes.includes('audio'))
+            return
+        }
+
+        if (permission === 'display-capture') {
+            callback(!isProjectorWebContents(webContents))
+            return
+        }
+
+        callback(false)
+    })
 
     // BS-004: required for navigator.mediaDevices.getDisplayMedia() to work
     // at all — Electron rejects every getDisplayMedia() call with
