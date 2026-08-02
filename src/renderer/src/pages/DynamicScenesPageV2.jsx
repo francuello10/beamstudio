@@ -97,7 +97,6 @@ const DynamicScenesPageV2 = () => {
         const toStore = newScenes.map(({ compiledFunc, ...rest }) => rest)
         localStorage.setItem('CUSTOM_AI_SCENES', JSON.stringify(toStore))
         setPreviewScene(null)
-        setAudioReactive(false)
     }
 
     useEffect(() => {
@@ -247,7 +246,7 @@ const DynamicScenesPageV2 = () => {
                                     }}
                                 >
                                     <Music size={14} />
-                                    <span>AUDIO REACTIVE {audioReactive ? 'ON' : 'OFF'}</span>
+                                    <span>AUDIO BOOST {audioReactive ? 'ON' : 'OFF'}</span>
                                     {audioReactive && <span style={{ opacity: 0.7, marginLeft: '4px' }}>x{energyFactor.toFixed(1)}</span>}
                                 </div>
                             </div>

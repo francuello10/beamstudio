@@ -169,7 +169,7 @@ Mixer/base palette → audio boost → fixture-slot DMX mapping
                                 cursor: 'pointer'
                             }}
                         >
-                            <Music2 size={14} /> Musical boost
+                            <Music2 size={14} /> Full music boost
                         </button>
                         <button
                             onClick={() => setBassPulseMode(true)}
@@ -241,7 +241,7 @@ Mixer/base palette → audio boost → fixture-slot DMX mapping
                             Mapping behavior
                         </div>
                         <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
-                            Slot order follows the fixture patch. Set any solid look first — REUNIÓN, Quick Palettes, ColorWheel, or RGB faders — and audio boosts that base. RGB changes reactively; DIM keeps the current master dimmer; FUNC/SPD/FLASH are left untouched. Extra fixtures reuse the last slot color.
+                            Slot order follows the fixture patch. Full music boost follows the whole spectrum/profile; Bass boost emphasizes low-end pulses. Set any solid look first — REUNIÓN, Quick Palettes, ColorWheel, RGB faders, or scenes — and audio boosts that base. RGB changes reactively; DIM keeps the current master dimmer; FUNC/SPD/FLASH are left untouched. Extra fixtures reuse the last slot color.
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
                             {mapping.map((item) => (
