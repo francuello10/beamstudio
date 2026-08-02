@@ -68,6 +68,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - Treinta y cincoavo slice activo: Slot 2 quedó más estricto y físico: SUB 35-85 Hz + KICK 70-125 Hz, penalización 125-350 Hz y salida centro más quantizada/off-on para pegar más bruto sólo cuando hay bajo real.
 - Treinta y seisavo slice activo: Slot 2 usa un hit shaper con armado, hysteresis, hold y refractory para evitar mini-titilados; el centro dispara pocos golpes más fuertes y los laterales conservan seguimiento musical continuo.
 - Treinta y sieteavo slice activo: el boost x4 dejó de volver demasiado sensible al centro; Slot 2 exige pureza sub/kick contra upper-bass/low-mid, punch transiente, dominancia física y refractory largo en todos los perfiles de render, mientras el medidor UI muestra el hit real del centro.
+- Treinta y ochoavo slice activo: Slot 2 dejó de contar energía sostenida sobre el piso como punch; ahora exige onset/rise real de sub/kick también en x1 para cortar falsos positivos.
 
 ## Alcance
 
@@ -117,6 +118,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - [x] El boost alto aumenta el impacto visual, pero no baja el detector de Slot 2 a falsos positivos de low-mid/upper-bass.
 - [x] Ningún perfil de género usa low-mid como intensidad de Slot 2; el centro consume `centerBassHit`.
 - [x] El medidor central de Audio UI muestra `CENTER HIT`, no un peak-hold de sub permanente.
+- [x] Slot 2 exige onset/rise real de sub/kick; la energía sostenida por encima del piso no cuenta como punch.
 - [x] En pausa/silencio sostenido, BeamStudio congela la salida DMX audio y mantiene la escena fija sin pulso artificial.
 - [x] El detector de pausa ignora ruido constante: sólo considera actividad musical cuando hay transiente o energía por encima del piso adaptativo.
 - [x] Al iniciar audio con música pausada, BeamStudio calibra piso antes de mandar DMX para no mover luces por ruido base.

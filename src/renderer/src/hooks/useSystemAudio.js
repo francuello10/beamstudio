@@ -52,33 +52,45 @@ const shapeCenterBassHit = ({ bassProfile, boostLevel, now, state }) => {
     const purity = trueBass / (trueBass + falseBass + 0.05)
     const aboveFloor = Math.max(0, raw - floor)
     const centerScore = clamp01(Math.max(
-        raw * 0.5 + dominance * 0.9,
-        aboveFloor * 1.75 + dominance * 0.45
+        raw * 0.48 + dominance * 0.82,
+        aboveFloor * 1.1 + dominance * 0.38
     ))
     const scoreRise = Math.max(0, centerScore - (state.previousScore || 0))
-    const punch = Math.max(bassProfile?.transient || 0, scoreRise * 7.2, aboveFloor * 3.2)
-    const trigger = Math.max(0.58, 0.64 - impactBias * 0.015)
-    const reset = trigger * 0.28
-    const minPurity = Math.max(0.54, 0.6 - impactBias * 0.01)
-    const minPunch = Math.max(0.44, 0.52 - impactBias * 0.02)
-    const minDominance = Math.max(0.1, 0.16 - impactBias * 0.015)
-    const refractoryMs = Math.max(360, 500 - impactBias * 24)
-    const holdMs = Math.max(76, 112 - impactBias * 6)
-    const release = Math.max(0.16, 0.34 - impactBias * 0.035)
-    state.previousScore = centerScore
+    const trueBassRise = Math.max(0, trueBass - (state.previousTrueBass || 0))
+    const falseBassRise = Math.max(0, falseBass - (state.previousFalseBass || 0))
+    const punch = Math.max(bassProfile?.transient || 0, scoreRise * 6.8, trueBassRise * 7.4)
+    const trigger = Math.max(0.62, 0.68 - impactBias * 0.01)
+    const reset = trigger * 0.22
+    const minPurity = Math.max(0.6, 0.64 - impactBias * 0.01)
+    const minPunch = Math.max(0.5, 0.6 - impactBias * 0.03)
+    const minDominance = Math.max(0.15, 0.2 - impactBias * 0.01)
+    const minScoreRise = Math.max(0.055, 0.08 - impactBias * 0.006)
+    const minTrueBassRise = Math.max(0.04, 0.065 - impactBias * 0.005)
+    const refractoryMs = Math.max(500, 620 - impactBias * 40)
+    const holdMs = Math.max(76, 108 - impactBias * 6)
+    const release = Math.max(0.14, 0.3 - impactBias * 0.04)
 
     if (centerScore <= reset) state.armed = true
 
-    const cleanImpact = purity >= minPurity && dominance >= minDominance && centerScore >= trigger && punch >= minPunch
-    const hugePureImpact = purity >= minPurity + 0.08 && dominance >= minDominance * 1.75 && centerScore >= trigger * 1.18 && punch >= minPunch
+    const hasOnset = scoreRise >= minScoreRise || trueBassRise >= minTrueBassRise
+    const lowMidLedAttack = falseBassRise > trueBassRise * 1.25 && falseBass > trueBass * 0.72
+    const cleanImpact = purity >= minPurity && dominance >= minDominance && centerScore >= trigger && punch >= minPunch && hasOnset && !lowMidLedAttack
+    const hugePureImpact = purity >= minPurity + 0.08 && dominance >= minDominance * 1.75 && centerScore >= trigger * 1.18 && punch >= minPunch && hasOnset && !lowMidLedAttack
     if (state.armed && now - state.lastTriggerAt >= refractoryMs && (cleanImpact || hugePureImpact)) {
         const normalized = clamp01((centerScore - trigger) / (1 - trigger))
         state.value = Math.max(0.9, Math.pow(normalized, 0.34))
         state.lastTriggerAt = now
         state.holdUntil = now + holdMs
         state.armed = false
+        state.previousScore = centerScore
+        state.previousTrueBass = trueBass
+        state.previousFalseBass = falseBass
         return state.value
     }
+
+    state.previousScore = centerScore
+    state.previousTrueBass = trueBass
+    state.previousFalseBass = falseBass
 
     if (now <= state.holdUntil) {
         state.value = Math.max(state.value, 0.84)
@@ -166,6 +178,8 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
     const centerBassHit = useRef({
         value: 0,
         previousScore: 0,
+        previousTrueBass: 0,
+        previousFalseBass: 0,
         lastTriggerAt: -Infinity,
         holdUntil: 0,
         armed: true
@@ -272,6 +286,8 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
         centerBassHit.current = {
             value: 0,
             previousScore: 0,
+            previousTrueBass: 0,
+            previousFalseBass: 0,
             lastTriggerAt: -Infinity,
             holdUntil: 0,
             armed: true
@@ -586,6 +602,8 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                     centerBassHit.current = {
                         value: 0,
                         previousScore: 0,
+                        previousTrueBass: 0,
+                        previousFalseBass: 0,
                         lastTriggerAt: -Infinity,
                         holdUntil: 0,
                         armed: true
