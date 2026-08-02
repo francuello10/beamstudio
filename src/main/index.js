@@ -48,6 +48,23 @@ const MAPPING_PRESETS_PATH = join(app.getPath('userData'), 'mapping-presets.json
 // to relay to.
 let lastKnownSurfaces = null
 
+// Bugfix: projector:setBlackout/setTestPattern/setVisual/setNowPlayingOverlay
+// and mapping:setEditMode were pure one-way relays with no server-side cache
+// - a freshly-opened (or reopened after being closed) projector window had no
+// way to learn the CURRENT toggle state, only updates pushed after it happened
+// to be listening. Mirrors the lastKnownSurfaces pattern above: cached
+// unconditionally on every set*, pulled on mount via projector:getState.
+// activeVisual starts null (not a real visual id) so ProjectorApp.jsx can
+// tell "never set yet" apart from an actual pulled value and keep its own
+// default in that case.
+let lastKnownProjectorState = {
+    blackout: false,
+    testPattern: false,
+    activeVisual: null,
+    nowPlayingOverlay: false,
+    mappingEditMode: false
+}
+
 function readMappingPresets() {
     try {
         const data = JSON.parse(readFileSync(MAPPING_PRESETS_PATH, 'utf8'))
@@ -1802,19 +1819,44 @@ function setupIPC() {
         closeProjectorWindow()
         return { ok: true }
     })
-    ipcMain.on('projector:setBlackout', (event, value) => projectorWindow?.webContents.send('projector:blackout', value))
-    ipcMain.on('projector:setTestPattern', (event, value) => projectorWindow?.webContents.send('projector:testPattern', value))
-    ipcMain.on('projector:setVisual', (event, visualId) => projectorWindow?.webContents.send('projector:visualChanged', visualId))
+    ipcMain.on('projector:setBlackout', (event, value) => {
+        lastKnownProjectorState.blackout = value
+        projectorWindow?.webContents.send('projector:blackout', value)
+    })
+    ipcMain.on('projector:setTestPattern', (event, value) => {
+        lastKnownProjectorState.testPattern = value
+        projectorWindow?.webContents.send('projector:testPattern', value)
+    })
+    ipcMain.on('projector:setVisual', (event, visualId) => {
+        lastKnownProjectorState.activeVisual = visualId
+        projectorWindow?.webContents.send('projector:visualChanged', visualId)
+    })
     // BS-007 phase 2: Now Playing overlay toggle - relayed the exact same
     // one-way way as setBlackout/setTestPattern above. The projector window
     // runs its own useNowPlaying() poll (see ProjectorApp.jsx) for the actual
     // metadata; this channel only carries the on/off toggle.
-    ipcMain.on('projector:setNowPlayingOverlay', (event, value) => projectorWindow?.webContents.send('projector:nowPlayingOverlayChanged', value))
+    ipcMain.on('projector:setNowPlayingOverlay', (event, value) => {
+        lastKnownProjectorState.nowPlayingOverlay = value
+        projectorWindow?.webContents.send('projector:nowPlayingOverlayChanged', value)
+    })
 
     // Projection Mapping (BS-006) — relayed the same way as
     // projector:setBlackout: the main window's Edit Mapping toggle sends
     // this, the projector window listens for it to show/hide corner handles.
-    ipcMain.on('mapping:setEditMode', (event, value) => projectorWindow?.webContents.send('mapping:editModeChanged', value))
+    ipcMain.on('mapping:setEditMode', (event, value) => {
+        lastKnownProjectorState.mappingEditMode = value
+        projectorWindow?.webContents.send('mapping:editModeChanged', value)
+    })
+
+    // Bugfix: lets a freshly-mounted (or reopened) projector window pull the
+    // last-known toggle state on mount, instead of only ever reflecting
+    // whatever it happened to be listening for after it opened - see
+    // lastKnownProjectorState's comment above.
+    ipcMain.handle('projector:getState', () => lastKnownProjectorState)
+    // Same fix as projector:getState above, exposed under the mapping:
+    // prefix to match mapping:setEditMode/mapping:getSurfaces' existing
+    // convention rather than mixing it into the projector: namespace.
+    ipcMain.handle('mapping:getEditMode', () => lastKnownProjectorState.mappingEditMode)
 
     // BS-006 phase 2: surfaces array sync. EITHER window (main or projector)
     // can push a new surfaces array — broadcast to every OTHER window, same

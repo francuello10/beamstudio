@@ -61,6 +61,23 @@ const ProjectorApp = () => {
         const unsubMappingEditMode = window.mapping?.onEditModeChanged(setMappingEditMode)
         const unsubNowPlayingOverlay = window.projector?.onNowPlayingOverlayChanged(setNowPlayingOverlay)
 
+        // Bugfix: setBlackout/setTestPattern/setVisual/setNowPlayingOverlay/
+        // setEditMode are one-way relays with no state of their own - a
+        // freshly-opened (or reopened after being closed) window only ever
+        // saw pushes that happened after it started listening above, so it
+        // silently reverted to these useState defaults regardless of what
+        // was actually live. Pull current state once on mount instead.
+        window.projector?.getState?.().then((state) => {
+            if (!state) return
+            setBlackout(state.blackout)
+            setTestPattern(state.testPattern)
+            if (state.activeVisual) setActiveVisual(state.activeVisual)
+            setNowPlayingOverlay(state.nowPlayingOverlay)
+        })
+        window.mapping?.getEditMode?.().then((value) => {
+            if (value !== undefined) setMappingEditMode(value)
+        })
+
         return () => {
             unsubBlackout?.()
             unsubTestPattern?.()

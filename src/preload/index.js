@@ -165,6 +165,10 @@ const projectorAPI = {
     listDisplays: () => ipcRenderer.invoke('projector:listDisplays'),
     open: (displayId) => ipcRenderer.invoke('projector:open', displayId),
     close: () => ipcRenderer.invoke('projector:close'),
+    // Bugfix: lets a freshly-mounted projector window pull current
+    // blackout/testPattern/activeVisual/nowPlayingOverlay state instead of
+    // only ever reflecting toggles pushed after it happened to be listening.
+    getState: () => ipcRenderer.invoke('projector:getState'),
     setBlackout: (value) => ipcRenderer.send('projector:setBlackout', value),
     setTestPattern: (value) => ipcRenderer.send('projector:setTestPattern', value),
     setVisual: (visualId) => ipcRenderer.send('projector:setVisual', visualId),
@@ -214,6 +218,9 @@ const mappingAPI = {
         ipcRenderer.on('mapping:editModeChanged', listener)
         return () => ipcRenderer.removeListener('mapping:editModeChanged', listener)
     },
+    // Bugfix: pull the current edit-mode toggle on mount, mirroring
+    // getSurfaces below - same reopened-window state-loss gap.
+    getEditMode: () => ipcRenderer.invoke('mapping:getEditMode'),
 
     // BS-006 phase 2: surfaces array sync. Either side (main window's
     // ProjectorPage or the projector window's MappingCompositor) can push a
