@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Play, Square, Zap, Droplets, Target, Activity } from 'lucide-react'
+import { Play, Square, Zap, Droplets, Target, Activity, Maximize, Minimize } from 'lucide-react'
 import LivePreviewContainer from '../components/LivePreviewContainer'
 import { useFluidSimulation, FLUID_PALETTES } from '../hooks/useFluidSimulation'
 import { useSystemAudio } from '../hooks/useSystemAudio'
@@ -9,6 +9,26 @@ import { useAudioStore } from '../store/audioStore'
 import '../fluidsim.css'
 
 const FluidSimPage = () => {
+    // Fullscreen (native Fullscreen API on the canvas wrapper, so what's on
+    // screen here matches what the projector output would show — no chrome,
+    // just the visualizer, edge to edge).
+    const canvasWrapperRef = useRef(null)
+    const [isFullscreen, setIsFullscreen] = useState(false)
+
+    useEffect(() => {
+        const onFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement)
+        document.addEventListener('fullscreenchange', onFullscreenChange)
+        return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
+    }, [])
+
+    const toggleFullscreen = useCallback(() => {
+        if (document.fullscreenElement) {
+            document.exitFullscreen()
+        } else {
+            canvasWrapperRef.current?.requestFullscreen()
+        }
+    }, [])
+
     // Stores
     const dmxFixtures = useDmxStore(state => state.dmxFixtures)
     const dmxUniverseState = useDmxStore(state => state.dmxUniverseState)
@@ -130,7 +150,14 @@ const FluidSimPage = () => {
                     </div>
 
                     {/* Canvas Wrapper */}
-                    <div className="fluidsim-canvas-wrapper">
+                    <div className="fluidsim-canvas-wrapper" ref={canvasWrapperRef}>
+                        <button
+                            className="fluidsim-fullscreen-btn"
+                            onClick={toggleFullscreen}
+                            title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
+                        >
+                            {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
+                        </button>
                         <canvas
                             ref={canvasRef}
                             width={1024}
