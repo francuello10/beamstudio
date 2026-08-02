@@ -31,7 +31,11 @@ export const DEFAULT_SURFACE = {
         { x: 0, y: 1 }  // BL
     ],
     mask: null,
-    feather: 0
+    feather: 0,
+    // Per-surface content rotation (radians), texture-sampling-only — see
+    // uRotation/rotate() in FRAGMENT_SHADER. Does NOT affect corners/quad-warp
+    // math (computeQuadWarpVertices) or the mask's sdPolygon evaluation.
+    rotation: 0
 }
 
 // Default mask seed: a slightly-inset quadrilateral in quad-local UV space,
@@ -72,7 +76,20 @@ uniform sampler2D uTexture;
 uniform vec2 uMaskPoints[MAX_MASK_POINTS];
 uniform int uMaskPointCount; // 0 means "no mask" — treat as fully visible
 uniform float uFeather;
+uniform float uRotation; // radians — per-surface CONTENT rotation only
 out vec4 outColor;
+
+// Rotates a quad-local UV around its own center (0.5, 0.5). Deliberately
+// applied ONLY to the texture-sampling UV below, never to the UV passed into
+// sdPolygon() — the mask polygon/feather are operator-set in un-rotated
+// quad-local space (same space corners/computeQuadWarpVertices use), so
+// rotating the content must never distort or move the mask shape.
+vec2 rotate(vec2 uv, float angle) {
+    float s = sin(angle);
+    float c = cos(angle);
+    mat2 rot = mat2(c, -s, s, c);
+    return rot * (uv - 0.5) + 0.5;
+}
 
 // Inigo Quilez's sdPolygon — signed distance from p to a simple (non-self-
 // intersecting) polygon boundary. Negative = inside, positive = outside.
@@ -101,7 +118,7 @@ void main() {
             ? smoothstep(0.0, uFeather, -dist)
             : (dist <= 0.0 ? 1.0 : 0.0);
     }
-    vec4 texel = texture(uTexture, vUV);
+    vec4 texel = texture(uTexture, rotate(vUV, uRotation));
     outColor = vec4(texel.rgb, texel.a * maskAlpha);
 }
 `
@@ -319,7 +336,7 @@ export function createInsetSurface(referenceCorners, name) {
         x: p.x + (cx - p.x) * inset,
         y: p.y + (cy - p.y) * inset
     }))
-    return { id: nextSurfaceId(), name: name || `Surface ${surfaceCounter}`, corners, mask: null, feather: 0 }
+    return { id: nextSurfaceId(), name: name || `Surface ${surfaceCounter}`, corners, mask: null, feather: 0, rotation: 0 }
 }
 
 /**
@@ -438,6 +455,7 @@ const MappingCompositor = ({ visualCanvasRef, editMode }) => {
         const uMaskPoints = gl.getUniformLocation(program, 'uMaskPoints[0]')
         const uMaskPointCount = gl.getUniformLocation(program, 'uMaskPointCount')
         const uFeather = gl.getUniformLocation(program, 'uFeather')
+        const uRotation = gl.getUniformLocation(program, 'uRotation')
 
         const vao = gl.createVertexArray()
         gl.bindVertexArray(vao)
@@ -482,12 +500,12 @@ const MappingCompositor = ({ visualCanvasRef, editMode }) => {
         gl.enable(gl.BLEND)
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 
-        glStateRef.current = { gl, program, vertexBuffer, texture, vao, uTexture, uMaskPoints, uMaskPointCount, uFeather }
+        glStateRef.current = { gl, program, vertexBuffer, texture, vao, uTexture, uMaskPoints, uMaskPointCount, uFeather, uRotation }
 
         function renderFrame() {
             const state = glStateRef.current
             if (!state) return
-            const { gl: ctx, program: prog, texture: tex, vao: vertexArray, uTexture: texUniform, uMaskPoints: maskUniform, uMaskPointCount: maskCountUniform, uFeather: featherUniform } = state
+            const { gl: ctx, program: prog, texture: tex, vao: vertexArray, uTexture: texUniform, uMaskPoints: maskUniform, uMaskPointCount: maskCountUniform, uFeather: featherUniform, uRotation: rotationUniform } = state
 
             const cssWidth = canvas.clientWidth || 1
             const cssHeight = canvas.clientHeight || 1
@@ -535,6 +553,7 @@ const MappingCompositor = ({ visualCanvasRef, editMode }) => {
                 ctx.uniform2fv(maskUniform, buildMaskUniformData(surface.mask))
                 ctx.uniform1i(maskCountUniform, maskPointCount)
                 ctx.uniform1f(featherUniform, surface.feather || 0)
+                ctx.uniform1f(rotationUniform, surface.rotation || 0)
                 ctx.drawArrays(ctx.TRIANGLES, 0, QUAD_TRIANGLE_ORDER.length)
             })
         }

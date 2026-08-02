@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Projector, Power, EyeOff, Crosshair, RefreshCw, Check, AlertCircle, Move, Layers, Plus, Trash2, Save, FolderOpen, Music } from 'lucide-react'
+import { Projector, Power, EyeOff, Crosshair, RefreshCw, Check, AlertCircle, Move, Layers, Plus, Trash2, Save, FolderOpen, Music, RotateCw } from 'lucide-react'
 import { VISUALS } from '../visuals/visualRegistry'
 import { DEFAULT_SURFACE, createInsetSurface } from '../mapping/MappingCompositor'
 
@@ -191,6 +191,15 @@ const ProjectorPage = () => {
         pushSurfaces(surfaces.map(s => (s.id === selectedSurfaceId ? { ...s, name } : s)))
     }
 
+    // BS-006 phase 3: per-surface content rotation. Stored on the surface
+    // object as radians (consumed directly by MappingCompositor.jsx's
+    // uRotation uniform); this page converts to/from degrees only for
+    // display, same split as the feather value elsewhere in this feature.
+    const handleRotationChange = (degrees) => {
+        const rotation = (Number(degrees) * Math.PI) / 180
+        pushSurfaces(surfaces.map(s => (s.id === selectedSurfaceId ? { ...s, rotation } : s)))
+    }
+
     const handleSavePreset = async () => {
         if (!presetName.trim()) return
         await window.mapping?.savePreset({ name: presetName.trim(), surfaces })
@@ -211,6 +220,7 @@ const ProjectorPage = () => {
     }
 
     const selectedSurface = surfaces.find(s => s.id === selectedSurfaceId) || surfaces[0]
+    const rotationDegrees = Math.round((((selectedSurface?.rotation || 0) * 180) / Math.PI) % 360)
 
     const connectedDisplay = displays.find(d => d.id === status.displayId)
 
@@ -396,6 +406,33 @@ const ProjectorPage = () => {
                                 <Trash2 size={16} />
                                 Remove Surface
                             </button>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
+                                <RotateCw size={16} />
+                                Rotation ({rotationDegrees}°)
+                            </label>
+                            <input
+                                type="range"
+                                min={0}
+                                max={360}
+                                step={1}
+                                value={rotationDegrees}
+                                onChange={(e) => handleRotationChange(e.target.value)}
+                            />
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                {[0, 90, 180, 270].map((deg) => (
+                                    <button
+                                        key={deg}
+                                        onClick={() => handleRotationChange(deg)}
+                                        className={`bgr-toggle ${rotationDegrees === deg ? 'active' : ''}`}
+                                        style={{ flex: 1, height: '32px', padding: 0, justifyContent: 'center', fontSize: '11px' }}
+                                    >
+                                        <span>{deg}°</span>
+                                    </button>
+                                ))}
+                            </div>
                         </div>
 
                         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
