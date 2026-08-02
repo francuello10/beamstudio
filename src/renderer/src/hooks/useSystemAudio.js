@@ -24,6 +24,7 @@ import {
     requestAudioInputStream,
     writeStoredAudioInputId
 } from '../audio/AudioSourceManager'
+import { useAudioStore } from '../store/audioStore'
 
 /**
  * useSystemAudio v6.1 — Expert Deco Tuning for Thonet & Vander Ratsel 2.1
@@ -420,6 +421,17 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
         } catch (err) {
             console.error('[Audio DSP] Failed:', err)
             stop()
+            if (err?.name === 'NotAllowedError') {
+                setSourceError('Audio capture permission was denied. Allow microphone / monitor access and try again.')
+                return
+            }
+
+            if (err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError') {
+                setSourceError('No audio input is available. On Linux, BeamStudio currently depends on a monitor/loopback input exposed by PipeWire or PulseAudio.')
+                return
+            }
+
+            setSourceError('Audio detection failed to start. On Linux, BeamStudio currently analyzes monitor/loopback inputs, not native desktop loopback.')
         }
     }, [refreshInputs, selectedDeviceId, sendDmxBatch, stop, autoGenre, detectedGenre, manualGenre, onAudioUpdate, audioSensitivity])
 
