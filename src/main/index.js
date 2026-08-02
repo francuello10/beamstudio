@@ -1490,13 +1490,17 @@ function setupIPC() {
     })
 
     // Ambilight
+    // @ai-constraints Return shape distinguishes "enumeration threw" (error set)
+    // from "enumeration succeeded but found zero sources" (error null, sources
+    // empty — e.g. Wayland/PipeWire portal permission not granted yet) so the
+    // renderer can show a genuinely different message for each case.
     ipcMain.handle('ambilight:getSources', async () => {
         try {
             const sources = await desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 320, height: 180 } })
-            return sources.map(s => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL() }))
+            return { sources: sources.map(s => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL() })), error: null }
         } catch (error) {
             logger.error('Ambilight: Failed to get sources (Check Wayland/PipeWire permissions):', error)
-            return []
+            return { sources: [], error: error.message || 'Unknown error' }
         }
     })
 

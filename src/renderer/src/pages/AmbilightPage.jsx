@@ -22,15 +22,18 @@ const AmbilightPage = () => {
     // Local State
     const [sources, setSources] = useState([])
     const [selectedSource, setSelectedSource] = useState(null)
-    const [audioBoost, setAudioBoost] = useState(false)
     const [captureError, setCaptureError] = useState(null)
     const [refreshing, setRefreshing] = useState(false)
+    const [isStarting, setIsStarting] = useState(false)
 
     // GPU Extraction Engine
-    const { start: startAmbilight, stop: stopAmbilight, capturing, colors: previewColors, isMono, setIsMono } = useGpuAmbilight(sendPixelMapBuffer, audioTelemetryDSP)
+    const {
+        start: startAmbilight, stop: stopAmbilight, capturing, colors: previewColors,
+        isMono, setIsMono, smoothingFactor, setSmoothingFactor
+    } = useGpuAmbilight(sendPixelMapBuffer, audioTelemetryDSP)
 
     // Audio Boost Engine (Analysis Only)
-    const { start: startAudio, stop: stopAudio, energyFactor } = useSystemAudio(
+    const { start: startAudio, stop: stopAudio } = useSystemAudio(
         () => { }, // No direct DMX control, Ambilight hook handles it
         null,
         setAudioTelemetryDSP
@@ -39,8 +42,17 @@ const AmbilightPage = () => {
     const refreshSources = async () => {
         setRefreshing(true)
         try {
-            const s = await window.ambilight?.getSources()
-            if (s) setSources(s)
+            const result = await window.ambilight?.getSources()
+            const sourceList = result?.sources ?? []
+            setSources(sourceList)
+
+            if (result?.error) {
+                setCaptureError(`No se pudieron listar las fuentes: ${result.error}`)
+            } else if (sourceList.length === 0) {
+                setCaptureError('No se encontraron fuentes de captura — revisá permisos de pantalla/PipeWire')
+            } else {
+                setCaptureError(null)
+            }
         } catch (e) {
             setCaptureError('Failed to list sources')
         }
@@ -67,19 +79,29 @@ const AmbilightPage = () => {
     const setActiveFlag = useDmxStore(state => state.setActiveFlag)
 
     const handleStart = async () => {
-        const id = selectedSource || sources[0]?.id
-        setActiveProgram(null)
-        setActiveDynamicScene(null)
-        setActiveFlag(null)
+        // Guard against rapid double-click: a second start() before `capturing`
+        // flips true could overwrite videoRef.current.srcObject with a second
+        // MediaStream before the first one is stopped.
+        if (isStarting || capturing) return
+        setIsStarting(true)
 
-        if (id) {
-            setCaptureError(null)
-            try {
-                startAmbilight(id)
-                if (audioMode !== 'OFF') await startAudio()
-            } catch (e) {
-                setCaptureError('GPU capture failed — try a different source')
+        try {
+            const id = selectedSource || sources[0]?.id
+            setActiveProgram(null)
+            setActiveDynamicScene(null)
+            setActiveFlag(null)
+
+            if (id) {
+                setCaptureError(null)
+                try {
+                    await startAmbilight(id)
+                    if (audioMode !== 'OFF') await startAudio()
+                } catch (e) {
+                    setCaptureError('GPU capture failed — try a different source')
+                }
             }
+        } finally {
+            setIsStarting(false)
         }
     }
 
@@ -95,6 +117,21 @@ const AmbilightPage = () => {
                     <Monitor size={48} strokeWidth={1} style={{ color: capturing ? 'var(--accent)' : 'inherit', filter: capturing ? 'drop-shadow(0 0 10px var(--accent))' : 'none' }} />
                     <h2>GPU Screen Sync</h2>
                     <p className="subtitle">Mapeo espacial Izquierda-Centro-Derecha acelerado por hardware</p>
+
+                    {captureError && (
+                        <div style={{
+                            background: 'rgba(255,68,68,0.12)',
+                            border: '1px solid rgba(255,68,68,0.35)',
+                            color: '#ff9b9b',
+                            borderRadius: '8px',
+                            padding: '10px 14px',
+                            fontSize: '12px',
+                            marginBottom: '16px',
+                            textAlign: 'left'
+                        }}>
+                            {captureError}
+                        </div>
+                    )}
 
                     <div className="ambilight-controls" style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
                         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
@@ -156,12 +193,40 @@ const AmbilightPage = () => {
                             <motion.button
                                 className={`action-button ${capturing ? 'stop' : 'active'}`}
                                 onClick={capturing ? handleStop : handleStart}
+                                disabled={isStarting}
                                 whileHover={{ scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
-                                style={{ flex: 1, margin: 0, height: '48px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}
+                                style={{
+                                    flex: 1, margin: 0, height: '48px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px',
+                                    opacity: isStarting ? 0.6 : 1,
+                                    cursor: isStarting ? 'not-allowed' : 'pointer'
+                                }}
                             >
-                                {capturing ? <><Square size={18} fill="currentColor" /> STOP ENGINE</> : <><Play size={18} fill="currentColor" /> IGNITE SYSTEM</>}
+                                {capturing
+                                    ? <><Square size={18} fill="currentColor" /> STOP ENGINE</>
+                                    : isStarting
+                                        ? <>Starting...</>
+                                        : <><Play size={18} fill="currentColor" /> IGNITE SYSTEM</>}
                             </motion.button>
+                        </div>
+
+                        <div style={{
+                            display: 'flex', flexDirection: 'column', gap: '6px', padding: '12px 16px',
+                            background: 'rgba(255,255,255,0.05)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)'
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                                <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Smoothing</span>
+                                <strong style={{ fontSize: '12px' }}>{smoothingFactor.toFixed(2)}</strong>
+                            </div>
+                            <input
+                                type="range"
+                                min="0.05"
+                                max="0.5"
+                                step="0.01"
+                                value={smoothingFactor}
+                                onChange={(e) => setSmoothingFactor(parseFloat(e.target.value))}
+                                style={{ width: '100%' }}
+                            />
                         </div>
                     </div>
 
@@ -173,7 +238,6 @@ const AmbilightPage = () => {
                         <div className="canvas-wrapper" style={{ display: 'flex', gap: '4px', background: '#000', padding: '10px', height: '100px', position: 'relative' }}>
                             {previewColors.map((c, i) => {
                                 const energyLabels = ['L', 'C', 'R']
-                                const boostPercent = audioBoost ? Math.round(energyFactor * 100 - 100) : 0
 
                                 return (
                                     <div key={i} style={{
@@ -185,18 +249,6 @@ const AmbilightPage = () => {
                                         position: 'relative',
                                         overflow: 'hidden'
                                     }}>
-                                        {audioBoost && (
-                                            <div style={{
-                                                position: 'absolute',
-                                                bottom: 0,
-                                                left: 0,
-                                                right: 0,
-                                                height: `${Math.min(100, boostPercent)}%`,
-                                                background: 'rgba(255,255,255,0.25)',
-                                                transition: 'height 0.1s ease',
-                                                borderRadius: '0 0 4px 4px'
-                                            }} />
-                                        )}
                                         <div style={{
                                             position: 'absolute',
                                             top: '50%',
