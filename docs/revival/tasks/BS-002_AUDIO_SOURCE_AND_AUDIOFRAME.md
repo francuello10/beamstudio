@@ -37,6 +37,8 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - Quinto slice activo en `main`: la gestión de fuentes quedó extraída a `src/renderer/src/audio/AudioSourceManager.js` para empezar a desacoplar `useSystemAudio`.
 - Sexto slice activo en `main`: los cálculos DSP base quedaron extraídos a `src/renderer/src/audio/AudioAnalyzer.js` para bajar complejidad del hook.
 - Séptimo slice activo en `main`: la detección de género estable y la telemetría derivada también quedaron movidas a `AudioAnalyzer`.
+- Octavo slice activo en `main`: la colorización/reactividad quedó extraída a `src/renderer/src/audio/AudioReactiveRenderer.js`.
+- Noveno slice activo en `main`: Ambilight y Fluid consumen `audioFrame` como contrato principal en lugar de depender de campos sueltos.
 
 ## Alcance
 

@@ -12,6 +12,12 @@ export const createEmptyAudioFrame = () => ({
         volume: 0,
         stereoWidth: 0
     },
+    stereo: {
+        lowMidLeft: 0,
+        lowMidRight: 0,
+        midHighLeft: 0,
+        midHighRight: 0
+    },
     spatial: { left: 0, center: 0, right: 0 },
     spectral: new Array(16).fill(0),
     telemetry: {
@@ -31,6 +37,7 @@ export const createAudioFrame = ({
     timestamp,
     source,
     levels,
+    stereo,
     spatial,
     spectral,
     telemetry,
@@ -49,6 +56,12 @@ export const createAudioFrame = ({
         high: Math.max(0, Math.min(1, levels?.high || 0)),
         volume: Math.max(0, Math.min(1, levels?.volume || 0)),
         stereoWidth: Math.max(0, Math.min(1, levels?.stereoWidth || 0))
+    },
+    stereo: {
+        lowMidLeft: Math.max(0, Math.min(1, stereo?.lowMidLeft || 0)),
+        lowMidRight: Math.max(0, Math.min(1, stereo?.lowMidRight || 0)),
+        midHighLeft: Math.max(0, Math.min(1, stereo?.midHighLeft || 0)),
+        midHighRight: Math.max(0, Math.min(1, stereo?.midHighRight || 0))
     },
     spatial: {
         left: Math.max(0, Math.min(1, spatial?.left || 0)),

@@ -20,7 +20,7 @@ const FluidSimPage = () => {
 
     const setAudioTelemetryDSP = useAudioStore(state => state.setAudioTelemetryDSP)
     const audioMode = useAudioStore(state => state.audioMode)
-    const spatialResponse = useAudioStore(state => state.spatialResponse)
+    const audioFrame = useAudioStore(state => state.audioFrame)
 
     // Audio Engine
     const { start: startAudio, stop: stopAudio, energyFactor } = useSystemAudio(
@@ -161,9 +161,9 @@ const FluidSimPage = () => {
 
                                 let energy = 0
                                 if (audioMode !== 'OFF') {
-                                    if (i === 0) energy = spatialResponse.left
-                                    if (i === 1) energy = spatialResponse.center
-                                    if (i === 2) energy = spatialResponse.right
+                                    if (i === 0) energy = audioFrame.spatial.left
+                                    if (i === 1) energy = audioFrame.spatial.center
+                                    if (i === 2) energy = audioFrame.spatial.right
                                 }
                                 // For visual feedback, show colors and overlay energy bar
 

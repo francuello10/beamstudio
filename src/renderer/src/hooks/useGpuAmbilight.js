@@ -16,8 +16,6 @@ import { useAudioStore } from '../store/audioStore'
 export const useGpuAmbilight = (dispatchPixelMapUpdate) => {
     // Centralized Audio Data
     const audioMode = useAudioStore(state => state.audioMode)
-    const spatial = useAudioStore(state => state.spatialResponse)
-    const spectral = useAudioStore(state => state.spectralResponse)
     const [capturing, setCapturing] = useState(false)
     const [isMono, setIsMono] = useState(false)
 
@@ -129,8 +127,9 @@ export const useGpuAmbilight = (dispatchPixelMapUpdate) => {
                 if (useAudioStore.getState().audioMode !== 'OFF') {
                     // Pull fresh data from store (no ref needed, store state is external to closure issue)
                     const currentMode = useAudioStore.getState().audioMode
-                    const spatialData = useAudioStore.getState().spatialResponse
-                    const spectralData = useAudioStore.getState().spectralResponse
+                    const audioFrame = useAudioStore.getState().audioFrame
+                    const spatialData = audioFrame.spatial
+                    const spectralData = audioFrame.spectral
                     const bf = boostFactorRef.current
 
                     let multipliers = [1.0, 1.0, 1.0]

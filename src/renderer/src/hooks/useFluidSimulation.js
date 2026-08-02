@@ -499,8 +499,9 @@ export function useFluidSimulation() {
     const processAudioImpulses = useCallback((dt) => {
         const physics = getPhysics()
         const currentMode = useAudioStore.getState().audioMode
-        const spatial = useAudioStore.getState().spatialResponse
-        const spectral = useAudioStore.getState().spectralResponse
+        const audioFrame = useAudioStore.getState().audioFrame
+        const spatial = audioFrame.spatial
+        const spectral = audioFrame.spectral
 
         if (currentMode === 'STEREO') {
             // STEREO MODE: 3 Discrete Impulse Zones
