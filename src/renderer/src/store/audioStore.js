@@ -35,6 +35,16 @@ export const useAudioStore = create((set) => ({
     audioFrame: createEmptyAudioFrame(),
     audioBaseColors: [],
     audioBoostLevel: 1.5,
+    // Page-derived override for the shared engine's modifier input colors.
+    // null = no override, fall back to audioBaseColors. Only the page that
+    // derives its own palette writes here (ConsoleMixerPage's manual mix,
+    // DynamicScenesPageV2's live scene frame) and it MUST clear it on unmount
+    // so a stale override never leaks into another feature.
+    audioInputColors: null,
+    // DMX source tag the shared engine writes its frames under. 'audio' is the
+    // audio output path; DynamicScenesPageV2 switches it to 'renderer' while its
+    // own audio boost is on, because that page owns DMX output as 'renderer'.
+    audioOutputSource: 'audio',
 
     // Actions
     setAudioTelemetryDSP: (audioTelemetryDSP) => set({ audioTelemetryDSP }),
@@ -47,6 +57,8 @@ export const useAudioStore = create((set) => ({
     setAudioActive: (audioActive) => set({ audioActive }),
     setEnergyFactor: (energyFactor) => set({ energyFactor }),
     setAudioBaseColors: (audioBaseColors) => set({ audioBaseColors }),
+    setAudioInputColors: (audioInputColors) => set({ audioInputColors: audioInputColors || null }),
+    setAudioOutputSource: (audioOutputSource) => set({ audioOutputSource: audioOutputSource || 'audio' }),
     setAudioBoostLevel: (audioBoostLevel) => set({ audioBoostLevel: Math.max(0.5, Math.min(4, audioBoostLevel || 1)) }),
 
     // New Actions

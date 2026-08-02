@@ -5,7 +5,7 @@ import LivePreviewContainer from '../components/LivePreviewContainer'
 import { useDmxStore } from '../store/dmxStore'
 import { useConfigStore } from '../store/configStore'
 import { useAudioStore } from '../store/audioStore'
-import { useSystemAudio } from '../hooks/useSystemAudio'
+import { useAudioEngine } from '../audio/AudioEngineContext'
 import { DYNAMIC_SCENES, FLAGS } from '../utils/palettes'
 import { DYNAMIC_SCENE_ICONS, BUILT_IN_SCENES } from '../utils/constants'
 import { generateLightScene } from '../services/geminiService'
@@ -26,11 +26,12 @@ const DynamicScenesPageV2 = () => {
     const config = useConfigStore(state => state.config)
 
     const audioTelemetryDSP = useAudioStore(state => state.audioTelemetryDSP)
-    const setAudioTelemetryDSP = useAudioStore(state => state.setAudioTelemetryDSP)
     const setAudioData = useAudioStore(state => state.setAudioData)
     const setAudioActive = useAudioStore(state => state.setAudioActive)
     const audioBoostLevel = useAudioStore(state => state.audioBoostLevel)
     const setAudioBoostLevel = useAudioStore(state => state.setAudioBoostLevel)
+    const setAudioInputColors = useAudioStore(state => state.setAudioInputColors)
+    const setAudioOutputSource = useAudioStore(state => state.setAudioOutputSource)
 
     // Force use of BUILT_IN_SCENES to ensure new V5.0 scenes are visible
     // ignoring potentially stale config.dynamicScenes
@@ -151,18 +152,45 @@ const DynamicScenesPageV2 = () => {
         colorsForAudio = FLAGS[activeFlag]?.colors
     }
 
-    const { start: startAudio, stop: stopAudio, energyFactor, visualizerData, setModifierMode } = useSystemAudio(
-        dispatchPixelMapUpdate,
-        colorsForAudio,
-        setAudioTelemetryDSP,
-        audioBoostLevel
-    )
+    // Publish this page's live scene frame as the shared engine's modifier input
+    // (it used to be a hook argument). sceneColors is replaced ~60fps by the rAF
+    // loop above, so this effect re-runs at that rate on purpose. Gated on
+    // audioReactive: the engine is shared, so pushing this page's scene frame
+    // while its own boost is OFF would hijack the input of audio that another
+    // feature started.
+    useEffect(() => {
+        if (audioReactive) setAudioInputColors(colorsForAudio)
+    }, [audioReactive, colorsForAudio, setAudioInputColors])
+
+    // While this page's boost is on it owns DMX output as 'renderer' (see the
+    // setDynamicRendererActive effect above), so the shared engine must tag ITS
+    // writes 'renderer' too or isAsyncOutputSourceAllowed() in src/main/index.js
+    // drops them. That also keeps the backend output path identical to what this
+    // page had when it passed dispatchPixelMapUpdate: 'renderer' frames respect
+    // the Grand Master dimmer and use adaptive smoothing, while 'audio' frames
+    // let audio drive the dimmer and slam Slot 2 at factor 1.
+    // Both overrides are released when the boost is switched off or the page
+    // unmounts, so nothing leaks into another feature.
+    useEffect(() => {
+        if (!audioReactive) return undefined
+        setAudioOutputSource('renderer')
+        return () => {
+            setAudioOutputSource('audio')
+            setAudioInputColors(null)
+        }
+    }, [audioReactive, setAudioOutputSource, setAudioInputColors])
+
+    const { start: startAudio, stop: stopAudio, energyFactor, visualizerData, setModifierMode } = useAudioEngine()
 
     useEffect(() => {
         window.currentBassLevel = visualizerData.bass
         setAudioData({ visualizerData })
     }, [visualizerData, setAudioData])
 
+    // Deliberate user toggle, so stopAudio() stays. claimsOutput: false because
+    // this page already claims DMX output as 'renderer' — letting audio:start
+    // claim 'audio' would steal ownership from the page's own claim and every
+    // frame would be dropped.
     const handleAudioReactiveToggle = async () => {
         if (audioReactive) {
             setAudioReactive(false)
@@ -173,7 +201,7 @@ const DynamicScenesPageV2 = () => {
             setAudioReactive(true)
             setAudioActive(true)
             setModifierMode(true)
-            await startAudio()
+            await startAudio({ claimsOutput: false })
         }
     }
 

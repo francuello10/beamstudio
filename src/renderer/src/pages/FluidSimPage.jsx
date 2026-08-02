@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Play, Square, Zap, Droplets, Target, Activity, Maximize, Minimize } from 'lucide-react'
 import LivePreviewContainer from '../components/LivePreviewContainer'
 import { useFluidSimulation, FLUID_PALETTES } from '../hooks/useFluidSimulation'
-import { useSystemAudio } from '../hooks/useSystemAudio'
+import { useAudioEngine } from '../audio/AudioEngineContext'
 import { useDmxStore } from '../store/dmxStore'
 import { useAudioStore } from '../store/audioStore'
 import '../fluidsim.css'
@@ -44,7 +44,6 @@ const FluidSimPage = () => {
     const setActiveDynamicScene = useDmxStore(state => state.setActiveDynamicScene)
     const setActiveFlag = useDmxStore(state => state.setActiveFlag)
 
-    const setAudioTelemetryDSP = useAudioStore(state => state.setAudioTelemetryDSP)
     const audioMode = useAudioStore(state => state.audioMode)
     const audioFrame = useAudioStore(state => state.audioFrame)
     const sourceChannelLabel = audioFrame.source.channelCount
@@ -60,14 +59,11 @@ const FluidSimPage = () => {
                 : `WIDTH ${stereoWidthPercent}%`
     const formatEnergy = (value) => `${Math.round(Math.min(1, Math.max(0, value || 0)) * 100)}%`
 
-    // Audio Engine
-    const { start: startAudio, stop: stopAudio, energyFactor } = useSystemAudio(
-        () => { }, // We don't need direct pixel map buffer here, fluid engine handles it
-        null,
-        setAudioTelemetryDSP,
-        1.0,
-        false // claimsOutput: analysis only - must not steal DMX ownership from whatever owns output
-    )
+    // Shared Audio Engine (mounted in App.jsx). Analysis only: this page reads
+    // telemetry from useAudioStore and the fluid engine drives DMX itself, so
+    // startAudio() below passes claimsOutput: false and must not steal DMX
+    // output ownership from whatever owns it.
+    const { start: startAudio, stop: stopAudio } = useAudioEngine()
 
     // Fluid Engine
     const {
@@ -91,7 +87,7 @@ const FluidSimPage = () => {
             stopAudio()
         } else if (running) {
             // Only start audio if the engine is running
-            await startAudio()
+            await startAudio({ claimsOutput: false })
         }
     }, [startAudio, stopAudio, running])
 
@@ -104,7 +100,7 @@ const FluidSimPage = () => {
 
         // Resume audio if mode was active
         if (audioMode !== 'OFF') {
-            await startAudio()
+            await startAudio({ claimsOutput: false })
         }
     }
 

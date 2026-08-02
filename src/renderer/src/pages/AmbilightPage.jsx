@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { Monitor, Zap, Play, Square, Check, RefreshCw } from 'lucide-react'
 import LivePreviewContainer from '../components/LivePreviewContainer'
 import { useGpuAmbilight } from '../hooks/useGpuAmbilight'
-import { useSystemAudio } from '../hooks/useSystemAudio'
+import { useAudioEngine } from '../audio/AudioEngineContext'
 import { useDmxStore } from '../store/dmxStore'
 import { useAudioStore } from '../store/audioStore'
 import '../fluidsim.css'
@@ -17,7 +17,6 @@ const AmbilightPage = () => {
     const sendPixelMapBuffer = useDmxStore(state => state.sendPixelMapBuffer)
 
     const audioTelemetryDSP = useAudioStore(state => state.audioTelemetryDSP)
-    const setAudioTelemetryDSP = useAudioStore(state => state.setAudioTelemetryDSP)
 
     // BS-004: on Linux/Wayland, desktopCapturer.getSources() returns
     // empty-named entries (or none at all) — PipeWire withholds real
@@ -41,14 +40,11 @@ const AmbilightPage = () => {
         isMono, setIsMono, smoothingFactor, setSmoothingFactor
     } = useGpuAmbilight(sendPixelMapBuffer, audioTelemetryDSP)
 
-    // Audio Boost Engine (Analysis Only)
-    const { start: startAudio, stop: stopAudio } = useSystemAudio(
-        () => { }, // No direct DMX control, Ambilight hook handles it
-        null,
-        setAudioTelemetryDSP,
-        1.0,
-        false // claimsOutput: analysis only - must not steal DMX ownership from ambilight
-    )
+    // Shared Audio Boost Engine (mounted in App.jsx) — Analysis Only. No direct
+    // DMX control here, the Ambilight hook owns output, so every startAudio()
+    // call below passes claimsOutput: false and must not steal DMX ownership
+    // from ambilight.
+    const { start: startAudio, stop: stopAudio } = useAudioEngine()
 
     const refreshSources = async () => {
         setRefreshing(true)
@@ -85,7 +81,7 @@ const AmbilightPage = () => {
         if (mode === 'OFF') {
             stopAudio()
         } else if (capturing) {
-            await startAudio()
+            await startAudio({ claimsOutput: false })
         }
     }
 
@@ -114,7 +110,7 @@ const AmbilightPage = () => {
                 setCaptureError(null)
                 try {
                     await startAmbilight(id)
-                    if (audioMode !== 'OFF') await startAudio()
+                    if (audioMode !== 'OFF') await startAudio({ claimsOutput: false })
                 } catch (e) {
                     if (e?.name === 'NotAllowedError') {
                         // User cancelled the native OS screen-picker dialog — a

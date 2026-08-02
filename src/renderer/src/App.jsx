@@ -19,6 +19,7 @@ import SystemPage from './pages/SystemPage'
 import { useConfigStore } from './store/configStore'
 import { useDmxStore } from './store/dmxStore'
 import { useAudioStore } from './store/audioStore'
+import { AudioEngineProvider } from './audio/AudioEngineContext'
 import './dynamic.css'
 
 class ErrorBoundary extends Component {
@@ -196,30 +197,37 @@ function App() {
 
     return (
         <ErrorBoundary>
-            <div className={`app ${darkMode ? 'dark' : 'light'}`}>
-                <Sidebar />
-                <div className="main-content">
-                    <Header
-                        onReset={handleReset}
-                        onMeet={handleMeet}
-                        onFlash={handleIntenseFlash}
-                    />
-                    <div className="page-container">
-                        <AnimatePresence mode='wait'>
-                            <motion.div
-                                key={activePage}
-                                initial={{ opacity: 0, x: 20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: -20 }}
-                                transition={{ duration: 0.15 }}
-                                style={{ height: '100%' }}
-                            >
-                                {renderPage()}
-                            </motion.div>
-                        </AnimatePresence>
+            {/* The shared audio-reactive engine sits ABOVE the page switch below.
+                <AnimatePresence mode='wait'> keyed on activePage unmounts the
+                outgoing page, so an engine owned by a page died on every
+                navigation. Mounted here it survives navigation and every feature
+                consumes the same instance via useAudioEngine(). */}
+            <AudioEngineProvider>
+                <div className={`app ${darkMode ? 'dark' : 'light'}`}>
+                    <Sidebar />
+                    <div className="main-content">
+                        <Header
+                            onReset={handleReset}
+                            onMeet={handleMeet}
+                            onFlash={handleIntenseFlash}
+                        />
+                        <div className="page-container">
+                            <AnimatePresence mode='wait'>
+                                <motion.div
+                                    key={activePage}
+                                    initial={{ opacity: 0, x: 20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: -20 }}
+                                    transition={{ duration: 0.15 }}
+                                    style={{ height: '100%' }}
+                                >
+                                    {renderPage()}
+                                </motion.div>
+                            </AnimatePresence>
+                        </div>
                     </div>
                 </div>
-            </div>
+            </AudioEngineProvider>
         </ErrorBoundary>
     )
 }

@@ -2,7 +2,7 @@ import React from 'react'
 import { Volume2, PowerOff, Play, Activity, Music2, RefreshCw } from 'lucide-react'
 import { motion } from 'framer-motion'
 import LivePreviewContainer from '../components/LivePreviewContainer'
-import { useSystemAudio } from '../hooks/useSystemAudio'
+import { useAudioEngine } from '../audio/AudioEngineContext'
 import { useDmxStore } from '../store/dmxStore'
 import { useAudioStore } from '../store/audioStore'
 
@@ -41,29 +41,30 @@ const AudioPage = () => {
     const pixelMapBuffer = useDmxStore(state => state.pixelMapBuffer)
     const dmxUniverseState = useDmxStore(state => state.dmxUniverseState)
     const toggleBlackout = useDmxStore(state => state.toggleBlackout)
-    const sendPixelMapBuffer = useDmxStore(state => state.sendPixelMapBuffer)
 
-    const setAudioTelemetryDSP = useAudioStore(state => state.setAudioTelemetryDSP)
     const setAudioData = useAudioStore(state => state.setAudioData)
     const setAudioActive = useAudioStore(state => state.setAudioActive)
     const audioFrame = useAudioStore(state => state.audioFrame)
-    const audioBaseColors = useAudioStore(state => state.audioBaseColors)
     const setAudioBaseColors = useAudioStore(state => state.setAudioBaseColors)
     const audioBoostLevel = useAudioStore(state => state.audioBoostLevel)
     const setAudioBoostLevel = useAudioStore(state => state.setAudioBoostLevel)
 
+    // Shared always-running engine (mounted in App.jsx). This page does NOT own
+    // it: leaving the page must not stop audio-reactive output.
     const {
         start, stop, active, detectedGenre, autoGenre, setAutoGenre,
         manualGenre, setManualGenre, visualizerData,
         bassPulseMode, setBassPulseMode,
         availableInputs, selectedDeviceId, setSelectedDeviceId, refreshInputs, sourceError,
         activeSource, reconnecting
-    } = useSystemAudio((colors) => sendPixelMapBuffer(colors, 'audio'), audioBaseColors, setAudioTelemetryDSP, audioBoostLevel)
+    } = useAudioEngine()
 
-    React.useEffect(() => {
-        if (active) window.dmx?.setDynamicRendererActive(true, 'audio')
-        return () => window.dmx?.setDynamicRendererActive(false, 'audio')
-    }, [active])
+    // NOTE: there is deliberately no setDynamicRendererActive(_, 'audio') effect
+    // here any more. Its unmount cleanup released 'audio' DMX output ownership,
+    // which made isAsyncOutputSourceAllowed() (src/main/index.js) drop every
+    // frame the engine emitted after navigation - the same user-facing bug as
+    // stopping the engine. audio:start(claimsOutput) / audio:stop already
+    // claim/release the 'audio' owner, so they are the single source of truth.
 
     React.useEffect(() => {
         setAudioData({ audioActive: active, activeAudioSource: activeSource })

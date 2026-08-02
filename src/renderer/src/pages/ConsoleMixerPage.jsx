@@ -7,7 +7,7 @@ import { CHANNELS, QUICK_COLORS } from '../utils/constants'
 import { useDmxStore } from '../store/dmxStore'
 import { useConfigStore } from '../store/configStore'
 import { useAudioStore } from '../store/audioStore'
-import { useSystemAudio } from '../hooks/useSystemAudio'
+import { useAudioEngine } from '../audio/AudioEngineContext'
 
 /**
  * ConsoleMixerPage - Grand Master Control Center
@@ -26,12 +26,12 @@ const ConsoleMixerPage = ({ onReset }) => {
     const pixelMapBuffer = useDmxStore(state => state.pixelMapBuffer)
 
     // Audio Store
-    const setAudioTelemetryDSP = useAudioStore(state => state.setAudioTelemetryDSP)
     const audioTelemetryDSP = useAudioStore(state => state.audioTelemetryDSP)
     const setAudioData = useAudioStore(state => state.setAudioData)
     const setAudioActive = useAudioStore(state => state.setAudioActive)
     const audioBoostLevel = useAudioStore(state => state.audioBoostLevel)
     const setAudioBoostLevel = useAudioStore(state => state.setAudioBoostLevel)
+    const setAudioInputColors = useAudioStore(state => state.setAudioInputColors)
 
     const config = useConfigStore(state => state.config)
     const incrementPending = useConfigStore(state => state.incrementPending)
@@ -40,30 +40,37 @@ const ConsoleMixerPage = ({ onReset }) => {
     // Local state for Audio Mode
     const [audioReactive, setAudioReactive] = React.useState(false)
 
-    // 1. Hook up Audio Engine
-    // We pass the *Manual Colors* from dmxUniverseState as the base "Input Colors" to the audio engine.
-    // The engine will then modulate them and call dispatchPixelMapUpdate (or sendDmxBatch).
+    // 1. Consume the shared Audio Engine (mounted in App.jsx, never unmounted by
+    //    navigation). Its DMX writes go out through useDmxStore.sendPixelMapBuffer
+    //    with source 'audio' - byte-for-byte what this page's old
+    //    dispatchAudioColors did.
 
-    // Convert current manual state to "colors" array for the hook
-    const currentManualColors = dmxFixtures.map(() => ({
+    // The *Manual Colors* from dmxUniverseState are the base "Input Colors" the
+    // engine modulates. Memoized on the actual values because it is published to
+    // the shared store below: a fresh array identity on every render would loop
+    // (store write -> engine re-render -> context consumer re-render -> ...).
+    const currentManualColors = React.useMemo(() => dmxFixtures.map(() => ({
         r: dmxUniverseState.red || 0,
         g: dmxUniverseState.green || 0,
         b: dmxUniverseState.blue || 0
-    }))
+    })), [dmxFixtures, dmxUniverseState.red, dmxUniverseState.green, dmxUniverseState.blue])
 
-    const dispatchAudioColors = useCallback((colors) => {
-        // Send to DMX (Fast Update)
-        window.ambilight?.setColorsAsync({ colors, source: 'audio' })
-        // Update Preview
-        useDmxStore.getState().setPixelMapBuffer(colors)
-    }, [])
+    // Publish the manual mix as the shared engine's modifier input, but ONLY
+    // while this page's audio boost is on. The engine is shared now, so an
+    // unconditional push would override whatever another feature already fed it
+    // just because the user happened to open the mixer.
+    React.useEffect(() => {
+        if (audioReactive) setAudioInputColors(currentManualColors)
+    }, [audioReactive, currentManualColors, setAudioInputColors])
 
-    const { start: startAudio, stop: stopAudio, energyFactor, visualizerData, setModifierMode } = useSystemAudio(
-        dispatchAudioColors,
-        currentManualColors, // Pass manual colors to be boosted
-        setAudioTelemetryDSP,
-        audioBoostLevel
-    )
+    // Release the override when the boost is switched off or the page goes away,
+    // so the global audioBaseColors fallback takes over again.
+    React.useEffect(() => {
+        if (!audioReactive) return undefined
+        return () => setAudioInputColors(null)
+    }, [audioReactive, setAudioInputColors])
+
+    const { start: startAudio, stop: stopAudio, energyFactor, visualizerData, setModifierMode } = useAudioEngine()
 
     const handleBoostLevelChange = useCallback((event) => {
         setAudioBoostLevel(parseFloat(event.target.value))
@@ -75,35 +82,28 @@ const ConsoleMixerPage = ({ onReset }) => {
         setAudioData({ visualizerData })
     }, [visualizerData, setAudioData])
 
-    // Toggle Audio Mode
+    // Toggle Audio Mode — a deliberate user action, so stopAudio() stays here.
+    // The redundant setDynamicRendererActive(_, 'audio') calls are gone:
+    // audio:start(claimsOutput) / audio:stop in src/main/index.js already claim
+    // and release the 'audio' output owner, and startAudio() below claims it
+    // anyway (claimsOutput defaults to true).
     const handleAudioReactiveToggle = async () => {
         if (audioReactive) {
             setAudioReactive(false)
             setAudioActive(false)
             setModifierMode(false)
             stopAudio()
-            // Turn off dynamic flag so manual faders regain full control without modulation
-            window.dmx?.setDynamicRendererActive(false, 'audio')
         } else {
             setAudioReactive(true)
             setAudioActive(true)
             setModifierMode(true) // ENABLE MODIFIER MODE (Boosts input colors)
-            // Enable dynamic renderer so updates are prioritized
-            window.dmx?.setDynamicRendererActive(true, 'audio')
             await startAudio()
         }
     }
 
-    // Cleanup on unmount
-    React.useEffect(() => {
-        return () => {
-            if (audioReactive) {
-                setAudioActive(false)
-                stopAudio()
-                window.dmx?.setDynamicRendererActive(false, 'audio')
-            }
-        }
-    }, [audioReactive, setAudioActive, stopAudio])
+    // NOTE: no unmount teardown any more. The engine is shared and always
+    // mounted; stopping it here killed audio-reactive DMX output the moment the
+    // user navigated to another page.
 
     const handleChannelChange = useCallback((channel, value) => {
         dispatchDmxAttributeUpdate(channel, value)

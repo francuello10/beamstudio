@@ -27,6 +27,7 @@ import {
     writeStoredAudioInputId
 } from '../audio/AudioSourceManager'
 import { useAudioStore } from '../store/audioStore'
+import { useDmxStore } from '../store/dmxStore'
 
 const MEDIA_STATUS_CHECK_INTERVAL_MS = 900
 const PLAYBACK_PAUSED_STATUSES = new Set(['paused', 'stopped'])
@@ -151,14 +152,33 @@ const shapeCenterBassHit = ({ bassProfile, boostLevel, now, state }) => {
  * 8. LERP standalone: 0.20 (smooth genre output)
  * 9. BACKGROUND SUPPORT: Recursive setTimeout (Anti-Throttle)
  */
-// claimsOutput: false for callers that only want audio telemetry to modulate
-// their OWN already-claimed output (e.g. AmbilightPage/FluidSimPage pass a
-// no-op sendDmxBatch and read useAudioStore's audioFrame directly instead) -
-// audio:start must not steal DMX output ownership from whatever feature is
-// legitimately driving it in that case. Defaults to true for every caller
-// that actually writes DMX through sendDmxBatch (AudioPage, ConsoleMixerPage,
-// DynamicScenesPageV2).
-export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate = null, audioSensitivity = 1.0, claimsOutput = true) => {
+// This hook takes NO parameters on purpose. It is instantiated exactly once, by
+// AudioEngineProvider (src/renderer/src/audio/AudioEngineContext.jsx), so every
+// input that used to be a per-page hook argument now comes from the shared
+// audio store and every output goes to the shared stores:
+//
+//   sendDmxBatch      -> useDmxStore.sendPixelMapBuffer(colors, <source tag>)
+//   onAudioUpdate     -> useAudioStore.setAudioTelemetryDSP(...)
+//   audioSensitivity  -> useAudioStore.audioBoostLevel (the one global slider)
+//   inputColors       -> useAudioStore.audioInputColors ?? audioBaseColors
+//   claimsOutput      -> argument of start({ claimsOutput }), see below
+//
+// claimsOutput is a start() argument rather than a hook parameter because a
+// single shared engine has to be startable both ways: as the DMX output owner
+// (AudioPage, ConsoleMixerPage) and analysis-only (AmbilightPage, FluidSimPage,
+// DynamicScenesPageV2 - those own DMX output through their own feature and only
+// need audio telemetry, so audio:start must not steal ownership from them).
+export const useSystemAudio = () => {
+    // === SHARED STORE INPUTS (formerly hook parameters) ===
+    const audioBoostLevel = useAudioStore(state => state.audioBoostLevel)
+    const audioBaseColors = useAudioStore(state => state.audioBaseColors)
+    const audioInputColors = useAudioStore(state => state.audioInputColors)
+    const audioOutputSource = useAudioStore(state => state.audioOutputSource)
+    // A page-derived override (ConsoleMixerPage's manual mix, DynamicScenesPageV2's
+    // live scene frame) wins while that page is mounted; otherwise the global base
+    // palette drives the modifier.
+    const inputColors = audioInputColors ?? audioBaseColors
+
     // === STATE ===
     const [active, setActive] = useState(false)
     const [reconnecting, setReconnecting] = useState(false)
@@ -213,8 +233,19 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
     useEffect(() => { detectedGenreRef.current = detectedGenre }, [detectedGenre])
     const manualGenreRef = useRef(manualGenre)
     useEffect(() => { manualGenreRef.current = manualGenre }, [manualGenre])
-    const audioSensitivityRef = useRef(audioSensitivity)
-    useEffect(() => { audioSensitivityRef.current = audioSensitivity }, [audioSensitivity])
+    const audioSensitivityRef = useRef(audioBoostLevel)
+    useEffect(() => { audioSensitivityRef.current = audioBoostLevel }, [audioBoostLevel])
+    // DMX source tag for this engine's own writes. 'audio' for the audio output
+    // path (backend honours the audio-driven dim value and hits Slot 2 hard);
+    // DynamicScenesPageV2 overrides it to 'renderer' so its scene-modulated
+    // frames keep going out under that page's own 'renderer' ownership claim,
+    // exactly as they did when the page passed its own sendDmxBatch.
+    const audioOutputSourceRef = useRef(audioOutputSource)
+    useEffect(() => { audioOutputSourceRef.current = audioOutputSource }, [audioOutputSource])
+    // Remembers how the current session was started so the internal reconnect
+    // paths (track.onended, devicechange) restart with the same ownership
+    // semantics instead of silently upgrading an analysis-only session to owner.
+    const claimsOutputRef = useRef(true)
 
     // === REFS ===
     const audioCtx = useRef(null)
@@ -380,9 +411,10 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
     const startingRef = useRef(false)
 
     // === MAIN ENGINE ===
-    const start = useCallback(async () => {
+    const start = useCallback(async ({ claimsOutput = true } = {}) => {
         if (startingRef.current) return
         startingRef.current = true
+        claimsOutputRef.current = claimsOutput
         const mySessionId = ++sessionIdRef.current
         try {
             stop()
@@ -682,7 +714,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                         audioFrame
                     )
                     setAudioTelemetryDSP({ left: 0, center: 0, right: 0 })
-                    if (onAudioUpdate) onAudioUpdate({ left: 0, center: 0, right: 0 })
+                    useAudioStore.getState().setAudioTelemetryDSP({ left: 0, center: 0, right: 0 })
                     setVisualizerData({
                         left: new Array(16).fill(0),
                         right: new Array(16).fill(0),
@@ -708,9 +740,9 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                     useAudioStore.getState().updateAudioAnalysis(spatial, spectral, audioFrame)
 
                     setAudioTelemetryDSP(energies)
-                    if (onAudioUpdate) onAudioUpdate(energies)
+                    useAudioStore.getState().setAudioTelemetryDSP(energies)
 
-                    sendDmxBatch(smoothedOutput.current)
+                    useDmxStore.getState().sendPixelMapBuffer(smoothedOutput.current, audioOutputSourceRef.current)
                     setEnergyFactor(pulseRender.bassBrightness)
 
                     setVisualizerData({
@@ -726,7 +758,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
 
                 // Legacy Internal State (keep for now to not break old consumers immediately if any)
                 setAudioTelemetryDSP(energies)
-                if (onAudioUpdate) onAudioUpdate(energies)
+                useAudioStore.getState().setAudioTelemetryDSP(energies)
 
                 const globalEnergy = (bassEnergy + vocalOutput * 0.75 + (midHighL + midHighR) / 2) / 2.75
                 const boostFactor = 0.2 + (globalEnergy * 0.9 * audioSensitivityRef.current)
@@ -740,7 +772,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                     audioSensitivity: audioSensitivityRef.current
                 })
 
-                sendDmxBatch(smoothedOutput.current)
+                useDmxStore.getState().sendPixelMapBuffer(smoothedOutput.current, audioOutputSourceRef.current)
 
                 setVisualizerData({
                     left: [...peakHoldL.current],
@@ -753,7 +785,19 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
             const loop = () => {
                 if (sessionIdRef.current !== mySessionId) return
                 if (!streamRef.current) return
-                analyze()
+                try {
+                    analyze()
+                } catch (err) {
+                    // The engine is now a single shared instance mounted once in
+                    // AudioEngineProvider (see AudioEngineContext.jsx) rather than
+                    // per-page - navigating away and back used to remount the hook
+                    // and implicitly recover from any exception in this loop.
+                    // Without this guard, one bad frame would silently stop
+                    // rescheduling the setTimeout below and kill audio-reactive
+                    // DMX output for every page, for the rest of the session, with
+                    // no visible error beyond a devtools console line.
+                    console.error('[Audio DSP] analyze() frame failed, continuing loop:', err)
+                }
                 // Hybrid: 16ms (60fps) usually, 33ms (30fps) if hidden to satisfy Electron throttling constraints
                 const delay = document.hidden ? 33 : 16
                 timerRef.current = setTimeout(loop, delay)
@@ -767,7 +811,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                     setSourceError('Active audio input ended. BeamStudio is trying to reconnect.')
                     setReconnecting(true)
                     try {
-                        await start()
+                        await start({ claimsOutput: claimsOutputRef.current })
                     } catch {
                         stop()
                     } finally {
@@ -797,9 +841,12 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
         } finally {
             startingRef.current = false
         }
-    }, [refreshInputs, refreshPlaybackStatus, selectedDeviceId, sendDmxBatch, stop, onAudioUpdate])
+    }, [refreshInputs, refreshPlaybackStatus, selectedDeviceId, stop])
 
-    // Cleanup on unmount
+    // Cleanup on app teardown. This effect now lives in the always-mounted
+    // AudioEngineProvider, so it no longer fires when the user navigates
+    // between pages - which is exactly what used to kill audio-reactive DMX
+    // output the moment the page owning the engine unmounted.
     useEffect(() => () => stop(), [stop])
 
     useEffect(() => {
@@ -814,7 +861,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 setSourceError('Active audio input disconnected. BeamStudio is reconnecting with the best available source.')
                 setReconnecting(true)
                 try {
-                    await start()
+                    await start({ claimsOutput: claimsOutputRef.current })
                 } catch {
                     stop()
                 } finally {
