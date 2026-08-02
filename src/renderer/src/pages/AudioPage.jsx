@@ -28,6 +28,12 @@ const compactCard = {
     border: '1px solid rgba(255,255,255,0.1)'
 }
 
+const audioSlotRoles = [
+    { label: 'Slot 1', role: 'LEFT SIDE', detail: 'L channel + slight bass bleed' },
+    { label: 'Slot 2', role: 'BASS CENTER', detail: 'Bass/sub only — put the physical center light here' },
+    { label: 'Slot 3', role: 'RIGHT SIDE', detail: 'R channel + slight bass bleed' }
+]
+
 const AudioPage = () => {
     const dmxFixtures = useDmxStore(state => state.dmxFixtures)
     const pixelMapBuffer = useDmxStore(state => state.pixelMapBuffer)
@@ -73,23 +79,23 @@ const AudioPage = () => {
     const currentGenre = autoGenre ? detectedGenre : manualGenre
     const mapping = [
         {
-            label: 'Slot 1',
+            ...audioSlotRoles[0],
             fixture: dmxFixtures[0]?.name || 'Fixture 1',
-            driver: bassPulseMode ? 'left channel + slight bass' : `${currentGenre} profile + left channel`,
+            driver: bassPulseMode ? 'side response + slight bass' : `${currentGenre} profile + left side`,
             level: audioFrame.spatial.left,
             color: pixelMapBuffer[0]
         },
         {
-            label: 'Slot 2',
+            ...audioSlotRoles[1],
             fixture: dmxFixtures[1]?.name || 'Fixture 2',
-            driver: bassPulseMode ? 'bass only / sub pulse' : `${currentGenre} profile + bass only`,
+            driver: bassPulseMode ? 'bass only / sub pulse' : `${currentGenre} profile + bass center`,
             level: audioFrame.spatial.center,
             color: pixelMapBuffer[1]
         },
         {
-            label: 'Slot 3',
+            ...audioSlotRoles[2],
             fixture: dmxFixtures[2]?.name || 'Fixture 3',
-            driver: bassPulseMode ? 'right channel + slight bass' : `${currentGenre} profile + right channel`,
+            driver: bassPulseMode ? 'side response + slight bass' : `${currentGenre} profile + right side`,
             level: audioFrame.spatial.right,
             color: pixelMapBuffer[2]
         }
@@ -106,7 +112,7 @@ const AudioPage = () => {
                     </div>
 
                     <p className="subtitle" style={{ marginBottom: '18px' }}>
-Mixer/base palette → audio boost → fixture-slot DMX mapping
+Mixer/base palette → audio boost → Slot 2 bass center
                     </p>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '10px', marginBottom: '12px' }}>
@@ -261,11 +267,17 @@ Mixer/base palette → audio boost → fixture-slot DMX mapping
                     )}
 
                     <div style={{ ...compactCard, marginBottom: '14px', textAlign: 'left' }}>
-                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
-                            Mapping behavior
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                            <div>
+                                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Audio fixture map</div>
+                                <strong>Slot 2 = physical center / bass only</strong>
+                            </div>
+                            <span style={{ fontSize: '11px', color: '#ffcc66', textAlign: 'right' }}>
+                                If center is wrong, reorder/rename fixtures in System.
+                            </span>
                         </div>
                         <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
-                            Slot order follows the fixture patch. Slot 2 is the bass/center slot. Full music boost follows the whole spectrum/profile; Bass boost keeps Slot 2 exclusive to bass and gives Slot 1/3 a smaller bass bleed. Set any solid look first — REUNIÓN, Quick Palettes, ColorWheel, RGB faders, or scenes — and audio boosts that base. RGB changes reactively; DIM keeps the current master dimmer; FUNC/SPD/FLASH are left untouched. Extra fixtures reuse the last slot color.
+                            Full Music Boost uses the whole profile. Bass Boost makes Slot 2 react only to bass/sub, while Slot 1 and Slot 3 follow L/R with a smaller bass bleed. RGB changes reactively; DIM stays on the current master dimmer; FUNC/SPD/FLASH are left untouched.
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
                             {mapping.map((item) => (
@@ -274,8 +286,10 @@ Mixer/base palette → audio boost → fixture-slot DMX mapping
                                         <span style={{ width: '14px', height: '14px', borderRadius: '50%', ...colorPreview(item.color) }} />
                                         <strong style={{ fontSize: '13px' }}>{item.label}</strong>
                                     </div>
+                                    <div style={{ fontSize: '12px', color: item.label === 'Slot 2' ? '#ffcc66' : '#fff', fontWeight: 800, marginBottom: '4px' }}>{item.role}</div>
                                     <div style={{ fontSize: '11px', color: 'var(--text-secondary)', minHeight: '30px' }}>{item.fixture}</div>
                                     <div style={{ fontSize: '11px', color: '#fff', marginTop: '8px' }}>{item.driver}</div>
+                                    <div style={{ fontSize: '10px', color: 'var(--text-secondary)', marginTop: '4px' }}>{item.detail}</div>
                                     <div style={{ height: '5px', background: 'rgba(255,255,255,0.08)', borderRadius: '999px', marginTop: '10px' }}>
                                         <div style={{ width: percent(item.level), height: '100%', borderRadius: '999px', background: 'var(--accent)' }} />
                                     </div>

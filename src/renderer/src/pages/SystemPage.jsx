@@ -5,6 +5,12 @@ import sticktecImg from '../assets/sticktec.png'
 import { useDmxStore } from '../store/dmxStore'
 import { useConfigStore } from '../store/configStore'
 
+const AUDIO_SLOT_ROLES = [
+    { label: 'Audio Slot 1', role: 'LEFT SIDE', color: '#00f2fe' },
+    { label: 'Audio Slot 2', role: 'BASS CENTER', color: '#ffcc66' },
+    { label: 'Audio Slot 3', role: 'RIGHT SIDE', color: '#7f00ff' }
+]
+
 const SystemPage = () => {
     // Stores
     const config = useConfigStore(state => state.config)
@@ -233,7 +239,7 @@ const SystemPage = () => {
                 <div className="glass-card hardware-card">
                     <h3>Fixtures Config</h3>
                     <div className="fixtures-config-list" style={{ marginTop: '10px' }}>
-                        {dmxFixtures.map(f => {
+                        {dmxFixtures.map((f, index) => {
                             const profile = FIXTURE_PROFILES[f.mode] || FIXTURE_PROFILES['P06']
                             const isOverlapping = dmxFixtures.some(other => {
                                 if (other.id === f.id) return false
@@ -243,10 +249,12 @@ const SystemPage = () => {
                                 return (f.startChannel <= otherEnd && fEnd >= other.startChannel)
                             })
 
+                            const audioRole = AUDIO_SLOT_ROLES[index]
+
                             return (
                                 <div key={f.id} className="fixture-config-row" style={{
                                     display: 'grid',
-                                    gridTemplateColumns: 'min-content 1.5fr 1fr 0.5fr',
+                                    gridTemplateColumns: 'min-content 1.5fr 1fr 1fr 0.5fr',
                                     gap: '10px',
                                     alignItems: 'center',
                                     marginBottom: '12px',
@@ -277,6 +285,21 @@ const SystemPage = () => {
                                                 <option key={key} value={key}>{key}</option>
                                             ))}
                                         </select>
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <label style={{ fontSize: '9px', fontWeight: 700, color: 'var(--text-secondary)' }}>AUDIO ROLE</label>
+                                        <div style={{
+                                            padding: '7px 8px',
+                                            borderRadius: '6px',
+                                            background: audioRole ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.025)',
+                                            border: audioRole ? `1px solid ${audioRole.color}` : '1px solid rgba(255,255,255,0.06)',
+                                            color: audioRole?.color || 'var(--text-secondary)',
+                                            fontSize: '10px',
+                                            fontWeight: 800,
+                                            lineHeight: 1.2
+                                        }}>
+                                            {audioRole ? `${audioRole.label} · ${audioRole.role}` : 'Extra fixture · repeats Slot 3'}
+                                        </div>
                                     </div>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                         <label style={{ fontSize: '9px', fontWeight: 700, color: isOverlapping ? '#ff4444' : 'var(--text-secondary)' }}>DMX CH</label>
