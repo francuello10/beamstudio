@@ -62,6 +62,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - Treintavo slice activo: si la música entra en silencio/pausa sostenida, el audio engine deja de mandar frames DMX y congela la salida física en vez de seguir animando una escena fija.
 - Treinta y unavo slice activo: la pausa dejó de depender de energía absoluta; ahora usa actividad musical por transientes y piso adaptativo broadband/bass para ignorar ruido constante de fuentes genéricas.
 - Treinta y dosavo slice activo: al arrancar audio hay una ventana corta de calibración silenciosa y los pisos adaptativos se inicializan al nivel capturado, evitando que ruido estable de música pausada dispare el show.
+- Treinta y tresavo slice activo: en Linux/Windows, `get-system-media` publica `playbackStatus`; cuando MPRIS/GSMTC informa `Paused` o `Stopped`, el engine fuerza silencio, limpia medidores y no manda frames DMX aunque la fuente `Default` tenga ruido.
 
 ## Alcance
 
@@ -109,6 +110,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - [x] En pausa/silencio sostenido, BeamStudio congela la salida DMX audio y mantiene la escena fija sin pulso artificial.
 - [x] El detector de pausa ignora ruido constante: sólo considera actividad musical cuando hay transiente o energía por encima del piso adaptativo.
 - [x] Al iniciar audio con música pausada, BeamStudio calibra piso antes de mandar DMX para no mover luces por ruido base.
+- [x] Si el reproductor del sistema informa `Paused`/`Stopped`, BeamStudio muestra pausa, limpia telemetría visual y mantiene la salida DMX quieta.
 - [ ] Silencio no genera NaN, Infinity ni flashes erráticos.
 - [ ] El DSP no escribe DMX directamente salvo contrato explícito.
 - [ ] La UI no renderiza innecesariamente a 60 Hz.

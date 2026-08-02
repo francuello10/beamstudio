@@ -28,7 +28,9 @@ export const createEmptyAudioFrame = () => ({
     },
     status: {
         silence: true,
-        clipping: false
+        clipping: false,
+        playbackPaused: false,
+        playbackStatus: 'unknown'
     },
     genre: 'UNKNOWN'
 })
@@ -79,7 +81,9 @@ export const createAudioFrame = ({
     },
     status: {
         silence: !!status?.silence,
-        clipping: !!status?.clipping
+        clipping: !!status?.clipping,
+        playbackPaused: !!status?.playbackPaused,
+        playbackStatus: status?.playbackStatus || 'unknown'
     },
     genre: genre || 'UNKNOWN'
 })

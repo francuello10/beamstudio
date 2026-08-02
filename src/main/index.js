@@ -1815,7 +1815,7 @@ if (process.platform === 'linux') {
 }
 
 // Media Bridge - IPC Handler
-// Returns { title, artist } or null
+// Returns { title, artist, playbackStatus } or null
 const execPromise = (cmd) => new Promise((resolve) => {
     const { exec } = require('child_process')
     exec(cmd, { timeout: 1500 }, (error, stdout) => {
@@ -1830,7 +1830,8 @@ const getWindowsMedia = async () => {
             $ctl = [Windows.Media.Control.GlobalSystemMediaTransportControls,Windows.Media.Control,ContentType=WindowsRuntime]::GetForCurrentView().SessionManager.GetCurrentSession()
             if ($ctl) {
                 $info = $ctl.TryGetMediaPropertiesAsync().GetAwaiter().GetResult()
-                Write-Output "$($info.Title)|$($info.Artist)"
+                $playback = $ctl.GetPlaybackInfo().PlaybackStatus
+                Write-Output "$($info.Title)|$($info.Artist)|$playback"
             }
         } catch {}
     `
@@ -1838,14 +1839,26 @@ const getWindowsMedia = async () => {
     const cmd = `powershell -NoProfile -NonInteractive -Command "${psScript.replace(/\n/g, ' ')}"`
     const output = await execPromise(cmd)
     if (!output || !output.includes('|')) return null
-    const [title, artist] = output.split('|')
-    return { title: title.trim(), artist: artist.trim() }
+    const [title, artist, playbackStatus] = output.split('|')
+    return {
+        title: title.trim(),
+        artist: artist.trim(),
+        playbackStatus: (playbackStatus || '').trim()
+    }
 }
 const getLinuxMedia = async () => {
+    const playbackStatus = await execPromise('playerctl status')
     const output = await execPromise("playerctl metadata --format '{{title}}|{{artist}}'")
-    if (!output || !output.includes('|')) return null
+    if (!output || !output.includes('|')) {
+        if (playbackStatus) return { title: '', artist: '', playbackStatus: playbackStatus.trim() }
+        return null
+    }
     const [title, artist] = output.split('|')
-    return { title: title.trim(), artist: artist.trim() }
+    return {
+        title: title.trim(),
+        artist: artist.trim(),
+        playbackStatus: (playbackStatus || '').trim()
+    }
 }
 
 ipcMain.handle('get-system-media', async () => {

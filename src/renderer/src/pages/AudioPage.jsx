@@ -77,6 +77,12 @@ const AudioPage = () => {
     }, [pixelMapBuffer, setAudioBaseColors, start])
 
     const currentGenre = autoGenre ? detectedGenre : manualGenre
+    const audioStatusLabel = audioFrame.status.playbackPaused
+        ? 'Playback paused'
+        : audioFrame.status.silence
+            ? 'Silence'
+            : 'Signal OK'
+    const audioStatusColor = audioFrame.status.playbackPaused || audioFrame.status.silence ? '#ffcc66' : '#8fffc2'
     const mapping = [
         {
             ...audioSlotRoles[0],
@@ -149,8 +155,8 @@ Mixer/base palette → audio boost → Slot 2 bass center
                                 {activeSource.isMonitor || activeSource.isGenericSystem ? <span style={{ color: '#8fffc2' }}> · system audio</span> : null}
                             </div>
                             <div style={{ display: 'flex', gap: '8px' }}>
-                                <span style={{ color: audioFrame.status.silence ? '#ffcc66' : '#8fffc2', fontSize: '12px' }}>
-                                    {audioFrame.status.silence ? 'Silence' : 'Signal OK'}
+                                <span style={{ color: audioStatusColor, fontSize: '12px' }}>
+                                    {audioStatusLabel}
                                 </span>
                                 <span style={{ color: audioFrame.status.clipping ? '#ff9b9b' : 'var(--text-secondary)', fontSize: '12px' }}>
                                     {audioFrame.status.clipping ? 'Clipping' : 'Clean'}

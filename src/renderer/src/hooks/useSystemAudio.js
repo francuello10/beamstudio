@@ -27,6 +27,9 @@ import {
 } from '../audio/AudioSourceManager'
 import { useAudioStore } from '../store/audioStore'
 
+const MEDIA_STATUS_CHECK_INTERVAL_MS = 900
+const PLAYBACK_PAUSED_STATUSES = new Set(['paused', 'stopped'])
+
 /**
  * useSystemAudio v6.1 — Expert Deco Tuning for Thonet & Vander Ratsel 2.1
  *
@@ -106,6 +109,12 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
     const previousBroadband = useRef(0)
     const lastMusicalActivityAt = useRef(0)
     const audioStartedAt = useRef(0)
+    const mediaPlaybackRef = useRef({
+        checkedAt: 0,
+        status: 'unknown',
+        paused: false
+    })
+    const mediaStatusRequestRef = useRef(null)
 
     // Genre detection history
     const genreHistory = useRef([])
@@ -123,6 +132,33 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
         const inputs = await listAudioInputs()
         setAvailableInputs(inputs)
         return inputs
+    }, [])
+
+    const refreshPlaybackStatus = useCallback((now) => {
+        if (!window.dmx?.getSystemMedia) return
+        if (mediaStatusRequestRef.current) return
+        if (now - mediaPlaybackRef.current.checkedAt < MEDIA_STATUS_CHECK_INTERVAL_MS) return
+
+        mediaPlaybackRef.current.checkedAt = now
+        mediaStatusRequestRef.current = window.dmx.getSystemMedia()
+            .then((media) => {
+                const status = String(media?.playbackStatus || '').toLowerCase()
+                mediaPlaybackRef.current = {
+                    checkedAt: now,
+                    status: status || 'unknown',
+                    paused: PLAYBACK_PAUSED_STATUSES.has(status)
+                }
+            })
+            .catch(() => {
+                mediaPlaybackRef.current = {
+                    checkedAt: now,
+                    status: 'unknown',
+                    paused: false
+                }
+            })
+            .finally(() => {
+                mediaStatusRequestRef.current = null
+            })
     }, [])
 
     const setSelectedDeviceId = useCallback((deviceId) => {
@@ -169,6 +205,12 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
         previousBroadband.current = 0
         lastMusicalActivityAt.current = 0
         audioStartedAt.current = 0
+        mediaPlaybackRef.current = {
+            checkedAt: 0,
+            status: 'unknown',
+            paused: false
+        }
+        mediaStatusRequestRef.current = null
         smoothedOutput.current = [
             { r: 0, g: 0, b: 0 },
             { r: 0, g: 0, b: 0 },
@@ -318,6 +360,10 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
 
                 // === GENRE DETECTION (Every 2.5s) ===
                 const now = performance.now()
+                refreshPlaybackStatus(now)
+                const playbackPaused = mediaPlaybackRef.current.paused
+                const playbackStatus = mediaPlaybackRef.current.status
+
                 if (now - lastGenreCheck.current > 2500) {
                     lastGenreCheck.current = now
                     const genreState = detectStableGenre({
@@ -368,7 +414,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 if (!calibrating && (transientActivity > 0.1 || sustainedActivity > 0.18)) {
                     lastMusicalActivityAt.current = now
                 }
-                const silence = calibrating || lastMusicalActivityAt.current === 0 || now - lastMusicalActivityAt.current > 700
+                const silence = playbackPaused || calibrating || lastMusicalActivityAt.current === 0 || now - lastMusicalActivityAt.current > 700
                 const clipping = Math.max(...spectral, bassOutput, midHighL, midHighR) >= 0.98
                 const frameTelemetry = buildFrameTelemetry({
                     bassEnergy,
@@ -379,42 +425,64 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                     midEnergy,
                     stereoWidth
                 })
-
-                const audioFrame = createAudioFrame({
-                    timestamp: Date.now(),
-                    source: activeSourceRef.current,
-                    levels: {
+                const frameSpatial = silence ? { left: 0, center: 0, right: 0 } : spatial
+                const frameSpectral = silence ? new Array(16).fill(0) : spectral
+                const frameLevels = silence
+                    ? {
+                        bass: 0,
+                        mid: 0,
+                        high: 0,
+                        volume: 0,
+                        stereoWidth: 0
+                    }
+                    : {
                         bass: bassOutput,
                         mid: midEnergy,
                         high: highEnergy,
                         volume,
                         stereoWidth
-                    },
-                    stereo: {
+                    }
+                const frameStereo = silence
+                    ? {
+                        lowMidLeft: 0,
+                        lowMidRight: 0,
+                        midHighLeft: 0,
+                        midHighRight: 0
+                    }
+                    : {
                         lowMidLeft: lowMidL,
                         lowMidRight: lowMidR,
                         midHighLeft: midHighL,
                         midHighRight: midHighR
-                    },
-                    spatial,
-                    spectral,
+                    }
+
+                const audioFrame = createAudioFrame({
+                    timestamp: Date.now(),
+                    source: activeSourceRef.current,
+                    levels: frameLevels,
+                    stereo: frameStereo,
+                    spatial: frameSpatial,
+                    spectral: frameSpectral,
                     telemetry: frameTelemetry,
-                    status: { silence, clipping },
+                    status: { silence, clipping, playbackPaused, playbackStatus },
                     genre: autoGenre ? detectedGenre : manualGenre
                 })
 
                 if (silence) {
+                    peakHoldL.current = new Array(16).fill(0)
+                    peakHoldR.current = new Array(16).fill(0)
+                    peakHoldBass.current = 0
                     bassPulse.current = 0
                     useAudioStore.getState().updateAudioAnalysis(
-                        { left: 0, center: 0, right: 0 },
-                        spectral,
+                        frameSpatial,
+                        frameSpectral,
                         audioFrame
                     )
                     setAudioTelemetryDSP({ left: 0, center: 0, right: 0 })
                     if (onAudioUpdate) onAudioUpdate({ left: 0, center: 0, right: 0 })
                     setVisualizerData({
-                        left: [...peakHoldL.current],
-                        right: [...peakHoldR.current],
+                        left: new Array(16).fill(0),
+                        right: new Array(16).fill(0),
                         bass: 0
                     })
                     return
@@ -523,7 +591,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
 
             setSourceError('Audio detection failed to start. BeamStudio only captures speaker monitor/loopback audio, never the computer microphone.')
         }
-    }, [refreshInputs, selectedDeviceId, sendDmxBatch, stop, autoGenre, detectedGenre, manualGenre, onAudioUpdate, audioSensitivity])
+    }, [refreshInputs, refreshPlaybackStatus, selectedDeviceId, sendDmxBatch, stop, autoGenre, detectedGenre, manualGenre, onAudioUpdate, audioSensitivity])
 
     // Cleanup on unmount
     useEffect(() => () => stop(), [stop])
