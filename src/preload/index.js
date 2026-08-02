@@ -68,12 +68,14 @@ const dmxAPI = {
 
     getState: () => ipcRenderer.invoke('dmx:getState'),
     onColorsUpdated: (callback) => {
-        ipcRenderer.on('dmx:colorsUpdated', (_, colors) => callback(colors))
-        return () => ipcRenderer.removeAllListeners('dmx:colorsUpdated')
+        const listener = (_, colors) => callback(colors)
+        ipcRenderer.on('dmx:colorsUpdated', listener)
+        return () => ipcRenderer.removeListener('dmx:colorsUpdated', listener)
     },
     onTelemetryUpdated: (callback) => {
-        ipcRenderer.on('dmx:telemetry', (_, data) => callback(data))
-        return () => ipcRenderer.removeAllListeners('dmx:telemetry')
+        const listener = (_, data) => callback(data)
+        ipcRenderer.on('dmx:telemetry', listener)
+        return () => ipcRenderer.removeListener('dmx:telemetry', listener)
     }
 }
 

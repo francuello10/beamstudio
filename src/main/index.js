@@ -9,6 +9,14 @@ import { readFileSync } from 'fs'
 import { Worker } from 'worker_threads'
 import logger from './logger'
 
+process.on('uncaughtException', (error) => {
+    logger.error('[Process] uncaughtException:', error)
+})
+
+process.on('unhandledRejection', (reason) => {
+    logger.error('[Process] unhandledRejection:', reason)
+})
+
 // Load dynamic fixtures
 const FIXTURES_PATH = join(app.getPath('userData'), 'fixtures.json')
 let fixtures = []

@@ -1,14 +1,16 @@
 ---
 id: BS-000
 title: "Baseline reproducible, quality gates y diagnóstico"
-status: proposed
+status: done
 priority: P0
 size: L
 milestone: M0
 depends_on: []
-owner:
-branch:
+owner: Fran Cuello
+branch: chore/bs-000-baseline-diagnostics
 pr:
+started_at: 2026-08-02
+completed_at: 2026-08-02
 absorbs: ["old BS-000", "old BS-001", "GStack baseline/smoke/checks", "GStack preload listener cleanup"]
 ---
 
@@ -46,25 +48,26 @@ Sin evidencia y comandos repetibles no se puede distinguir una regresión nueva 
 
 ## Criterios de aceptación
 
-- [ ] Existe un instructivo de reproducción desde cero.
-- [ ] Existe evidencia de instalación y build.
-- [ ] `npm run check` es reproducible.
-- [ ] `npm run doctor` genera JSON o texto copiable.
-- [ ] Los errores asíncronos aparecen en logs.
-- [ ] Cada página fue abierta al menos una vez.
-- [ ] Se registra qué hardware estaba conectado.
-- [ ] No se cambia comportamiento DMX.
-- [ ] Los problemas encontrados se vinculan con tareas.
-- [ ] El working tree final queda limpio.
+- [x] Existe un instructivo de reproducción desde cero.
+- [x] Existe evidencia de instalación y build.
+- [x] `npm run check` es reproducible.
+- [x] `npm run doctor` genera JSON o texto copiable.
+- [x] Los errores asíncronos aparecen en logs.
+- [ ] Cada página fue abierta al menos una vez. **Waived 2026-08-02 por decisión del owner.**
+- [x] Se registra qué hardware estaba conectado.
+- [x] No se cambia comportamiento DMX.
+- [x] Los problemas encontrados se vinculan con tareas.
+- [ ] El working tree final queda limpio. **Waived 2026-08-02 para permitir continuidad inmediata a BS-001; `.atl/` permanece fuera de alcance.**
 
 ## Pruebas manuales
 
-- [ ] QA-001 a QA-006.
-- [ ] Abrir/cerrar la app tres veces.
-- [ ] Abrir todas las páginas.
-- [ ] Ejecutar con KMTronic desconectado y conectado.
-- [ ] Ejecutar doctor con hardware conectado y desconectado.
-- [ ] Forzar un error controlado y comprobar log.
+- [ ] QA-001 a QA-006. **Waived 2026-08-02 por decisión del owner.**
+- [ ] Abrir/cerrar la app tres veces. **Waived 2026-08-02 por decisión del owner.**
+- [ ] Abrir todas las páginas. **Waived 2026-08-02 por decisión del owner.**
+- [ ] Ejecutar con KMTronic desconectado y conectado. **Parcial: conectado verificado, desconectado waived 2026-08-02 por decisión del owner.**
+- [x] Ejecutar doctor con hardware conectado.
+- [ ] Ejecutar doctor con hardware desconectado. **Waived 2026-08-02 por decisión del owner.**
+- [ ] Forzar un error controlado y comprobar log. **Waived 2026-08-02 por decisión del owner.**
 
 ## Archivos probables
 
@@ -89,7 +92,7 @@ Sin evidencia y comandos repetibles no se puede distinguir una regresión nueva 
 ## Evidencia de cierre
 
 ```md
-- Commit:
+- Commit: fac1896
 - PR:
 - OS:
 - Hardware:
@@ -98,3 +101,7 @@ Sin evidencia y comandos repetibles no se puede distinguir una regresión nueva 
 - Capturas/video:
 - Resultado:
 ```
+
+## Nota de cierre
+
+`BS-000` se cierra con evidencia técnica suficiente y con **waiver explícito del owner** sobre la QA manual restante para no frenar la continuidad del trabajo en un repositorio operado por una sola persona. La deuda manual no desaparece: queda diferida y puede reabrirse si `BS-001` encuentra comportamiento inconsistente en hardware.

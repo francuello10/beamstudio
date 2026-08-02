@@ -1,0 +1,59 @@
+## git status
+?? .atl/
+?? docs/revival/evidence/
+
+## git log -1
+commit c1cb1bae946753dcadafbc21ba135b2d4f1cda1a
+Author: Fran Cuello <francisco.cuello@comprandoengrupo.net>
+Date:   Sat Aug 1 23:37:17 2026 -0300
+
+    docs: consolidate revival tasks
+
+ docs/revival/00_MASTER_PLAN.md                     |  59 +++++-------
+ docs/revival/01_CURRENT_STATE_AND_ARCHITECTURE.md  |  10 +-
+ docs/revival/03_BRANCH_AND_DELIVERY_WORKFLOW.md    |  24 ++---
+ docs/revival/README.md                             |  37 +++++---
+ docs/revival/manifest.json                         |  45 +++++++--
+ docs/revival/tasks/BS-000_REPO_BASELINE.md         |  96 -------------------
+ .../BS-000_REVIVAL_BASELINE_AND_DIAGNOSTICS.md     | 100 ++++++++++++++++++++
+ .../tasks/BS-001_BUILD_QUALITY_AND_DIAGNOSTICS.md  |  95 -------------------
+ ...ESSION.md => BS-001_DMX_HARDWARE_REGRESSION.md} |  47 +++-------
+ .../tasks/BS-002_AUDIO_SOURCE_AND_AUDIOFRAME.md    |  83 ++++++++++++++++
+ docs/revival/tasks/BS-003_AUDIO_SOURCE_MANAGER.md  | 100 --------------------
+ .../BS-003_SCENE_ENGINE_AND_SOUND_REACTIVE.md      |  76 +++++++++++++++
+ docs/revival/tasks/BS-004_AMBILIGHT_QA.md          |  73 +++++++++++++++
+ .../tasks/BS-004_AUDIO_DSP_STABILIZATION.md        | 104 ---------------------
+ docs/revival/tasks/BS-005_PROJECTOR_VISUALS_MVP.md |  79 ++++++++++++++++
+ .../tasks/BS-005_SCENE_ENGINE_SINGLE_OWNER.md      | 101 --------------------
+ .../tasks/BS-006_PROJECTION_MAPPING_BASIC.md       |  71 ++++++++++++++
+ .../tasks/BS-006_SOUND_REACTIVE_SCENES_V2.md       | 102 --------------------
+ docs/revival/tasks/BS-007_AMBILIGHT_QA.md          |  99 --------------------
+ docs/revival/tasks/BS-007_NOW_PLAYING_METADATA.md  |  70 ++++++++++++++
+ docs/revival/tasks/BS-008_PROJECTOR_OUTPUT_MVP.md  | 100 --------------------
+ docs/revival/tasks/BS-009_VISUAL_LIBRARY_MVP.md    |  97 -------------------
+ .../tasks/BS-010_PROJECTION_MAPPING_BASIC.md       |  99 --------------------
+ docs/revival/tasks/BS-011_NOW_PLAYING_METADATA.md  | 100 --------------------
+ 24 files changed, 666 insertions(+), 1201 deletions(-)
+
+## node
+v22.23.2
+## npm
+10.9.8
+## uname
+Linux workstation-linux 7.0.0-28-generic #28~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Wed Jul  1 15:50:57 UTC 2 x86_64 x86_64 x86_64 GNU/Linux
+## os-release
+PRETTY_NAME="Ubuntu 24.04.4 LTS"
+NAME="Ubuntu"
+VERSION_ID="24.04"
+VERSION="24.04.4 LTS (Noble Numbat)"
+VERSION_CODENAME=noble
+ID=ubuntu
+ID_LIKE=debian
+HOME_URL="https://www.ubuntu.com/"
+SUPPORT_URL="https://help.ubuntu.com/"
+BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+UBUNTU_CODENAME=noble
+LOGO=ubuntu-logo
+npm ci: OK
+build: OK

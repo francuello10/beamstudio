@@ -6,6 +6,9 @@
   "author": "Antigravity Team",
   "scripts": {
     "dev": "ELECTRON_DISABLE_SANDBOX=1 electron-vite dev",
+    "check": "node scripts/check.mjs",
+    "lint": "node scripts/check.mjs",
+    "doctor": "node scripts/doctor.mjs",
     "build": "electron-vite build && cp src/main/logger.cjs out/main/logger.cjs",
     "dist": "npm run build && electron-builder"
   },

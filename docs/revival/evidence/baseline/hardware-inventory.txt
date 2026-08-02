@@ -1,0 +1,106 @@
+## display
+DISPLAY=:0
+WAYLAND_DISPLAY=wayland-0
+
+## lspci
+00:00.0 Host bridge: Advanced Micro Devices, Inc. [AMD] Starship/Matisse Root Complex
+00:00.2 IOMMU: Advanced Micro Devices, Inc. [AMD] Starship/Matisse IOMMU
+00:01.0 Host bridge: Advanced Micro Devices, Inc. [AMD] Starship/Matisse PCIe Dummy Host Bridge
+00:01.1 PCI bridge: Advanced Micro Devices, Inc. [AMD] Starship/Matisse GPP Bridge
+00:01.3 PCI bridge: Advanced Micro Devices, Inc. [AMD] Starship/Matisse GPP Bridge
+00:02.0 Host bridge: Advanced Micro Devices, Inc. [AMD] Starship/Matisse PCIe Dummy Host Bridge
+00:03.0 Host bridge: Advanced Micro Devices, Inc. [AMD] Starship/Matisse PCIe Dummy Host Bridge
+00:03.1 PCI bridge: Advanced Micro Devices, Inc. [AMD] Starship/Matisse GPP Bridge
+00:04.0 Host bridge: Advanced Micro Devices, Inc. [AMD] Starship/Matisse PCIe Dummy Host Bridge
+00:05.0 Host bridge: Advanced Micro Devices, Inc. [AMD] Starship/Matisse PCIe Dummy Host Bridge
+00:07.0 Host bridge: Advanced Micro Devices, Inc. [AMD] Starship/Matisse PCIe Dummy Host Bridge
+00:07.1 PCI bridge: Advanced Micro Devices, Inc. [AMD] Starship/Matisse Internal PCIe GPP Bridge 0 to bus[E:B]
+00:08.0 Host bridge: Advanced Micro Devices, Inc. [AMD] Starship/Matisse PCIe Dummy Host Bridge
+00:08.1 PCI bridge: Advanced Micro Devices, Inc. [AMD] Starship/Matisse Internal PCIe GPP Bridge 0 to bus[E:B]
+00:14.0 SMBus: Advanced Micro Devices, Inc. [AMD] FCH SMBus Controller (rev 61)
+00:14.3 ISA bridge: Advanced Micro Devices, Inc. [AMD] FCH LPC Bridge (rev 51)
+00:18.0 Host bridge: Advanced Micro Devices, Inc. [AMD] Matisse/Vermeer Data Fabric: Device 18h; Function 0
+00:18.1 Host bridge: Advanced Micro Devices, Inc. [AMD] Matisse/Vermeer Data Fabric: Device 18h; Function 1
+00:18.2 Host bridge: Advanced Micro Devices, Inc. [AMD] Matisse/Vermeer Data Fabric: Device 18h; Function 2
+00:18.3 Host bridge: Advanced Micro Devices, Inc. [AMD] Matisse/Vermeer Data Fabric: Device 18h; Function 3
+00:18.4 Host bridge: Advanced Micro Devices, Inc. [AMD] Matisse/Vermeer Data Fabric: Device 18h; Function 4
+00:18.5 Host bridge: Advanced Micro Devices, Inc. [AMD] Matisse/Vermeer Data Fabric: Device 18h; Function 5
+00:18.6 Host bridge: Advanced Micro Devices, Inc. [AMD] Matisse/Vermeer Data Fabric: Device 18h; Function 6
+00:18.7 Host bridge: Advanced Micro Devices, Inc. [AMD] Matisse/Vermeer Data Fabric: Device 18h; Function 7
+01:00.0 Non-Volatile memory controller: Realtek Semiconductor Co., Ltd. RTS5763DL NVMe SSD Controller (DRAM-less) (rev 01)
+03:00.0 USB controller: Advanced Micro Devices, Inc. [AMD] Device 43bc (rev 02)
+03:00.1 SATA controller: Advanced Micro Devices, Inc. [AMD] Device 43b8 (rev 02)
+03:00.2 PCI bridge: Advanced Micro Devices, Inc. [AMD] Device 43b3 (rev 02)
+20:04.0 PCI bridge: Advanced Micro Devices, Inc. [AMD] 300 Series Chipset PCIe Port (rev 02)
+20:05.0 PCI bridge: Advanced Micro Devices, Inc. [AMD] 300 Series Chipset PCIe Port (rev 02)
+20:06.0 PCI bridge: Advanced Micro Devices, Inc. [AMD] 300 Series Chipset PCIe Port (rev 02)
+20:07.0 PCI bridge: Advanced Micro Devices, Inc. [AMD] 300 Series Chipset PCIe Port (rev 02)
+25:00.0 Ethernet controller: Realtek Semiconductor Co., Ltd. RTL8111/8168/8211/8411 PCI Express Gigabit Ethernet Controller (rev 15)
+29:00.0 PCI bridge: Advanced Micro Devices, Inc. [AMD/ATI] Navi 10 XL Upstream Port of PCI Express Switch (rev c1)
+2a:00.0 PCI bridge: Advanced Micro Devices, Inc. [AMD/ATI] Navi 10 XL Downstream Port of PCI Express Switch
+2b:00.0 VGA compatible controller: Advanced Micro Devices, Inc. [AMD/ATI] Navi 22 [Radeon RX 6700/6700 XT/6750 XT / 6800M/6850M XT] (rev c1)
+2b:00.1 Audio device: Advanced Micro Devices, Inc. [AMD/ATI] Navi 21/23 HDMI/DP Audio Controller
+2c:00.0 Non-Essential Instrumentation [1300]: Advanced Micro Devices, Inc. [AMD] Starship/Matisse PCIe Dummy Function
+2d:00.0 Non-Essential Instrumentation [1300]: Advanced Micro Devices, Inc. [AMD] Starship/Matisse Reserved SPP
+2d:00.1 Encryption controller: Advanced Micro Devices, Inc. [AMD] Starship/Matisse Cryptographic Coprocessor PSPCPP
+2d:00.3 USB controller: Advanced Micro Devices, Inc. [AMD] Matisse USB 3.0 Host Controller
+2d:00.4 Audio device: Advanced Micro Devices, Inc. [AMD] Starship/Matisse HD Audio Controller
+
+## lsusb
+Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+Bus 001 Device 002: ID 2357:0604 TP-Link TP-Link UB500 Adapter
+Bus 001 Device 003: ID 0458:7103 KYE Systems Corp. (Mouse Systems) USB 2.0 Camera
+Bus 001 Device 004: ID 0403:6001 Future Technology Devices International, Ltd FT232 Serial (UART) IC
+Bus 001 Device 005: ID 046d:0a8f Logitech, Inc. H390 headset with microphone
+Bus 002 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub
+Bus 003 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+Bus 003 Device 002: ID 1a40:0801 Terminus Technology Inc. USB 2.0 Hub
+Bus 003 Device 003: ID 258a:0089 SINO WEALTH Bluetooth Keyboard
+Bus 004 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub
+
+## audio sources
+
+## audio sinks
+
+## pipewire
+● pipewire.service - PipeWire Multimedia Service
+     Loaded: loaded (/usr/lib/systemd/user/pipewire.service; enabled; preset: enabled)
+     Active: active (running) since Sat 2026-08-01 21:29:41 -03; 2h 8min ago
+TriggeredBy: ● pipewire.socket
+   Main PID: 3541 (pipewire)
+      Tasks: 3 (limit: 25893)
+     Memory: 7.5M (peak: 8.8M)
+        CPU: 6.964s
+     CGroup: /user.slice/user-1000.slice/user@1000.service/session.slice/pipewire.service
+             └─3541 /usr/bin/pipewire
+
+Aug 01 21:29:41 workstation-linux systemd[3521]: Started pipewire.service - PipeWire Multimedia Service.
+Aug 01 21:29:41 workstation-linux pipewire[3541]: mod.jackdbus-detect: Failed to receive jackdbus reply: org.freedesktop.DBus.Error.ServiceUnknown: The name org.jackaudio.service was not provided by any .service files
+
+● pipewire-pulse.service - PipeWire PulseAudio
+     Loaded: loaded (/usr/lib/systemd/user/pipewire-pulse.service; enabled; preset: enabled)
+     Active: active (running) since Sat 2026-08-01 21:29:41 -03; 2h 8min ago
+TriggeredBy: ● pipewire-pulse.socket
+   Main PID: 3547 (pipewire-pulse)
+      Tasks: 3 (limit: 25893)
+     Memory: 9.8M (peak: 11.3M)
+        CPU: 123ms
+     CGroup: /user.slice/user-1000.slice/user@1000.service/session.slice/pipewire-pulse.service
+             └─3547 /usr/bin/pipewire-pulse
+
+Aug 01 21:29:41 workstation-linux systemd[3521]: Started pipewire-pulse.service - PipeWire PulseAudio.
+
+● wireplumber.service - Multimedia Service Session Manager
+     Loaded: loaded (/usr/lib/systemd/user/wireplumber.service; enabled; preset: enabled)
+     Active: active (running) since Sat 2026-08-01 21:29:41 -03; 2h 8min ago
+   Main PID: 3545 (wireplumber)
+      Tasks: 6 (limit: 25893)
+     Memory: 6.2M (peak: 7.6M)
+        CPU: 283ms
+     CGroup: /user.slice/user-1000.slice/user@1000.service/session.slice/wireplumber.service
+             └─3545 /usr/bin/wireplumber
+
+Aug 01 21:29:41 workstation-linux systemd[3521]: Started wireplumber.service - Multimedia Service Session Manager.
+Aug 01 21:29:41 workstation-linux wireplumber[3545]: SPA handle 'api.libcamera.enum.manager' could not be loaded; is it installed?
+Aug 01 21:29:41 workstation-linux wireplumber[3545]: PipeWire's libcamera SPA missing or broken. libcamera not supported.
+Aug 01 21:29:41 workstation-linux wireplumber[3545]: <WpPortalPermissionStorePlugin:0x5ed3c60caa30> Failed to call Lookup: GDBus.Error:org.freedesktop.portal.Error.NotFound: No entry for camera
