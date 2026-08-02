@@ -979,7 +979,13 @@ function clearOutputOwner(owner) {
 }
 
 function isAsyncOutputSourceAllowed(source = 'renderer') {
-    if (source === 'audio' && dmxState.audioReactiveActive) return true
+    // 'audio' used to bypass ownership arbitration entirely whenever
+    // audioReactiveActive was true, regardless of dmxState.outputOwner -
+    // meaning audio and ambilight/dynamic-scene could both be writing to
+    // the same fixtures at once if both were started, fighting for the
+    // same channels. Audio now claims/releases ownership the same way
+    // ambilight and dynamic scenes already do (see audio:start/audio:stop),
+    // so this is a plain, consistent ownership check for every source.
     return dmxState.outputOwner === source
 }
 
@@ -1687,11 +1693,18 @@ function setupIPC() {
     })
 
     // @ai-constraints Audio start must make each master-dimmer fixture visible once.
-    ipcMain.handle('audio:start', () => {
+    ipcMain.handle('audio:start', (_, { claimsOutput = true } = {}) => {
         stopDynamicScene()
         dmxState.activeProgram = null
         snapshotAudioDimmerValues()
         dmxState.audioReactiveActive = true
+        // claimsOutput: false for analysis-only callers (AmbilightPage/
+        // FluidSimPage use useSystemAudio purely to modulate their OWN
+        // already-claimed output, not to write DMX through the audio path -
+        // see useSystemAudio.js's claimsOutput comment). Claiming 'audio'
+        // ownership for those would steal it from whatever legitimately
+        // owns output (e.g. 'ambilight'), silently dropping its writes.
+        if (claimsOutput) setOutputOwner('audio')
 
         // Seed only fixtures whose own master dimmer is still closed. Later audio frames
         // keep respecting the current dimmer value so intentional grand-master changes hold.
@@ -1703,6 +1716,7 @@ function setupIPC() {
     // User must explicitly press RESET to clear. Navigation should not kill DMX output.
     ipcMain.handle('audio:stop', () => {
         dmxState.audioReactiveActive = false
+        clearOutputOwner('audio')
         restoreAudioDimmerValues()
         return { success: true }
     })
@@ -1711,7 +1725,7 @@ function setupIPC() {
      * Uses bass/mid/high levels to create dynamic, varied colors.
      */
     ipcMain.handle('audio:setLevel', (_, { bass, mid, high, volume }) => {
-        if (!dmxState.audioReactiveActive) return { success: false }
+        if (!dmxState.audioReactiveActive || dmxState.outputOwner !== 'audio') return { success: false }
 
         // Improved color formula for more variety (not just blue)
         // Bass drives red/orange, mid drives green/yellow, high drives cyan/white

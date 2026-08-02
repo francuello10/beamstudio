@@ -128,7 +128,7 @@ const audioAPI = {
         return () => ipcRenderer.removeListener('audio:frameBroadcast', listener)
     },
     ...(!isProjectorWindow && {
-        start: () => ipcRenderer.invoke('audio:start'),
+        start: (claimsOutput = true) => ipcRenderer.invoke('audio:start', { claimsOutput }),
         stop: () => ipcRenderer.invoke('audio:stop'),
         setLevel: (levels) => ipcRenderer.invoke('audio:setLevel', levels)
     })

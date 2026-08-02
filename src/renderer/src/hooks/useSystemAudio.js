@@ -117,7 +117,14 @@ const shapeCenterBassHit = ({ bassProfile, boostLevel, now, state }) => {
  * 8. LERP standalone: 0.20 (smooth genre output)
  * 9. BACKGROUND SUPPORT: Recursive setTimeout (Anti-Throttle)
  */
-export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate = null, audioSensitivity = 1.0) => {
+// claimsOutput: false for callers that only want audio telemetry to modulate
+// their OWN already-claimed output (e.g. AmbilightPage/FluidSimPage pass a
+// no-op sendDmxBatch and read useAudioStore's audioFrame directly instead) -
+// audio:start must not steal DMX output ownership from whatever feature is
+// legitimately driving it in that case. Defaults to true for every caller
+// that actually writes DMX through sendDmxBatch (AudioPage, ConsoleMixerPage,
+// DynamicScenesPageV2).
+export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate = null, audioSensitivity = 1.0, claimsOutput = true) => {
     // === STATE ===
     const [active, setActive] = useState(false)
     const [reconnecting, setReconnecting] = useState(false)
@@ -434,7 +441,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
 
             setActive(true)
             audioStartedAt.current = performance.now()
-            window.audio?.start()
+            window.audio?.start(claimsOutput)
 
             const dataL = new Uint8Array(analyserL.current.frequencyBinCount)
             const dataR = new Uint8Array(analyserR.current.frequencyBinCount)

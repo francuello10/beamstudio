@@ -64,7 +64,9 @@ const FluidSimPage = () => {
     const { start: startAudio, stop: stopAudio, energyFactor } = useSystemAudio(
         () => { }, // We don't need direct pixel map buffer here, fluid engine handles it
         null,
-        setAudioTelemetryDSP
+        setAudioTelemetryDSP,
+        1.0,
+        false // claimsOutput: analysis only - must not steal DMX ownership from whatever owns output
     )
 
     // Fluid Engine

@@ -45,7 +45,9 @@ const AmbilightPage = () => {
     const { start: startAudio, stop: stopAudio } = useSystemAudio(
         () => { }, // No direct DMX control, Ambilight hook handles it
         null,
-        setAudioTelemetryDSP
+        setAudioTelemetryDSP,
+        1.0,
+        false // claimsOutput: analysis only - must not steal DMX ownership from ambilight
     )
 
     const refreshSources = async () => {
