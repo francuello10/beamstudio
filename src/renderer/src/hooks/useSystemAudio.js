@@ -10,6 +10,7 @@ import {
     computeLowMid,
     computeMidHigh,
     computeStereoWidth,
+    detectStableGenre,
     extractBands
 } from '../audio/AudioAnalyzer'
 import {
@@ -267,37 +268,20 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 const now = performance.now()
                 if (now - lastGenreCheck.current > 2500) {
                     lastGenreCheck.current = now
+                    const genreState = detectStableGenre({
+                        bassEnergy,
+                        bandsL,
+                        bandsR,
+                        lowMidAvg,
+                        peakHoldL: peakHoldL.current,
+                        peakHoldR: peakHoldR.current,
+                        genreHistory: genreHistory.current,
+                        stereoWidth
+                    })
 
-                    const bassRMS = Math.sqrt(bassEnergy)
-                    const midL = bandsL.slice(4, 10).reduce((a, b) => a + b, 0) / 6
-                    const midR = bandsR.slice(4, 10).reduce((a, b) => a + b, 0) / 6
-                    const midRms = (midL + midR) / 2
-                    const peakMax = Math.max(...peakHoldL.current, ...peakHoldR.current)
-                    const avgEnergy = (bandsL.reduce((a, b) => a + b, 0) + bandsR.reduce((a, b) => a + b, 0)) / 32
-                    const transientRatio = avgEnergy > 0.01 ? peakMax / avgEnergy : 0
-                    const dynamicRange = peakMax - avgEnergy
-
-                    let genre = 'CHILL'
-                    if (bassRMS > 0.5 && transientRatio > 1.8) genre = 'ELECTRO'
-                    else if (midRms > 0.4 && transientRatio > 1.2) genre = 'ROCK'
-                    else if (lowMidAvg > 0.35 && transientRatio > 1.0 && transientRatio < 1.5) genre = 'LATIN'
-                    else if (dynamicRange > 0.6 && transientRatio > 2.0) genre = 'CINEMA'
-
-                    genreHistory.current.push(genre)
-                    if (genreHistory.current.length > 5) genreHistory.current.shift()
-
-                    const counts = { ELECTRO: 0, ROCK: 0, CHILL: 0, LATIN: 0, CINEMA: 0 }
-                    genreHistory.current.forEach(g => counts[g]++)
-                    const stable = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]
-                    const currentTelemetry = {
-                        lowEndDynamics: Math.round(bassRMS * 100),
-                        transientDensity: Math.round(transientRatio * 50),
-                        midRms: Math.round(midRms * 100),
-                        stereoWidth: Math.round(stereoWidth * 100)
-                    }
-
-                    setDetectedGenre(stable)
-                    setTelemetry(currentTelemetry)
+                    genreHistory.current = genreState.nextHistory
+                    setDetectedGenre(genreState.stableGenre)
+                    setTelemetry(genreState.telemetry)
                 }
 
                 // Sides: Mid/High energy (bands 4-15) — needed by BOTH Bass Pulse and Genre mode

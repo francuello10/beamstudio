@@ -98,3 +98,45 @@ export const buildFrameTelemetry = ({
         stereoWidth: Math.round(stereoWidth * 100)
     }
 }
+
+export const detectStableGenre = ({
+    bassEnergy,
+    bandsL,
+    bandsR,
+    lowMidAvg,
+    peakHoldL,
+    peakHoldR,
+    genreHistory,
+    stereoWidth
+}) => {
+    const bassRMS = Math.sqrt(bassEnergy)
+    const midL = bandsL.slice(4, 10).reduce((a, b) => a + b, 0) / 6
+    const midR = bandsR.slice(4, 10).reduce((a, b) => a + b, 0) / 6
+    const midRms = (midL + midR) / 2
+    const peakMax = Math.max(...peakHoldL, ...peakHoldR)
+    const avgEnergy = (bandsL.reduce((a, b) => a + b, 0) + bandsR.reduce((a, b) => a + b, 0)) / 32
+    const transientRatio = avgEnergy > 0.01 ? peakMax / avgEnergy : 0
+    const dynamicRange = peakMax - avgEnergy
+
+    let genre = 'CHILL'
+    if (bassRMS > 0.5 && transientRatio > 1.8) genre = 'ELECTRO'
+    else if (midRms > 0.4 && transientRatio > 1.2) genre = 'ROCK'
+    else if (lowMidAvg > 0.35 && transientRatio > 1.0 && transientRatio < 1.5) genre = 'LATIN'
+    else if (dynamicRange > 0.6 && transientRatio > 2.0) genre = 'CINEMA'
+
+    const nextHistory = [...genreHistory, genre].slice(-5)
+    const counts = { ELECTRO: 0, ROCK: 0, CHILL: 0, LATIN: 0, CINEMA: 0 }
+    nextHistory.forEach((value) => { counts[value]++ })
+    const stableGenre = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]
+
+    return {
+        stableGenre,
+        nextHistory,
+        telemetry: {
+            lowEndDynamics: Math.round(bassRMS * 100),
+            transientDensity: Math.round(transientRatio * 50),
+            midRms: Math.round(midRms * 100),
+            stereoWidth: Math.round(stereoWidth * 100)
+        }
+    }
+}
