@@ -1,11 +1,18 @@
 import React, { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Projector, Power, EyeOff, Crosshair, RefreshCw, Check, AlertCircle } from 'lucide-react'
+import { VISUALS } from '../visuals/visualRegistry'
+
+// BS-005: visual library — Fluid Neon exists today, the remaining 3 (Particle
+// Field, Tunnel/Grid, Kaleidoscope/Waves) are follow-up work. VISUALS is
+// shared with ProjectorApp.jsx via visualRegistry.js so adding one is just
+// another entry there, not a locally-duplicated literal.
 
 /**
  * ProjectorPage — operator control surface for the fullscreen projector
  * output window (`?role=projector`). Lists displays, opens/closes the
- * projector window, and drives blackout / test pattern remotely via IPC.
+ * projector window, and drives blackout / test pattern / active visual
+ * remotely via IPC.
  *
  * This page never renders inside the projector window itself.
  */
@@ -15,6 +22,7 @@ const ProjectorPage = () => {
     const [status, setStatus] = useState({ connected: false, displayId: null })
     const [blackout, setBlackout] = useState(false)
     const [testPattern, setTestPattern] = useState(false)
+    const [activeVisual, setActiveVisual] = useState(VISUALS[0].id)
     const [refreshing, setRefreshing] = useState(false)
 
     const refreshDisplays = async () => {
@@ -72,6 +80,11 @@ const ProjectorPage = () => {
         const next = !testPattern
         setTestPattern(next)
         window.projector?.setTestPattern(next)
+    }
+
+    const handleVisualSelect = (visualId) => {
+        setActiveVisual(visualId)
+        window.projector?.setVisual(visualId)
     }
 
     const connectedDisplay = displays.find(d => d.id === status.displayId)
@@ -169,6 +182,20 @@ const ProjectorPage = () => {
                                 <Crosshair size={16} />
                                 <span>TEST PATTERN</span>
                             </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                            {VISUALS.map((visual) => (
+                                <div
+                                    key={visual.id}
+                                    className={`bgr-toggle ${activeVisual === visual.id ? 'active' : ''}`}
+                                    onClick={() => handleVisualSelect(visual.id)}
+                                    title={visual.label}
+                                    style={{ height: '48px', padding: '0 16px', flex: 1, justifyContent: 'center' }}
+                                >
+                                    <span>{visual.label.toUpperCase()}</span>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </div>
