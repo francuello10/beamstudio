@@ -32,6 +32,45 @@ try {
     ]
 }
 
+// BS-006 phase 2: projection-mapping surface presets, mirroring the
+// fixtures.json persistence pattern exactly (userData JSON file, read on
+// demand, written back on every mutation — no in-memory cache needed since
+// preset saves/loads are rare, operator-driven actions, not per-frame state).
+const MAPPING_PRESETS_PATH = join(app.getPath('userData'), 'mapping-presets.json')
+
+// BS-006 phase 2 fix: last surfaces array pushed by EITHER window (main or
+// projector) via mapping:setSurfaces, cached here so a freshly-mounted
+// projector window (e.g. after the operator closes/reopens it) can pull
+// current state instead of a newly-mounted MappingCompositor pushing its own
+// [DEFAULT_SURFACE] initial state back out and silently clobbering whatever
+// richer layout was already live. Updated unconditionally in the
+// mapping:setSurfaces handler below, even when there are zero other windows
+// to relay to.
+let lastKnownSurfaces = null
+
+function readMappingPresets() {
+    try {
+        const data = JSON.parse(readFileSync(MAPPING_PRESETS_PATH, 'utf8'))
+        // Guard against valid-JSON-but-wrong-shape content (e.g. `[]` or
+        // `"oops"`) — without this, `data[name] = surfaces` below silently
+        // succeeds but JSON.stringify on the result either drops the write
+        // (array) or throws (primitive), corrupting/losing saved presets.
+        if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+            return {}
+        }
+        return data
+    } catch (e) {
+        // Missing file (first run) or corrupt JSON — start from an empty
+        // preset set rather than throwing, same as fixtures' fallback above.
+        return {}
+    }
+}
+
+function writeMappingPresets(data) {
+    const fs = require('fs')
+    fs.writeFileSync(MAPPING_PRESETS_PATH, JSON.stringify(data, null, 2))
+}
+
 const DMX_UNIVERSE_SIZE = 512
 const dmxSharedBuffer = new SharedArrayBuffer(DMX_UNIVERSE_SIZE + 1)
 const dmxArray = new Uint8Array(dmxSharedBuffer)
@@ -1708,6 +1747,76 @@ function setupIPC() {
     // projector:setBlackout: the main window's Edit Mapping toggle sends
     // this, the projector window listens for it to show/hide corner handles.
     ipcMain.on('mapping:setEditMode', (event, value) => projectorWindow?.webContents.send('mapping:editModeChanged', value))
+
+    // BS-006 phase 2: surfaces array sync. EITHER window (main or projector)
+    // can push a new surfaces array — broadcast to every OTHER window, same
+    // relay shape as audio:frameBroadcast. Excluding the sender is what keeps
+    // this from being a literal echo back to whichever window just sent it;
+    // it does not by itself prevent a receiving window from turning around
+    // and re-broadcasting what it just received — that feedback-loop guard
+    // lives on the renderer side (see MappingCompositor.jsx's
+    // suppressNextBroadcastRef).
+    ipcMain.on('mapping:setSurfaces', (event, surfaces) => {
+        // Cache unconditionally — even if no other window is currently open
+        // to relay to (e.g. a preset gets loaded in the main window while
+        // the projector window is closed) — so a LATER-opened window can
+        // still pull current state via mapping:getSurfaces instead of
+        // silently reverting to its own default.
+        lastKnownSurfaces = surfaces
+        BrowserWindow.getAllWindows().forEach(win => {
+            if (win.webContents.id !== event.sender.id) win.webContents.send('mapping:surfacesChanged', surfaces)
+        })
+    })
+
+    // BS-006 phase 2 fix: lets a freshly-mounted window (main or projector)
+    // pull the last-known surfaces array on mount, instead of only ever
+    // receiving updates pushed after it happened to be listening.
+    ipcMain.handle('mapping:getSurfaces', () => lastKnownSurfaces)
+
+    // BS-006 phase 2: mapping preset persistence, mirroring dmx:saveFixtures'
+    // read-modify-write-to-userData-JSON pattern.
+    ipcMain.handle('mapping:listPresets', () => {
+        try {
+            return Object.keys(readMappingPresets())
+        } catch (error) {
+            logger.error('[Mapping] Failed to list presets:', error)
+            return []
+        }
+    })
+
+    ipcMain.handle('mapping:savePreset', (_, { name, surfaces }) => {
+        try {
+            const data = readMappingPresets()
+            data[name] = surfaces
+            writeMappingPresets(data)
+            return { success: true }
+        } catch (error) {
+            logger.error('[Mapping] Failed to save preset:', error)
+            return { success: false, error: error.message }
+        }
+    })
+
+    ipcMain.handle('mapping:loadPreset', (_, name) => {
+        try {
+            const data = readMappingPresets()
+            return data[name] ?? null
+        } catch (error) {
+            logger.error('[Mapping] Failed to load preset:', error)
+            return null
+        }
+    })
+
+    ipcMain.handle('mapping:deletePreset', (_, name) => {
+        try {
+            const data = readMappingPresets()
+            delete data[name]
+            writeMappingPresets(data)
+            return { success: true }
+        } catch (error) {
+            logger.error('[Mapping] Failed to delete preset:', error)
+            return { success: false, error: error.message }
+        }
+    })
 
     // Relay AudioFrame from the main window's renderer process to every other
     // window (i.e. the projector window). Each BrowserWindow is a separate

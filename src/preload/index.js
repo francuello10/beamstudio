@@ -197,7 +197,27 @@ const mappingAPI = {
         const listener = (_e, v) => cb(v)
         ipcRenderer.on('mapping:editModeChanged', listener)
         return () => ipcRenderer.removeListener('mapping:editModeChanged', listener)
-    }
+    },
+
+    // BS-006 phase 2: surfaces array sync. Either side (main window's
+    // ProjectorPage or the projector window's MappingCompositor) can push a
+    // new surfaces array — the other side picks it up via onSurfacesChanged.
+    setSurfaces: (surfaces) => ipcRenderer.send('mapping:setSurfaces', surfaces),
+    onSurfacesChanged: (cb) => {
+        const listener = (_e, surfaces) => cb(surfaces)
+        ipcRenderer.on('mapping:surfacesChanged', listener)
+        return () => ipcRenderer.removeListener('mapping:surfacesChanged', listener)
+    },
+    // BS-006 phase 2 fix: pull the main process's last-known surfaces array
+    // on mount, so a freshly-opened window adopts current state instead of
+    // only ever reacting to pushes that happen after it starts listening.
+    getSurfaces: () => ipcRenderer.invoke('mapping:getSurfaces'),
+
+    // BS-006 phase 2: mapping preset persistence (userData/mapping-presets.json).
+    listPresets: () => ipcRenderer.invoke('mapping:listPresets'),
+    savePreset: (payload) => ipcRenderer.invoke('mapping:savePreset', payload),
+    loadPreset: (name) => ipcRenderer.invoke('mapping:loadPreset', name),
+    deletePreset: (name) => ipcRenderer.invoke('mapping:deletePreset', name)
 }
 
 // Expose APIs
