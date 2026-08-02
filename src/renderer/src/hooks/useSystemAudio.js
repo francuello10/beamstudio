@@ -2,8 +2,18 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { multiplyBrightness, lerpColor, GENRE_PROFILES } from '../utils/palettes'
 import { createAudioFrame } from '../audio/AudioFrame'
 import {
+    applyPeakHold,
+    buildFrameTelemetry,
+    buildSpatialResponse,
+    buildSpectralResponse,
+    computeBassEnergy,
+    computeLowMid,
+    computeMidHigh,
+    computeStereoWidth,
+    extractBands
+} from '../audio/AudioAnalyzer'
+import {
     listAudioInputs,
-    getPreferredAudioInput,
     readStoredAudioInputId,
     resolveActiveAudioSource,
     requestAudioInputStream,
@@ -236,44 +246,22 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 analyserR.current.getByteFrequencyData(dataR)
                 analyserBass.current.getByteFrequencyData(dataBass)
 
-                // === FREQUENCY EXTRACTION ===
-                const extractBands = (data, count = 16) => {
-                    const bands = []
-                    const step = Math.floor(data.length / count)
-                    for (let i = 0; i < count; i++) {
-                        let sum = 0
-                        for (let j = 0; j < step; j++) sum += data[i * step + j]
-                        bands.push(sum / step / 255)
-                    }
-                    return bands
-                }
-
                 const bandsL = extractBands(dataL)
                 const bandsR = extractBands(dataR)
-
-                // Bass (20-150Hz) = First 3 bins
-                let bassEnergy = 0
-                for (let i = 0; i < 3; i++) bassEnergy += dataBass[i]
-                bassEnergy = bassEnergy / 3 / 255
-
-                // === PEAK HOLD & DECAY — luxurious ~300ms fade ===
-                const decayRate = 0.96 // [T3] Deco: longer visual tail, elegant
-                for (let i = 0; i < 16; i++) {
-                    peakHoldL.current[i] = Math.max(bandsL[i], peakHoldL.current[i] * decayRate)
-                    peakHoldR.current[i] = Math.max(bandsR[i], peakHoldR.current[i] * decayRate)
-                }
-                peakHoldBass.current = Math.max(bassEnergy, peakHoldBass.current * decayRate)
-                const bassSmooth = peakHoldBass.current
-
-                // === STEREO WIDTH ===
-                let diffSum = 0
-                for (let i = 0; i < 16; i++) diffSum += Math.abs(bandsL[i] - bandsR[i])
-                const stereoWidth = diffSum / 16
-
-                // === LOW-MIDS FOR LATIN ===
-                const lowMidL = bandsL.slice(2, 7).reduce((a, b) => a + b, 0) / 5
-                const lowMidR = bandsR.slice(2, 7).reduce((a, b) => a + b, 0) / 5
-                const lowMidAvg = (lowMidL + lowMidR) / 2
+                const bassEnergy = computeBassEnergy(dataBass)
+                const peakState = applyPeakHold({
+                    bandsL,
+                    bandsR,
+                    bassEnergy,
+                    peakHoldL: peakHoldL.current,
+                    peakHoldR: peakHoldR.current,
+                    peakHoldBass: peakHoldBass.current,
+                    decayRate: 0.96
+                })
+                peakHoldBass.current = peakState.peakHoldBass
+                const bassSmooth = peakState.bassSmooth
+                const stereoWidth = computeStereoWidth(bandsL, bandsR)
+                const { lowMidL, lowMidR, lowMidAvg } = computeLowMid(bandsL, bandsR)
 
                 // === GENRE DETECTION (Every 2.5s) ===
                 const now = performance.now()
@@ -313,8 +301,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 }
 
                 // Sides: Mid/High energy (bands 4-15) — needed by BOTH Bass Pulse and Genre mode
-                const midHighL = bandsL.slice(4).reduce((a, b) => a + b, 0) / 12
-                const midHighR = bandsR.slice(4).reduce((a, b) => a + b, 0) / 12
+                const { midHighL, midHighR } = computeMidHigh(bandsL, bandsR)
 
                 // ═══════════════════════════════════════════════
                 // BASS PULSE MODE — Pure bass-driven ON/OFF lights
@@ -367,19 +354,8 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 // ═══════════════════════════════════════════════
 
                 // 1. SPATIAL ANALYSIS (Bass=Center, Mids=Stereo)
-                const spatial = {
-                    left: Math.min(1.0, midHighL * 1.2),    // Boost mids for visibility
-                    center: Math.min(1.0, bassSmooth * 1.0), // Bass anchor
-                    right: Math.min(1.0, midHighR * 1.2)
-                }
-
-                // 2. SPECTRAL ANALYSIS (16-band EQ)
-                // Merge L+R for a unified visualizer rail
-                const spectral = new Array(16)
-                for (let i = 0; i < 16; i++) {
-                    const val = (bandsL[i] + bandsR[i]) / 2
-                    spectral[i] = Math.min(1.0, val * 1.5) // Norm & boost
-                }
+                const spatial = buildSpatialResponse({ midHighL, bassSmooth, midHighR })
+                const spectral = buildSpectralResponse(bandsL, bandsR)
 
                 const energies = spatial
 
@@ -388,14 +364,15 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 const volume = Math.min(1.0, (bassSmooth + midHighL + midHighR) / 3)
                 const silence = volume < 0.025
                 const clipping = Math.max(...spectral, bassSmooth, midHighL, midHighR) >= 0.98
-                const frameTelemetry = {
-                    lowEndDynamics: Math.round(Math.sqrt(bassEnergy) * 100),
-                    transientDensity: Math.round((((bandsL.reduce((a, b) => a + b, 0) + bandsR.reduce((a, b) => a + b, 0)) / 32) > 0.01
-                        ? Math.max(...peakHoldL.current, ...peakHoldR.current) / ((bandsL.reduce((a, b) => a + b, 0) + bandsR.reduce((a, b) => a + b, 0)) / 32)
-                        : 0) * 50),
-                    midRms: Math.round(midEnergy * 100),
-                    stereoWidth: Math.round(stereoWidth * 100)
-                }
+                const frameTelemetry = buildFrameTelemetry({
+                    bassEnergy,
+                    bandsL,
+                    bandsR,
+                    peakHoldL: peakHoldL.current,
+                    peakHoldR: peakHoldR.current,
+                    midEnergy,
+                    stereoWidth
+                })
 
                 const audioFrame = createAudioFrame({
                     timestamp: Date.now(),
