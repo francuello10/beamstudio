@@ -56,7 +56,7 @@ const dmxAPI = {
 
     // Dynamic scenes (software)
     dynamicScene: (sceneId, active) => ipcRenderer.invoke('dmx:dynamicScene', { sceneId, active }),
-    setDynamicRendererActive: (active) => ipcRenderer.invoke('dmx:setDynamicRendererActive', active),
+    setDynamicRendererActive: (active, owner = 'renderer') => ipcRenderer.invoke('dmx:setDynamicRendererActive', { active, owner }),
     updatePerformance: (settings) => ipcRenderer.invoke('dmx:updatePerformance', settings),
 
     // DMX Connection Control (USB runtime only)
@@ -85,7 +85,7 @@ const ambilightAPI = {
     start: (sourceId) => ipcRenderer.invoke('ambilight:start', sourceId),
     stop: () => ipcRenderer.invoke('ambilight:stop'),
     setColors: (colors) => ipcRenderer.invoke('ambilight:setColors', colors),
-    setColorsAsync: (colors) => ipcRenderer.send('ambilight:setColorsAsync', colors)
+    setColorsAsync: (payload) => ipcRenderer.send('ambilight:setColorsAsync', payload)
 }
 
 // Audio API

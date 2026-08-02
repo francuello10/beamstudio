@@ -33,8 +33,8 @@ export const useDmxStore = create((set) => ({
 
     setPixelMapBuffer: (colors) => set({ pixelMapBuffer: colors }),
 
-    sendPixelMapBuffer: (colors) => {
-        window.ambilight?.setColorsAsync({ colors })
+    sendPixelMapBuffer: (colors, source = 'renderer') => {
+        window.ambilight?.setColorsAsync({ colors, source })
         set({ pixelMapBuffer: colors })
     },
 

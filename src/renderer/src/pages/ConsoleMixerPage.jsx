@@ -50,7 +50,7 @@ const ConsoleMixerPage = ({ onReset }) => {
 
     const dispatchAudioColors = useCallback((colors) => {
         // Send to DMX (Fast Update)
-        window.ambilight?.setColorsAsync({ colors })
+        window.ambilight?.setColorsAsync({ colors, source: 'audio' })
         // Update Preview
         useDmxStore.getState().setPixelMapBuffer(colors)
     }, [])
@@ -74,12 +74,12 @@ const ConsoleMixerPage = ({ onReset }) => {
             setModifierMode(false)
             stopAudio()
             // Turn off dynamic flag so manual faders regain full control without modulation
-            window.dmx?.setDynamicRendererActive(false)
+            window.dmx?.setDynamicRendererActive(false, 'audio')
         } else {
             setAudioReactive(true)
             setModifierMode(true) // ENABLE MODIFIER MODE (Boosts input colors)
             // Enable dynamic renderer so updates are prioritized
-            window.dmx?.setDynamicRendererActive(true)
+            window.dmx?.setDynamicRendererActive(true, 'audio')
             await startAudio()
         }
     }
@@ -89,7 +89,7 @@ const ConsoleMixerPage = ({ onReset }) => {
         return () => {
             if (audioReactive) {
                 stopAudio()
-                window.dmx?.setDynamicRendererActive(false)
+                window.dmx?.setDynamicRendererActive(false, 'audio')
             }
         }
     }, [audioReactive, stopAudio])

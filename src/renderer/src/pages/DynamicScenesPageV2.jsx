@@ -60,7 +60,7 @@ const DynamicScenesPageV2 = () => {
     }, [])
 
     const dispatchPixelMapUpdate = useCallback((colors) => {
-        window.ambilight?.setColorsAsync({ colors })
+        window.ambilight?.setColorsAsync({ colors, source: 'renderer' })
         // We use dmxStore to track live colors for preview
         useDmxStore.getState().setPixelMapBuffer(colors)
     }, [])
@@ -101,9 +101,10 @@ const DynamicScenesPageV2 = () => {
     }
 
     useEffect(() => {
-        window.dmx?.setDynamicRendererActive(!!activeFlag || audioReactive)
-        return () => window.dmx?.setDynamicRendererActive(false)
-    }, [activeFlag, audioReactive])
+        const rendererDriven = !!activeFlag || audioReactive || previewScene?.type === 'DYNAMIC'
+        window.dmx?.setDynamicRendererActive(rendererDriven, 'renderer')
+        return () => window.dmx?.setDynamicRendererActive(false, 'renderer')
+    }, [activeFlag, audioReactive, previewScene])
 
     useEffect(() => {
         if (!audioReactive && !previewScene) return

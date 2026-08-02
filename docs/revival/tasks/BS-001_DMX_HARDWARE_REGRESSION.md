@@ -37,6 +37,7 @@ DMX es la base física del producto. Cualquier feature audiovisual depende de qu
 - Primer slice de `BS-001` ya eliminado: `startDynamicScene()` dejó de depender de `CHANNEL_MAP` y ahora usa lookup por perfil para el dimmer maestro.
 - Se agregó un guard en `check` para evitar que `CHANNEL_MAP` reaparezca en `src/main/index.js`.
 - La activación IPC de escenas dinámicas ahora responde mejor ante escena desconocida, doble start y doble stop.
+- El main ahora expone `outputOwner` y filtra updates async por fuente activa para evitar competencia entre renderer, audio y Ambilight.
 
 ## Readiness al 2026-08-02
 
@@ -60,6 +61,7 @@ Arrancar `BS-001` ahora sobre `fix/bs-001-dmx-regression`. El riesgo manual dife
 - Centralizar acceso a offsets/canales por perfil.
 - Corregir estado de escena.
 - Hacer `stopDynamicScene` idempotente.
+- Garantizar owner único para updates DMX async.
 - Validar P06 en tres barras.
 - Validar start/stop y reconexión.
 - Verificar persistencia real de fixture patch y settings antes de tocarla.

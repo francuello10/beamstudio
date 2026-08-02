@@ -768,6 +768,7 @@ const dmxState = {
     dynamicSceneFrame: 0,
     activeProgram: null,
     programSpeed: 127,
+    outputOwner: 'manual',
     ambilightActive: false,
     audioReactiveActive: false,
     dynamicRendererActive: false, // For flags and renderer-driven scenes
@@ -850,6 +851,20 @@ function getFixtureMasterDimValue(fixture) {
     const profile = getFixtureProfile(fixture)
     if (!profile.hasMasterDimmer || profile.map.DIM === undefined) return 0
     return dmxState.channels[fixture.startChannel - 1 + profile.map.DIM] || 0
+}
+
+function setOutputOwner(owner = 'manual') {
+    dmxState.outputOwner = owner
+}
+
+function clearOutputOwner(owner) {
+    if (!owner || dmxState.outputOwner === owner) {
+        dmxState.outputOwner = 'manual'
+    }
+}
+
+function isAsyncOutputSourceAllowed(source = 'renderer') {
+    return dmxState.outputOwner === source
 }
 
 // RESET ALL - Set all channels to 0
@@ -1194,6 +1209,7 @@ function setupIPC() {
     ipcMain.handle('dmx:colorMacro', (_, colorName) => {
         stopDynamicScene()
         dmxState.activeProgram = null
+        setOutputOwner('manual')
         const color = COLOR_MACROS[colorName.toUpperCase()]
         if (!color) return { success: false }
         setAllFixturesColor(color.r, color.g, color.b, color.r === 0 && color.g === 0 && color.b === 0 ? 0 : 255)
@@ -1209,10 +1225,12 @@ function setupIPC() {
     ipcMain.handle('dmx:setProgram', (_, { program, speed }) => {
         stopDynamicScene()
         dmxState.dynamicRendererActive = false // Force clear dynamic/flag mode
+        setOutputOwner('program')
 
         // If same program, toggle OFF (reset to 0)
         if (dmxState.activeProgram === program) {
             resetAll()
+            setOutputOwner('manual')
             return { success: true, program: null, speed: 0 }
         }
 
@@ -1360,6 +1378,7 @@ function setupIPC() {
     ipcMain.handle('dmx:meet', () => {
         stopDynamicScene()
         dmxState.activeProgram = null
+        setOutputOwner('manual')
         setAllFixturesColor(255, 255, 255, 255)
         setAllFixturesChannel('func', 0)
         setAllFixturesChannel('spd', 0)
@@ -1379,6 +1398,7 @@ function setupIPC() {
             if (!started) {
                 return { success: false, error: `Unknown dynamic scene: ${sceneId}`, sceneId: null }
             }
+            setOutputOwner('dynamic-scene')
             return { success: true, sceneId: dmxState.dynamicScene }
         } else {
             if (!dynamicSceneInterval && !dmxState.dynamicScene) {
@@ -1386,14 +1406,19 @@ function setupIPC() {
             }
             stopDynamicScene()
             resetAll() // Reset to 0 when stopping
+            clearOutputOwner('dynamic-scene')
             return { success: true, sceneId: null }
         }
     })
 
-    ipcMain.handle('dmx:setDynamicRendererActive', (_, active) => {
+    ipcMain.handle('dmx:setDynamicRendererActive', (_, { active, owner = 'renderer' }) => {
         dmxState.dynamicRendererActive = active
-        // if (!active) resetAll() // Don't reset, allow persistence
-        return { success: true, active }
+        if (active) {
+            setOutputOwner(owner)
+        } else {
+            clearOutputOwner(owner)
+        }
+        return { success: true, active, owner: dmxState.outputOwner }
     })
 
     ipcMain.handle('dmx:soundMode', (_, active) => {
@@ -1424,6 +1449,7 @@ function setupIPC() {
         stopDynamicScene()
         dmxState.activeProgram = null
         dmxState.ambilightActive = true
+        setOutputOwner('ambilight')
 
         // Cold start fix: If Dimmer is 0, set to 255 to ensure visibility
         const isCold = fixtures.every(f => {
@@ -1435,7 +1461,12 @@ function setupIPC() {
 
         return { success: true, sourceId }
     })
-    ipcMain.handle('ambilight:stop', () => { dmxState.ambilightActive = false; resetAll(); return { success: true } })
+    ipcMain.handle('ambilight:stop', () => {
+        dmxState.ambilightActive = false
+        clearOutputOwner('ambilight')
+        resetAll()
+        return { success: true }
+    })
 
     let lastAmbiColors = fixtures.map(() => ({ r: 0, g: 0, b: 0 }))
     ipcMain.handle('ambilight:setColors', (_, { left, center, right, colors: incomingColors }) => {
@@ -1465,8 +1496,8 @@ function setupIPC() {
     })
 
     // Async High-Frequency Ambilight update (One-way)
-    ipcMain.on('ambilight:setColorsAsync', (_, { left, center, right, colors: incomingColors }) => {
-        if (!dmxState.ambilightActive && !dmxState.audioReactiveActive && !dmxState.dynamicRendererActive) return
+    ipcMain.on('ambilight:setColorsAsync', (_, { left, center, right, colors: incomingColors, source = 'renderer' }) => {
+        if (!isAsyncOutputSourceAllowed(source)) return
 
         const targetColors = incomingColors || [left, center, right]
 
@@ -1555,6 +1586,7 @@ function setupIPC() {
     ipcMain.handle('scene:load', (_, sceneData) => {
         stopDynamicScene()
         dmxState.activeProgram = null
+        setOutputOwner('manual')
         fixtures.forEach((f, i) => {
             const base = f.startChannel - 1
             const profile = FIXTURE_PROFILES[f.mode] || FIXTURE_PROFILES['P06']
@@ -1583,6 +1615,7 @@ function setupIPC() {
         ambilightActive: dmxState.ambilightActive,
         audioReactiveActive: dmxState.audioReactiveActive,
         dynamicRendererActive: dmxState.dynamicRendererActive,
+        outputOwner: dmxState.outputOwner,
         flashWhiteActive: dmxState.flashWhiteActive,
         fixtureColors: dmxState.fixtureColors
     }))

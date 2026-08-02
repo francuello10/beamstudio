@@ -38,8 +38,8 @@ const FluidSimPage = () => {
 
     // Toggle dynamic renderer for DMX routing
     useEffect(() => {
-        if (running) window.dmx?.setDynamicRendererActive(true)
-        return () => window.dmx?.setDynamicRendererActive(false)
+        if (running) window.dmx?.setDynamicRendererActive(true, 'renderer')
+        return () => window.dmx?.setDynamicRendererActive(false, 'renderer')
     }, [running])
 
     // Audio Mode Handler

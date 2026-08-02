@@ -67,6 +67,7 @@ Esto evita duplicar planes: GStack queda como origen de hallazgos, Revival queda
 - worker para D2XX;
 - worker para serial;
 - runtime local USB-only;
+- `outputOwner` en main para arbitrar la fuente async activa;
 - perfiles P06/P01/P02;
 - fixture patch persistente en userData;
 - dimmer, RGB, flash y macros;

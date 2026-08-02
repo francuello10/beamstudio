@@ -22,12 +22,12 @@ const AudioPage = () => {
         start, stop, active, detectedGenre, autoGenre, setAutoGenre,
         manualGenre, setManualGenre, telemetry, visualizerData,
         bassPulseMode, setBassPulseMode
-    } = useSystemAudio(sendPixelMapBuffer, null, setAudioTelemetryDSP)
+    } = useSystemAudio((colors) => sendPixelMapBuffer(colors, 'audio'), null, setAudioTelemetryDSP)
 
     // Toggle dynamic renderer flag so main process routes color updates to DMX
     React.useEffect(() => {
-        if (active) window.dmx?.setDynamicRendererActive(true)
-        return () => window.dmx?.setDynamicRendererActive(false)
+        if (active) window.dmx?.setDynamicRendererActive(true, 'audio')
+        return () => window.dmx?.setDynamicRendererActive(false, 'audio')
     }, [active])
 
     // Sync store with hook data

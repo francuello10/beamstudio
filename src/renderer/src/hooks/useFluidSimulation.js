@@ -734,7 +734,7 @@ export function useFluidSimulation() {
         if (!glRef.current) {
             if (!initGL()) return
         }
-        window.dmx?.setDynamicRendererActive(true)
+        window.dmx?.setDynamicRendererActive(true, 'renderer')
         window.dmx?.setAllFixturesChannel?.('dim', 255)
 
         runningRef.current = true
@@ -758,7 +758,7 @@ export function useFluidSimulation() {
             clearTimeout(timerRef.current)
             timerRef.current = null
         }
-        window.dmx?.setDynamicRendererActive(false)
+        window.dmx?.setDynamicRendererActive(false, 'renderer')
     }, [])
 
     // ── Change palette ──
@@ -778,7 +778,7 @@ export function useFluidSimulation() {
             runningRef.current = false
             if (rafRef.current) cancelAnimationFrame(rafRef.current)
             if (timerRef.current) clearTimeout(timerRef.current)
-            window.dmx?.setDynamicRendererActive(false)
+            window.dmx?.setDynamicRendererActive(false, 'renderer')
             const gl = glRef.current
             if (gl) {
                 const ext = gl.getExtension('WEBGL_lose_context')
