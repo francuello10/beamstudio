@@ -54,9 +54,11 @@ export const computeBassProfile = (dataBass, {
     const lowMidPenalty = Math.min(0.5, lowMid * 0.55)
     const raw = clamp01(coreBass - lowMidPenalty)
 
-    const floor = raw > adaptiveFloor
-        ? adaptiveFloor * 0.995 + raw * 0.005
-        : adaptiveFloor * 0.92 + raw * 0.08
+    const floor = adaptiveFloor <= 0.0001 && previousRaw <= 0.0001
+        ? raw
+        : raw > adaptiveFloor
+            ? adaptiveFloor * 0.96 + raw * 0.04
+            : adaptiveFloor * 0.88 + raw * 0.12
 
     const sensitivity = Math.max(0.5, Math.min(4, boostLevel || 1))
     const gate = Math.max(0.012, floor * (1.16 - sensitivity * 0.045) + (0.045 - sensitivity * 0.008))

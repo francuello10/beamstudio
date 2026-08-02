@@ -105,6 +105,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
     const broadbandFloor = useRef(0)
     const previousBroadband = useRef(0)
     const lastMusicalActivityAt = useRef(0)
+    const audioStartedAt = useRef(0)
 
     // Genre detection history
     const genreHistory = useRef([])
@@ -167,6 +168,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
         broadbandFloor.current = 0
         previousBroadband.current = 0
         lastMusicalActivityAt.current = 0
+        audioStartedAt.current = 0
         smoothedOutput.current = [
             { r: 0, g: 0, b: 0 },
             { r: 0, g: 0, b: 0 },
@@ -268,6 +270,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
             merger.connect(analyserBass.current)
 
             setActive(true)
+            audioStartedAt.current = performance.now()
             window.audio?.start()
 
             const dataL = new Uint8Array(analyserL.current.frequencyBinCount)
@@ -347,18 +350,25 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 const broadband = Math.max(midEnergy, highEnergy, midHighL, midHighR)
                 const broadbandRise = Math.max(0, broadband - previousBroadband.current)
                 previousBroadband.current = broadband
-                broadbandFloor.current = broadband > broadbandFloor.current
-                    ? broadbandFloor.current * 0.998 + broadband * 0.002
-                    : broadbandFloor.current * 0.9 + broadband * 0.1
-                const broadbandAboveFloor = Math.max(0, broadband - (broadbandFloor.current + 0.035))
-                const musicalActivity = Math.max(
-                    bassProfile.energy,
+                broadbandFloor.current = broadbandFloor.current <= 0.0001
+                    ? broadband
+                    : broadband > broadbandFloor.current
+                        ? broadbandFloor.current * 0.96 + broadband * 0.04
+                        : broadbandFloor.current * 0.88 + broadband * 0.12
+                const broadbandAboveFloor = Math.max(0, broadband - (broadbandFloor.current + 0.045))
+                const transientActivity = Math.max(
                     bassProfile.transient,
-                    broadbandRise * 5.5,
-                    broadbandAboveFloor * 1.8
+                    broadbandRise * 6.5
                 )
-                if (musicalActivity > 0.12) lastMusicalActivityAt.current = now
-                const silence = lastMusicalActivityAt.current === 0 || now - lastMusicalActivityAt.current > 700
+                const sustainedActivity = Math.max(
+                    bassProfile.energy,
+                    broadbandAboveFloor * 1.6
+                )
+                const calibrating = audioStartedAt.current === 0 || now - audioStartedAt.current < 900
+                if (!calibrating && (transientActivity > 0.1 || sustainedActivity > 0.18)) {
+                    lastMusicalActivityAt.current = now
+                }
+                const silence = calibrating || lastMusicalActivityAt.current === 0 || now - lastMusicalActivityAt.current > 700
                 const clipping = Math.max(...spectral, bassOutput, midHighL, midHighR) >= 0.98
                 const frameTelemetry = buildFrameTelemetry({
                     bassEnergy,

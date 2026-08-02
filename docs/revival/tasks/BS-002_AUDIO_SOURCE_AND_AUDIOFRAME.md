@@ -61,6 +61,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - Veintinueveavo slice activo: el bass center dejó de usar bins low-mid amplios; ahora detecta SUB 35-90 Hz + KICK 90-160 Hz con FFT 2048, penaliza 160-350 Hz y usa transiente/adaptive floor para que rock/voz/guitarra no disparen falso bajo.
 - Treintavo slice activo: si la música entra en silencio/pausa sostenida, el audio engine deja de mandar frames DMX y congela la salida física en vez de seguir animando una escena fija.
 - Treinta y unavo slice activo: la pausa dejó de depender de energía absoluta; ahora usa actividad musical por transientes y piso adaptativo broadband/bass para ignorar ruido constante de fuentes genéricas.
+- Treinta y dosavo slice activo: al arrancar audio hay una ventana corta de calibración silenciosa y los pisos adaptativos se inicializan al nivel capturado, evitando que ruido estable de música pausada dispare el show.
 
 ## Alcance
 
@@ -107,6 +108,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - [x] Slot 2 usa bass real por frecuencia: SUB 35-90 Hz, KICK 90-160 Hz y penalización low-mid 160-350 Hz.
 - [x] En pausa/silencio sostenido, BeamStudio congela la salida DMX audio y mantiene la escena fija sin pulso artificial.
 - [x] El detector de pausa ignora ruido constante: sólo considera actividad musical cuando hay transiente o energía por encima del piso adaptativo.
+- [x] Al iniciar audio con música pausada, BeamStudio calibra piso antes de mandar DMX para no mover luces por ruido base.
 - [ ] Silencio no genera NaN, Infinity ni flashes erráticos.
 - [ ] El DSP no escribe DMX directamente salvo contrato explícito.
 - [ ] La UI no renderiza innecesariamente a 60 Hz.
