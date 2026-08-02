@@ -46,6 +46,24 @@ export const useAudioStore = create((set) => ({
     // own audio boost is on, because that page owns DMX output as 'renderer'.
     audioOutputSource: 'audio',
 
+    // Ecosystem Color-Sync: presentational-only UI toggle read by Particle
+    // Field / Tunnel Grid / Kaleidoscope (useParticleField.js/useTunnelGrid.js/
+    // useKaleidoscope.js) to optionally borrow their hue range from the DMX
+    // side's current genre theme (see audio/genreColorTheme.js) instead of
+    // their own fixed neon hue band. Deliberately NOT implemented for Fluid
+    // Neon (its own manual palette picker is excluded on purpose) or Ceiling
+    // Dome (no sync support added in this pass).
+    // This is a narrow, deliberate exception to this store's "no business
+    // logic" header comment above — a single boolean UI flag, not DSP/
+    // business logic. It lives here (rather than a separate small store)
+    // only because it must reach the projector output window's OWN separate
+    // useAudioStore instance (a different renderer process) via the exact
+    // same IPC relay this store already uses for `audioFrame` — see
+    // ProjectorApp.jsx's onVisualColorSyncChanged listener and
+    // ProjectorPage.jsx's toggle. Defaults ON per the ecosystem color-sync
+    // audit's recommendation.
+    visualColorSyncEnabled: true,
+
     // Actions
     setAudioTelemetryDSP: (audioTelemetryDSP) => set({ audioTelemetryDSP }),
 
@@ -60,6 +78,7 @@ export const useAudioStore = create((set) => ({
     setAudioInputColors: (audioInputColors) => set({ audioInputColors: audioInputColors || null }),
     setAudioOutputSource: (audioOutputSource) => set({ audioOutputSource: audioOutputSource || 'audio' }),
     setAudioBoostLevel: (audioBoostLevel) => set({ audioBoostLevel: Math.max(0.5, Math.min(4, audioBoostLevel || 1)) }),
+    setVisualColorSyncEnabled: (visualColorSyncEnabled) => set({ visualColorSyncEnabled: !!visualColorSyncEnabled }),
 
     // New Actions
     setAudioMode: (audioMode) => set({ audioMode }),

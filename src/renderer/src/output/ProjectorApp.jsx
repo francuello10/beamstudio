@@ -62,6 +62,14 @@ const ProjectorApp = () => {
         const unsubVisual = window.projector?.onVisualChanged(setActiveVisual)
         const unsubMappingEditMode = window.mapping?.onEditModeChanged(setMappingEditMode)
         const unsubNowPlayingOverlay = window.projector?.onNowPlayingOverlayChanged(setNowPlayingOverlay)
+        // Ecosystem Color-Sync: unlike the toggles above, this one has no
+        // local React state of its own here - it's written straight into
+        // this window's own local useAudioStore (the store instance the
+        // visual hooks actually read from), same reasoning as the AudioFrame
+        // relay below.
+        const unsubVisualColorSync = window.projector?.onVisualColorSyncChanged((value) => {
+            useAudioStore.getState().setVisualColorSyncEnabled(value)
+        })
 
         // Bugfix: setBlackout/setTestPattern/setVisual/setNowPlayingOverlay/
         // setEditMode are one-way relays with no state of their own - a
@@ -75,6 +83,9 @@ const ProjectorApp = () => {
             setTestPattern(state.testPattern)
             if (state.activeVisual) setActiveVisual(state.activeVisual)
             setNowPlayingOverlay(state.nowPlayingOverlay)
+            if (state.visualColorSyncEnabled !== undefined) {
+                useAudioStore.getState().setVisualColorSyncEnabled(state.visualColorSyncEnabled)
+            }
         })
         window.mapping?.getEditMode?.().then((value) => {
             if (value !== undefined) setMappingEditMode(value)
@@ -86,6 +97,7 @@ const ProjectorApp = () => {
             unsubVisual?.()
             unsubMappingEditMode?.()
             unsubNowPlayingOverlay?.()
+            unsubVisualColorSync?.()
         }
     }, [])
 

@@ -43,7 +43,13 @@
  *                          then varies further across the folded wedge angle
  *                          and pattern value, so the kaleidoscope shows a
  *                          coherent but ever-shifting spread of hues instead
- *                          of one flat color per frame.
+ *                          of one flat color per frame. Ecosystem Color-Sync
+ *                          (opt-in, defaults ON, see useAudioStore's
+ *                          `visualColorSyncEnabled`): when enabled, the
+ *                          HUE_LOW/HUE_HIGH range is swapped for the DMX
+ *                          side's current genre theme
+ *                          (audio/genreColorTheme.js) instead. Flag OFF is
+ *                          byte-identical to before this feature existed.
  *   - spatial.left/right -> stereo bias (right - left) biases rotation
  *                          direction/speed on top of a small always-on
  *                          ambient rotation (same pattern as Tunnel Grid).
@@ -78,6 +84,7 @@
 import { useCallback, useRef } from 'react'
 import { useAudioStore } from '../store/audioStore'
 import { createProgram } from '../visuals/glUtils'
+import { getThemeForGenre } from '../audio/genreColorTheme'
 
 // ═══════════════════════════════════════════════════
 // TUNING CONSTANTS
@@ -225,6 +232,30 @@ function sampleHueFromSpectral(spectral) {
     return HUE_LOW + (HUE_HIGH - HUE_LOW) * t
 }
 
+/**
+ * Ecosystem Color-Sync (opt-in, defaults ON — see useAudioStore's
+ * `visualColorSyncEnabled`): same weighted-average spectral -> hue mapping
+ * as sampleHueFromSpectral above, but with the hue range passed in instead
+ * of the module HUE_LOW/HUE_HIGH constants, so the kaleidoscope can borrow
+ * its hue range from the DMX side's current genre theme
+ * (audio/genreColorTheme.js). Kept as its OWN separate function (not a
+ * parameterized rewrite of sampleHueFromSpectral) so the flag-off code path
+ * above is untouched by this feature and stays byte-for-byte the same as
+ * before it existed.
+ */
+function sampleHueFromSpectralInRange(spectral, hueLow, hueHigh) {
+    let weighted = 0
+    let total = 0
+    for (let b = 0; b < spectral.length; b++) {
+        weighted += b * spectral[b]
+        total += spectral[b]
+    }
+    const t = total > 0.001
+        ? weighted / total / Math.max(1, spectral.length - 1)
+        : 0.5
+    return hueLow + (hueHigh - hueLow) * t
+}
+
 // ═══════════════════════════════════════════════════
 // MAIN HOOK
 // ═══════════════════════════════════════════════════
@@ -335,8 +366,17 @@ export function useKaleidoscope() {
         const foldDrift = (Math.sin(foldCyclePhase) * 0.5 + 0.5) * (FOLD_COUNT_MAX - FOLD_COUNT_MIN)
         const foldCount = FOLD_COUNT_MIN + foldDrift + bassAvgRef.current * FOLD_BASS_NUDGE
 
+        // Ecosystem Color-Sync (opt-in, defaults ON): when enabled, sample
+        // from the DMX side's current genre theme instead of this hook's own
+        // fixed HUE_LOW/HUE_HIGH range. Resolved via an imperative getState()
+        // read, same idiom this hook already uses for `audioFrame` itself.
+        const colorSyncEnabled = useAudioStore.getState().visualColorSyncEnabled
+        const syncTheme = colorSyncEnabled ? getThemeForGenre(audioFrame.genre) : null
+
         // Spectral -> hue, smoothed (see sampleHueFromSpectral doc comment).
-        const targetHue = sampleHueFromSpectral(spectral)
+        const targetHue = syncTheme
+            ? sampleHueFromSpectralInRange(spectral, syncTheme.hueLow, syncTheme.hueHigh)
+            : sampleHueFromSpectral(spectral)
         hueRef.current += (targetHue - hueRef.current) * HUE_SMOOTH
 
         // Ambient brightness floor (never fully dark) + volume + kick term,

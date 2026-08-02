@@ -62,7 +62,11 @@ let lastKnownProjectorState = {
     testPattern: false,
     activeVisual: null,
     nowPlayingOverlay: false,
-    mappingEditMode: false
+    mappingEditMode: false,
+    // Ecosystem Color-Sync ("Sync colors with lights") toggle - same
+    // relay-and-cache shape as the fields above. Defaults true to match
+    // useAudioStore's own visualColorSyncEnabled default.
+    visualColorSyncEnabled: true
 }
 
 function readMappingPresets() {
@@ -1838,6 +1842,19 @@ function setupIPC() {
     ipcMain.on('projector:setNowPlayingOverlay', (event, value) => {
         lastKnownProjectorState.nowPlayingOverlay = value
         projectorWindow?.webContents.send('projector:nowPlayingOverlayChanged', value)
+    })
+    // Ecosystem Color-Sync toggle - relayed the exact same one-way way as
+    // setBlackout/setTestPattern/setNowPlayingOverlay above. The projector
+    // window writes the relayed value into its own local
+    // useAudioStore.visualColorSyncEnabled (see ProjectorApp.jsx).
+    ipcMain.on('projector:setVisualColorSync', (event, value) => {
+        // Coerced at the boundary rather than trusting the IPC payload shape -
+        // this gets cached in lastKnownProjectorState alongside every other
+        // projector toggle, so a malformed value here wouldn't just affect
+        // this feature but would sit in a shared cache object.
+        const enabled = Boolean(value)
+        lastKnownProjectorState.visualColorSyncEnabled = enabled
+        projectorWindow?.webContents.send('projector:visualColorSyncChanged', enabled)
     })
 
     // Projection Mapping (BS-006) — relayed the same way as

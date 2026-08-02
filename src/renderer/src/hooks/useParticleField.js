@@ -13,7 +13,14 @@
  *                          bands -> warm magenta/violet, high bands -> cyan),
  *                          staying inside a saturated neon range that matches
  *                          the app's Fluid Neon palette family instead of the
- *                          full ugly RGB hue wheel.
+ *                          full ugly RGB hue wheel. Ecosystem Color-Sync
+ *                          (opt-in, defaults ON, see useAudioStore's
+ *                          `visualColorSyncEnabled`): when enabled, this hue
+ *                          range is swapped for the DMX side's current genre
+ *                          theme (audio/genreColorTheme.js) instead, so this
+ *                          visual can optionally share one color identity
+ *                          with the fixture colors. Flag OFF is byte-
+ *                          identical to before this feature existed.
  *   - spatial.left/right -> horizontal drift bias + burst spawn position, for
  *                          a sense of stereo width.
  *   - levels.volume       -> ambient brightness floor sampled at hue-refresh
@@ -41,6 +48,7 @@
 import { useCallback, useRef } from 'react'
 import { useAudioStore } from '../store/audioStore'
 import { createProgram } from '../visuals/glUtils'
+import { getThemeForGenre } from '../audio/genreColorTheme'
 
 // ═══════════════════════════════════════════════════
 // TUNING CONSTANTS
@@ -191,6 +199,30 @@ function sampleHueFromSpectral(spectral) {
     return clamp01(base + (Math.random() - 0.5) * HUE_JITTER)
 }
 
+/**
+ * Ecosystem Color-Sync (opt-in, defaults ON — see useAudioStore's
+ * `visualColorSyncEnabled`): same weighted-average spectral -> hue mapping
+ * as sampleHueFromSpectral above, but with the hue range passed in instead
+ * of the module HUE_LOW/HUE_HIGH constants, so the field can borrow its hue
+ * range from the DMX side's current genre theme (audio/genreColorTheme.js).
+ * Kept as its OWN separate function (not a parameterized rewrite of
+ * sampleHueFromSpectral) so the flag-off code path above is untouched by
+ * this feature and stays byte-for-byte the same as before it existed.
+ */
+function sampleHueFromSpectralInRange(spectral, hueLow, hueHigh) {
+    let weighted = 0
+    let total = 0
+    for (let b = 0; b < spectral.length; b++) {
+        weighted += b * spectral[b]
+        total += spectral[b]
+    }
+    const t = total > 0.001
+        ? weighted / total / Math.max(1, spectral.length - 1)
+        : Math.random()
+    const base = hueLow + (hueHigh - hueLow) * t
+    return clamp01(base + (Math.random() - 0.5) * HUE_JITTER)
+}
+
 // ═══════════════════════════════════════════════════
 // MAIN HOOK
 // ═══════════════════════════════════════════════════
@@ -336,6 +368,14 @@ export function useParticleField() {
         const bass = levels.bass
         const stereoBias = spatial.right - spatial.left // -1..1
 
+        // Ecosystem Color-Sync (opt-in, defaults ON): when enabled, both hue
+        // refresh sites below sample from the DMX side's current genre theme
+        // instead of this field's own fixed HUE_LOW/HUE_HIGH range. Resolved
+        // once per frame (not per-particle) via an imperative getState() read,
+        // same idiom this hook already uses for `audioFrame` itself.
+        const colorSyncEnabled = useAudioStore.getState().visualColorSyncEnabled
+        const syncTheme = colorSyncEnabled ? getThemeForGenre(audioFrame.genre) : null
+
         // Rolling average + transient detection for burst triggering.
         bassAvgRef.current += (bass - bassAvgRef.current) * BASS_AVG_SMOOTH
         const transient = Math.max(0, bass - bassAvgRef.current - TRANSIENT_THRESHOLD)
@@ -369,7 +409,9 @@ export function useParticleField() {
             velY[i] = Math.sin(angle) * speed
             age[i] = 0
             life[i] = BURST_LIFE_MIN + Math.random() * (BURST_LIFE_MAX - BURST_LIFE_MIN)
-            hue[i] = sampleHueFromSpectral(spectral)
+            hue[i] = syncTheme
+                ? sampleHueFromSpectralInRange(spectral, syncTheme.hueLow, syncTheme.hueHigh)
+                : sampleHueFromSpectral(spectral)
             brightness[i] = Math.min(
                 burstBrightnessCeiling,
                 BURST_BRIGHTNESS_BASE + sizeEnvRef.current * BURST_BRIGHTNESS_ENV_TERM
@@ -401,7 +443,9 @@ export function useParticleField() {
             if (age[i] >= life[i]) {
                 age[i] = 0
                 life[i] = LIFE_MIN + Math.random() * (LIFE_MAX - LIFE_MIN)
-                hue[i] = sampleHueFromSpectral(spectral)
+                hue[i] = syncTheme
+                    ? sampleHueFromSpectralInRange(spectral, syncTheme.hueLow, syncTheme.hueHigh)
+                    : sampleHueFromSpectral(spectral)
                 brightness[i] = AMBIENT_BRIGHTNESS_MIN
                     + Math.random() * AMBIENT_BRIGHTNESS_RANGE
                     + levels.volume * AMBIENT_BRIGHTNESS_VOLUME_TERM

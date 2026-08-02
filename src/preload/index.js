@@ -175,6 +175,14 @@ const projectorAPI = {
     // BS-007 phase 2: Now Playing overlay toggle - mirrors setBlackout/
     // setTestPattern's exact one-way send/subscribe shape.
     setNowPlayingOverlay: (value) => ipcRenderer.send('projector:setNowPlayingOverlay', value),
+    // Ecosystem Color-Sync toggle ("Sync colors with lights") - mirrors
+    // setBlackout/setTestPattern/setNowPlayingOverlay's exact one-way
+    // send/subscribe shape. ProjectorPage.jsx (main window) has no direct
+    // access to the projector output window's visual hook instances (they
+    // run in a separate renderer process), so this toggle is relayed the
+    // same way every other cross-window toggle already is, into the
+    // projector window's own local useAudioStore.visualColorSyncEnabled.
+    setVisualColorSync: (value) => ipcRenderer.send('projector:setVisualColorSync', value),
     onVisualChanged: (cb) => {
         const listener = (_e, visualId) => cb(visualId)
         ipcRenderer.on('projector:visualChanged', listener)
@@ -194,6 +202,11 @@ const projectorAPI = {
         const listener = (_e, v) => cb(v)
         ipcRenderer.on('projector:nowPlayingOverlayChanged', listener)
         return () => ipcRenderer.removeListener('projector:nowPlayingOverlayChanged', listener)
+    },
+    onVisualColorSyncChanged: (cb) => {
+        const listener = (_e, v) => cb(v)
+        ipcRenderer.on('projector:visualColorSyncChanged', listener)
+        return () => ipcRenderer.removeListener('projector:visualColorSyncChanged', listener)
     },
     onStatusChanged: (cb) => {
         const listener = (_e, payload) => cb(payload)

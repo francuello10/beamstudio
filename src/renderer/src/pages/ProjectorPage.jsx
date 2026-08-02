@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Projector, Power, EyeOff, Crosshair, RefreshCw, Check, AlertCircle, Move, Layers, Plus, Trash2, Save, FolderOpen, Music, RotateCw } from 'lucide-react'
+import { Projector, Power, EyeOff, Crosshair, RefreshCw, Check, AlertCircle, Move, Layers, Plus, Trash2, Save, FolderOpen, Music, RotateCw, Palette } from 'lucide-react'
 import { VISUALS } from '../visuals/visualRegistry'
 import { DEFAULT_SURFACE, createInsetSurface } from '../mapping/MappingCompositor'
 
@@ -8,6 +8,13 @@ import { DEFAULT_SURFACE, createInsetSurface } from '../mapping/MappingComposito
 // Field, Tunnel/Grid, Kaleidoscope/Waves) are follow-up work. VISUALS is
 // shared with ProjectorApp.jsx via visualRegistry.js so adding one is just
 // another entry there, not a locally-duplicated literal.
+
+// Ecosystem Color-Sync: only these 3 visuals implement the opt-in genre-hue
+// sync (see useParticleField.js/useTunnelGrid.js/useKaleidoscope.js). Fluid
+// Neon keeps its own deliberate manual palette untouched, and Ceiling Dome
+// has no sync support added in this pass — so the toggle below is hidden for
+// both instead of being shown as a no-op.
+const COLOR_SYNC_VISUAL_IDS = ['particleField', 'tunnelGrid', 'kaleidoscope']
 
 /**
  * ProjectorPage — operator control surface for the fullscreen projector
@@ -26,6 +33,14 @@ const ProjectorPage = () => {
     // BS-007 phase 2: Now Playing overlay toggle for the projector output.
     const [nowPlayingOverlay, setNowPlayingOverlay] = useState(false)
     const [activeVisual, setActiveVisual] = useState(VISUALS[0].id)
+    // Ecosystem Color-Sync toggle ("Sync colors with lights"). This page runs
+    // in the main window while the visual hooks it controls run in the
+    // projector output window's own separate renderer process (same
+    // isolation as blackout/testPattern/mappingEditMode above), so there's
+    // no direct hook instance to wire here — this local state only mirrors
+    // what gets pushed to the projector window via IPC below. Defaults ON to
+    // match useAudioStore's own visualColorSyncEnabled default.
+    const [visualColorSync, setVisualColorSync] = useState(true)
     const [refreshing, setRefreshing] = useState(false)
     // BS-006: projection mapping edit mode — shows/hides the quad-warp
     // corner handles on the projector output.
@@ -112,6 +127,12 @@ const ProjectorPage = () => {
     const handleVisualSelect = (visualId) => {
         setActiveVisual(visualId)
         window.projector?.setVisual(visualId)
+    }
+
+    const handleVisualColorSyncToggle = () => {
+        const next = !visualColorSync
+        setVisualColorSync(next)
+        window.projector?.setVisualColorSync(next)
     }
 
     const handleMappingEditModeToggle = () => {
@@ -342,6 +363,20 @@ const ProjectorPage = () => {
                                 </div>
                             ))}
                         </div>
+
+                        {COLOR_SYNC_VISUAL_IDS.includes(activeVisual) && (
+                            <div style={{ display: 'flex', gap: '12px' }}>
+                                <div
+                                    className={`bgr-toggle ${visualColorSync ? 'active' : ''}`}
+                                    onClick={handleVisualColorSyncToggle}
+                                    title="Sync colors with lights"
+                                    style={{ height: '48px', padding: '0 16px', flex: 1, justifyContent: 'center' }}
+                                >
+                                    <Palette size={16} />
+                                    <span>SYNC COLORS WITH LIGHTS</span>
+                                </div>
+                            </div>
+                        )}
 
                         <div style={{ display: 'flex', gap: '12px' }}>
                             <div
