@@ -2001,16 +2001,32 @@ const getWindowsMedia = async () => {
 }
 const getLinuxMedia = async () => {
     const playbackStatus = await execPromise('playerctl status')
-    const output = await execPromise("playerctl metadata --format '{{title}}|{{artist}}'")
+    // BS-007: format string extended with position/mpris:length/mpris:artUrl
+    // (additive only - title/artist/playbackStatus below keep their exact
+    // existing shape/behavior so useSystemAudio.js and geminiService.js, both
+    // of which already call window.dmx.getSystemMedia() directly, are
+    // unaffected). Units verified empirically on this machine with a live
+    // MPRIS player (playerctl v2.4.1): both {{position}} and {{mpris:length}}
+    // are microseconds - e.g. position=4096000 matched `playerctl position`
+    // reporting 4.096 seconds for the same track.
+    const output = await execPromise(
+        "playerctl metadata --format '{{title}}|{{artist}}|{{position}}|{{mpris:length}}|{{mpris:artUrl}}'"
+    )
     if (!output || !output.includes('|')) {
         if (playbackStatus) return { title: '', artist: '', playbackStatus: playbackStatus.trim() }
         return null
     }
-    const [title, artist] = output.split('|')
+    const [title, artist, positionRaw, lengthRaw, artUrlRaw] = output.split('|')
+    const positionUs = Number(positionRaw)
+    const lengthUs = Number(lengthRaw)
     return {
         title: title.trim(),
         artist: artist.trim(),
-        playbackStatus: (playbackStatus || '').trim()
+        playbackStatus: (playbackStatus || '').trim(),
+        // New BS-007 fields - additive, not consumed by existing callers.
+        positionSec: Number.isFinite(positionUs) && positionUs >= 0 ? positionUs / 1e6 : null,
+        durationSec: Number.isFinite(lengthUs) && lengthUs > 0 ? lengthUs / 1e6 : null,
+        artUrl: artUrlRaw && artUrlRaw.trim() ? artUrlRaw.trim() : null
     }
 }
 

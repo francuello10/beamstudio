@@ -220,6 +220,15 @@ const mappingAPI = {
     deletePreset: (name) => ipcRenderer.invoke('mapping:deletePreset', name)
 }
 
+// BS-007: better-named alias for the same 'get-system-media' IPC channel
+// already used by dmxAPI.getSystemMedia. The original stays put (and
+// unmodified) since useSystemAudio.js and geminiService.js already call
+// window.dmx.getSystemMedia() directly - this is purely an additive, more
+// discoverable name for new Now Playing metadata consumers.
+const nowPlayingAPI = {
+    getSystemMedia: () => ipcRenderer.invoke('get-system-media')
+}
+
 // Expose APIs
 // BS-005: `electron`, `audio`, and `projector` are always exposed — the
 // projector window needs `audio` for the AudioFrame relay and `projector`
@@ -235,6 +244,7 @@ if (process.contextIsolated) {
         if (!isProjectorWindow) {
             contextBridge.exposeInMainWorld('dmx', dmxAPI)
             contextBridge.exposeInMainWorld('ambilight', ambilightAPI)
+            contextBridge.exposeInMainWorld('nowPlaying', nowPlayingAPI)
         }
         contextBridge.exposeInMainWorld('audio', audioAPI)
         if (!isProjectorWindow) {
@@ -253,6 +263,7 @@ if (process.contextIsolated) {
     if (!isProjectorWindow) {
         window.dmx = dmxAPI
         window.ambilight = ambilightAPI
+        window.nowPlaying = nowPlayingAPI
     }
     window.audio = audioAPI
     if (!isProjectorWindow) {
