@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, desktopCapturer, nativeTheme } from 'electron' // Force Rebuild 01:10
+import { app, shell, BrowserWindow, ipcMain, desktopCapturer, nativeTheme, screen } from 'electron' // Force Rebuild 01:10
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -1672,6 +1672,19 @@ function setupIPC() {
     ipcMain.handle('theme:toggle', () => { nativeTheme.themeSource = nativeTheme.shouldUseDarkColors ? 'light' : 'dark'; return { theme: nativeTheme.shouldUseDarkColors ? 'dark' : 'light' } })
     ipcMain.handle('theme:get', () => ({ theme: nativeTheme.shouldUseDarkColors ? 'dark' : 'light' }))
     ipcMain.handle('theme:set', (_, theme) => { nativeTheme.themeSource = theme; return { theme } })
+
+    // Projector Output
+    ipcMain.handle('projector:listDisplays', () => serializeDisplays())
+    ipcMain.handle('projector:open', (event, displayId) => {
+        createProjectorWindow(displayId)
+        return { ok: true, displayId: projectorDisplayId }
+    })
+    ipcMain.handle('projector:close', () => {
+        closeProjectorWindow()
+        return { ok: true }
+    })
+    ipcMain.on('projector:setBlackout', (event, value) => projectorWindow?.webContents.send('projector:blackout', value))
+    ipcMain.on('projector:setTestPattern', (event, value) => projectorWindow?.webContents.send('projector:testPattern', value))
 }
 
 // ============================================================================
@@ -1706,6 +1719,88 @@ function createWindow() {
         mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
     } else {
         mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    }
+}
+
+// ============================================================================
+// Projector Output (BS-005)
+// ============================================================================
+
+let projectorWindow = null
+let projectorDisplayId = null
+
+function serializeDisplays() {
+    const primaryId = screen.getPrimaryDisplay().id
+    return screen.getAllDisplays().map(d => ({ id: d.id, bounds: d.bounds, size: d.size, isPrimary: d.id === primaryId }))
+}
+
+function broadcastProjectorStatus() {
+    BrowserWindow.getAllWindows().forEach(win => {
+        if (win !== projectorWindow) win.webContents.send('projector:statusChanged', { connected: !!projectorWindow, displayId: projectorDisplayId })
+    })
+}
+
+function createProjectorWindow(displayId) {
+    // Only one projector window may exist at a time. Tear down any existing
+    // one first so we never leak a stale BrowserWindow, and so its eventual
+    // 'closed' event (guarded below) can't clobber state that now belongs
+    // to the new window.
+    if (projectorWindow && !projectorWindow.isDestroyed()) {
+        closeProjectorWindow()
+    }
+
+    const displays = screen.getAllDisplays()
+    const primaryDisplay = screen.getPrimaryDisplay()
+    const display = displays.find(d => d.id === displayId)
+        || displays.find(d => d.id !== primaryDisplay.id)
+        || primaryDisplay
+
+    const win = new BrowserWindow({
+        x: display.bounds.x,
+        y: display.bounds.y,
+        width: display.bounds.width,
+        height: display.bounds.height,
+        fullscreen: true,
+        frame: false,
+        autoHideMenuBar: true,
+        backgroundColor: '#000000',
+        webPreferences: {
+            preload: join(__dirname, '../preload/index.js'),
+            sandbox: false,
+            contextIsolation: true,
+            nodeIntegration: false,
+            backgroundThrottling: false
+        }
+    })
+
+    projectorWindow = win
+    projectorDisplayId = display.id
+
+    if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+        win.loadURL(process.env['ELECTRON_RENDERER_URL'] + '?role=projector')
+    } else {
+        // `query` is serialized via url.format() and appended as `?role=projector`
+        win.loadFile(join(__dirname, '../renderer/index.html'), { query: { role: 'projector' } })
+    }
+
+    win.on('closed', () => {
+        // Only clear shared state if this window is still the current
+        // projector window. A stale/orphaned window's 'closed' event firing
+        // after a newer window has taken over must NOT null out state that
+        // belongs to that newer, still-live window.
+        if (projectorWindow === win) {
+            projectorWindow = null
+            projectorDisplayId = null
+            broadcastProjectorStatus()
+        }
+    })
+
+    broadcastProjectorStatus()
+}
+
+function closeProjectorWindow() {
+    if (projectorWindow) {
+        projectorWindow.close()
     }
 }
 
@@ -1763,6 +1858,18 @@ app.whenReady().then(async () => {
     electronApp.setAppUserModelId('com.francuello.beamstudio')
     app.on('browser-window-created', (_, window) => optimizer.watchWindowShortcuts(window))
     setupIPC()
+
+    // Projector display recovery (BS-005)
+    screen.on('display-removed', (event, oldDisplay) => {
+        if (projectorDisplayId === oldDisplay.id) {
+            closeProjectorWindow()
+        }
+    })
+    screen.on('display-added', () => {
+        BrowserWindow.getAllWindows().forEach(win => {
+            if (win !== projectorWindow) win.webContents.send('projector:displaysChanged', serializeDisplays())
+        })
+    })
 
     // Auto-connect to the local USB DMX interface by default
     try {
