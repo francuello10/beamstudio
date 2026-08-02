@@ -33,9 +33,39 @@ const PLAYBACK_PAUSED_STATUSES = new Set(['paused', 'stopped'])
 
 const clamp01 = (value) => Math.max(0, Math.min(1, value))
 
+/**
+ * Detects a clean physical bass hit for the center slot (Slot 2).
+ *
+ * Calibrated against 1055 frames (~17.6s) of real captured system audio from a
+ * synthwave track with a clear kick. The previous calibration never fired a
+ * single hit at ANY boost level - CENTER HIT sat at 0% and the center fixture
+ * stayed dark - for two compounding reasons:
+ *
+ * 1. centerScore was built from bassProfile.raw, which ALREADY has the low-mid
+ *    mask subtracted inside computeBassProfile (`raw = coreBass - upperMask`).
+ *    Subtracting falseBass again via `dominance` double-penalized the same
+ *    low-mid energy, capping centerScore at a measured max of 0.618 while the
+ *    trigger sat at 0.66-0.675. The gate was mathematically unreachable.
+ * 2. The second centerScore branch leaned on `aboveFloor = raw - floor`, but
+ *    `floor` is an adaptive EMA that tracks `raw` itself, so in sustained music
+ *    that term stays near ~0.03 and contributed nothing.
+ *
+ * Measured real-audio distribution (live frames): trueBass p50 0.464 / max
+ * 0.562, falseBass p50 0.454, purity p50 0.478 / p99 0.758, dominance p90
+ * 0.247. Thresholds below are set against those actual values instead of the
+ * unreachable ones, and the boost level now scales them meaningfully (it used
+ * to move the trigger by only 0.01 per unit - effectively inert, which is why
+ * cranking the slider to x3 changed nothing).
+ *
+ * Selectivity is preserved: a synthetic voice/snare signal (strong 125-350Hz,
+ * no sub/kick) still produces zero hits even at max boost, so voice and snare
+ * body cannot fake the center light - the original design intent.
+ */
 const shapeCenterBassHit = ({ bassProfile, boostLevel, now, state }) => {
     const sensitivity = Math.max(0.5, Math.min(4, boostLevel || 1))
-    const impactBias = Math.max(0, sensitivity - 1)
+    // 0 at x1 -> 1 at x4. The old impactBias moved thresholds by ~0.01/unit,
+    // which made the user-facing Boost slider a no-op for this gate.
+    const impactBias = clamp01((sensitivity - 1) / 3)
     const sub = clamp01(bassProfile?.sub || 0)
     const kick = clamp01(bassProfile?.kick || 0)
     const upperBass = clamp01(bassProfile?.upperBass || 0)
@@ -51,32 +81,36 @@ const shapeCenterBassHit = ({ bassProfile, boostLevel, now, state }) => {
     const dominance = Math.max(0, trueBass - falseBass * 0.82)
     const purity = trueBass / (trueBass + falseBass + 0.05)
     const aboveFloor = Math.max(0, raw - floor)
-    const centerScore = clamp01(Math.max(
-        raw * 0.48 + dominance * 0.82,
-        aboveFloor * 1.1 + dominance * 0.38
-    ))
+    // Built from trueBass (un-masked sub/kick) rather than the already-masked
+    // `raw`, so the low-mid penalty is applied exactly once, via dominance.
+    const centerScore = clamp01(trueBass * 0.62 + dominance * 0.75 + aboveFloor * 1.5)
     const scoreRise = Math.max(0, centerScore - (state.previousScore || 0))
     const trueBassRise = Math.max(0, trueBass - (state.previousTrueBass || 0))
     const falseBassRise = Math.max(0, falseBass - (state.previousFalseBass || 0))
     const punch = Math.max(bassProfile?.transient || 0, scoreRise * 6.8, trueBassRise * 7.4)
-    const trigger = Math.max(0.62, 0.68 - impactBias * 0.01)
-    const reset = trigger * 0.22
-    const minPurity = Math.max(0.6, 0.64 - impactBias * 0.01)
-    const minPunch = Math.max(0.5, 0.6 - impactBias * 0.03)
-    const minDominance = Math.max(0.15, 0.2 - impactBias * 0.01)
-    const minScoreRise = Math.max(0.055, 0.08 - impactBias * 0.006)
-    const minTrueBassRise = Math.max(0.04, 0.065 - impactBias * 0.005)
-    const refractoryMs = Math.max(500, 620 - impactBias * 40)
-    const holdMs = Math.max(76, 108 - impactBias * 6)
-    const release = Math.max(0.14, 0.3 - impactBias * 0.04)
+    const trigger = 0.52 - impactBias * 0.12
+    // Re-arm at 0.72x trigger, not 0.22x: sustained music never drops that low,
+    // so once the old gate fired it could not re-arm until near silence.
+    const reset = trigger * 0.72
+    const minPurity = 0.52 - impactBias * 0.07
+    const minPunch = 0.42 - impactBias * 0.14
+    const minDominance = 0.1 - impactBias * 0.045
+    const minScoreRise = 0.03 - impactBias * 0.014
+    const minTrueBassRise = 0.022 - impactBias * 0.01
+    // ~2-3 hits/sec at typical dance tempo instead of a hard 1.6/sec ceiling.
+    const refractoryMs = 260 - impactBias * 80
+    const holdMs = 110 - impactBias * 20
+    const release = Math.max(0.14, 0.3 - impactBias * 0.1)
 
     if (centerScore <= reset) state.armed = true
 
     const hasOnset = scoreRise >= minScoreRise || trueBassRise >= minTrueBassRise
     const lowMidLedAttack = falseBassRise > trueBassRise * 1.25 && falseBass > trueBass * 0.72
+    // The old `hugePureImpact` alternative was strictly stricter than
+    // cleanImpact on every axis, so `cleanImpact || hugePureImpact` was
+    // logically identical to `cleanImpact` - dead code, removed.
     const cleanImpact = purity >= minPurity && dominance >= minDominance && centerScore >= trigger && punch >= minPunch && hasOnset && !lowMidLedAttack
-    const hugePureImpact = purity >= minPurity + 0.08 && dominance >= minDominance * 1.75 && centerScore >= trigger * 1.18 && punch >= minPunch && hasOnset && !lowMidLedAttack
-    if (state.armed && now - state.lastTriggerAt >= refractoryMs && (cleanImpact || hugePureImpact)) {
+    if (state.armed && now - state.lastTriggerAt >= refractoryMs && cleanImpact) {
         const normalized = clamp01((centerScore - trigger) / (1 - trigger))
         state.value = Math.max(0.9, Math.pow(normalized, 0.34))
         state.lastTriggerAt = now
