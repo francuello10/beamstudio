@@ -52,6 +52,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - Veinteavo slice activo: la UI de Audio y System muestra roles de patch para dejar claro que Slot 2 debe ser la luz física central/bass.
 - Veintiunavo slice activo: `audio:start` abre individualmente cada master dimmer que esté en 0 y `computeBassEnergy` ignora bin DC, pondera bajos musicales y clamppea el pulso para que Slot 2 responda mejor al ritmo real.
 - Veintidosavo slice activo: la salida física usa un bass pulse rápido separado del peak-hold de medidores, evitando que la luz central quede plana o siempre encendida sin reflejar kicks.
+- Veintitresavo slice activo: Slot 2 dejó de usar sólo multiplicación RGB; ahora oscurece entre kicks y mezcla un flash cálido proporcional al boost para que x2.5 tenga impacto visual real aun con colores saturados.
 
 ## Alcance
 
@@ -88,6 +89,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - [x] Al iniciar audio boost, cada fixture con master dimmer cerrado queda visible sin pisar cambios intencionales posteriores del dimmer.
 - [x] La energía bass evita sesgo DC-only y queda clamppeada para hacer más visible el pulso low-end en Slot 2.
 - [x] Slot 2 usa pulso bass rápido para salida física; el peak-hold queda para visualización/medición y no aplana el ritmo.
+- [x] Slot 2 usa contraste + flash cálido en kicks, no sólo multiplicación RGB, para que colores saturados sigan mostrando el bajo.
 - [ ] Silencio no genera NaN, Infinity ni flashes erráticos.
 - [ ] El DSP no escribe DMX directamente salvo contrato explícito.
 - [ ] La UI no renderiza innecesariamente a 60 Hz.

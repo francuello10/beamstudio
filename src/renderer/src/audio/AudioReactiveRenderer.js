@@ -1,5 +1,28 @@
 import { multiplyBrightness, lerpColor, GENRE_PROFILES } from '../utils/palettes'
 
+const clamp01 = (value) => Math.max(0, Math.min(1, value))
+
+const clampChannel = (value) => Math.max(0, Math.min(255, Math.round(value)))
+
+const mixColor = (from, to, amount) => {
+    const mix = clamp01(amount)
+    return {
+        r: clampChannel((from.r || 0) + ((to.r || 0) - (from.r || 0)) * mix),
+        g: clampChannel((from.g || 0) + ((to.g || 0) - (from.g || 0)) * mix),
+        b: clampChannel((from.b || 0) + ((to.b || 0) - (from.b || 0)) * mix)
+    }
+}
+
+const buildCenterBassKickColor = (color, bass, boostLevel) => {
+    // Multiplying RGB brightness is barely visible once a channel is already saturated.
+    // Slot 2 needs contrast: dark base between kicks, then a warm flash on bass hits.
+    const kick = clamp01(Math.pow(clamp01((bass - 0.08) / 0.67), 0.55) * (0.55 + boostLevel * 0.28))
+    const lowState = multiplyBrightness(color, 0.06)
+    const highState = multiplyBrightness(color, 0.35 + boostLevel * 1.15)
+    const accent = { r: 255, g: 235, b: 185 }
+    return mixColor(mixColor(lowState, highState, kick), accent, kick * 0.72)
+}
+
 export const buildBassPulseColors = (audioFrame) => {
     const bassBrightness = Math.pow(audioFrame.levels.bass, 0.8)
     const ambientFloor = 0.05
@@ -94,12 +117,14 @@ export const applyModifierAndSmoothing = ({
     if (modifierMode && inputColors && inputColors.length >= 3) {
         const boostLevel = Math.max(0.5, Math.min(2.5, audioSensitivity || 1))
         nextTargetColors = inputColors.map((color, index) => {
-            const sideEnergy = index === 0 ? audioFrame.stereo.midHighLeft : audioFrame.stereo.midHighRight
             const bass = Math.pow(audioFrame.levels.bass, 0.62)
+            if (index === 1) {
+                return buildCenterBassKickColor(color, bass, boostLevel)
+            }
+
+            const sideEnergy = index === 0 ? audioFrame.stereo.midHighLeft : audioFrame.stereo.midHighRight
             const sideWithBassBleed = Math.min(1, Math.pow(sideEnergy, 0.72) + bass * 0.22)
-            const factor = index === 1
-                ? (0.18 + bass * 2.25 * boostLevel)
-                : (0.32 + sideWithBassBleed * 1.15 * boostLevel)
+            const factor = 0.32 + sideWithBassBleed * 1.15 * boostLevel
             return multiplyBrightness(color, factor)
         })
     }
