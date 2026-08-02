@@ -12,7 +12,23 @@ const buildCenterBassKickColor = (color, rawBass, boostLevel) => {
     const floor = clamp01(0.24 - boostLevel * 0.075)
     const ceiling = Math.min(1, 0.72 + boostLevel * 0.12)
     const intensity = floor + kick * (ceiling - floor)
-    return multiplyBrightness(color, intensity)
+    const dimFloor = Math.max(8, Math.round(64 - boostLevel * 18))
+    const dim = Math.round(dimFloor + kick * (255 - dimFloor))
+
+    return {
+        ...multiplyBrightness(color, intensity),
+        dim
+    }
+}
+
+const lerpAudioColor = (current, target, factor) => {
+    const color = lerpColor(current, target, factor)
+    if (target?.dim !== undefined || current?.dim !== undefined) {
+        const currentDim = current?.dim ?? target?.dim ?? 255
+        const targetDim = target?.dim ?? currentDim
+        color.dim = Math.round(currentDim + (targetDim - currentDim) * factor)
+    }
+    return color
 }
 
 export const buildBassPulseColors = (audioFrame) => {
@@ -125,7 +141,8 @@ export const applyModifierAndSmoothing = ({
     const lerpSpeed = modifierMode
         ? Math.min(0.9, 0.58 + Math.max(0.5, Math.min(2.5, audioSensitivity || 1)) * 0.12)
         : 0.24
-    return nextTargetColors.map((targetColor, index) =>
-        lerpColor(currentColors[index], targetColor, lerpSpeed)
-    )
+    return nextTargetColors.map((targetColor, index) => {
+        const slotLerpSpeed = modifierMode && index === 1 ? 1 : lerpSpeed
+        return lerpAudioColor(currentColors[index], targetColor, slotLerpSpeed)
+    })
 }

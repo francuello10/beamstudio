@@ -277,7 +277,7 @@ Mixer/base palette → audio boost → Slot 2 bass center
                             </span>
                         </div>
                         <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
-                            Full Music Boost uses the whole profile. Bass Boost makes Slot 2 react only to bass/sub, while Slot 1 and Slot 3 follow L/R with a smaller bass bleed. RGB changes reactively; DIM stays on the current master dimmer; FUNC/SPD/FLASH are left untouched.
+                            Full Music Boost uses the whole profile. Bass Boost makes Slot 2 react only to bass/sub, while Slot 1 and Slot 3 follow L/R with a smaller bass bleed. RGB changes reactively; Slot 2 can pulse DIM while audio is on and restores it when stopped; FUNC/SPD/FLASH are left untouched.
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
                             {mapping.map((item) => (

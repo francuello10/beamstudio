@@ -853,14 +853,42 @@ function getFixtureMasterDimValue(fixture) {
     return dmxState.channels[fixture.startChannel - 1 + profile.map.DIM] || 0
 }
 
+let audioDimmerSnapshot = null
+
+function getFixtureMasterDimIndex(fixture) {
+    if (!fixture) return null
+    const profile = getFixtureProfile(fixture)
+    if (!profile.hasMasterDimmer || profile.map.DIM === undefined) return null
+    return fixture.startChannel - 1 + profile.map.DIM
+}
+
+function snapshotAudioDimmerValues() {
+    audioDimmerSnapshot = fixtures.map((fixture) => {
+        const dimIndex = getFixtureMasterDimIndex(fixture)
+        return dimIndex === null ? null : (dmxState.channels[dimIndex] || 0)
+    })
+}
+
+function restoreAudioDimmerValues() {
+    if (!audioDimmerSnapshot) return
+
+    fixtures.forEach((fixture, index) => {
+        const dimIndex = getFixtureMasterDimIndex(fixture)
+        const value = audioDimmerSnapshot[index]
+        if (dimIndex !== null && value !== null) {
+            dmxState.channels[dimIndex] = value
+        }
+    })
+    audioDimmerSnapshot = null
+}
+
 function ensureAudioStartVisibility() {
     fixtures.forEach((fixture, index) => {
         if (dmxState.fixtureColors[index]?.blackout) return
 
-        const profile = getFixtureProfile(fixture)
-        if (!profile.hasMasterDimmer || profile.map.DIM === undefined) return
+        const dimIndex = getFixtureMasterDimIndex(fixture)
+        if (dimIndex === null) return
 
-        const dimIndex = fixture.startChannel - 1 + profile.map.DIM
         if ((dmxState.channels[dimIndex] || 0) === 0) {
             dmxState.channels[dimIndex] = 255
         }
@@ -1516,20 +1544,28 @@ function setupIPC() {
 
         const targetColors = incomingColors || [left, center, right]
 
-        const adaptiveSmooth = (cur, target) => {
+        const adaptiveSmooth = (cur, target, index) => {
             const diff = (Math.abs(cur.r - (target?.r || 0)) + Math.abs(cur.g - (target?.g || 0)) + Math.abs(cur.b - (target?.b || 0))) / 3
-            // @ai-constraints Deco tuning: blend smoothly, only large transients snap
-            const f = diff > 40 ? 0.75 : 0.25
-            return {
+            // Audio Slot 2 is already smoothed in the renderer and must hit the fixture hard.
+            const f = source === 'audio' && index === 1 ? 1 : (diff > 40 ? 0.75 : 0.25)
+            const color = {
                 r: Math.round(cur.r + ((target?.r || 0) - cur.r) * f),
                 g: Math.round(cur.g + ((target?.g || 0) - cur.g) * f),
                 b: Math.round(cur.b + ((target?.b || 0) - cur.b) * f)
             }
+
+            if (target?.dim !== undefined || cur?.dim !== undefined) {
+                const currentDim = cur?.dim ?? target?.dim ?? 255
+                const targetDim = target?.dim ?? currentDim
+                color.dim = Math.round(currentDim + (targetDim - currentDim) * f)
+            }
+
+            return color
         }
 
         const colors = fixtures.map((_, i) => {
             const target = targetColors[i] || targetColors[targetColors.length - 1] || { r: 0, g: 0, b: 0 }
-            return adaptiveSmooth(lastAmbiColors[i] || { r: 0, g: 0, b: 0 }, target)
+            return adaptiveSmooth(lastAmbiColors[i] || { r: 0, g: 0, b: 0 }, target, i)
         })
 
         lastAmbiColors = colors
@@ -1541,11 +1577,8 @@ function setupIPC() {
             if (profile.hasMasterDimmer && profile.map.DIM !== undefined) {
                 currentDim = dmxState.channels[f.startChannel - 1 + profile.map.DIM] || 0
             }
-            // If currentDim is 0, we should probably output 0, but if it's undefined (startup), default to 255?
-            // Actually, dmxState is initialized to 0. 
-            // When Audio starts, we set it to 255.
-            // If user lowers it, we should use that value.
-            setFixtureColor(i, c.r, c.g, c.b, currentDim)
+            const outputDim = source === 'audio' && c.dim !== undefined ? c.dim : currentDim
+            setFixtureColor(i, c.r, c.g, c.b, outputDim)
         })
     })
 
@@ -1553,6 +1586,7 @@ function setupIPC() {
     ipcMain.handle('audio:start', () => {
         stopDynamicScene()
         dmxState.activeProgram = null
+        snapshotAudioDimmerValues()
         dmxState.audioReactiveActive = true
 
         // Seed only fixtures whose own master dimmer is still closed. Later audio frames
@@ -1563,7 +1597,11 @@ function setupIPC() {
     })
     // @ai-constraints Do NOT call resetAll() here — let lights hold their last state
     // User must explicitly press RESET to clear. Navigation should not kill DMX output.
-    ipcMain.handle('audio:stop', () => { dmxState.audioReactiveActive = false; return { success: true } })
+    ipcMain.handle('audio:stop', () => {
+        dmxState.audioReactiveActive = false
+        restoreAudioDimmerValues()
+        return { success: true }
+    })
     /**
      * @ai-constraints Audio-reactive color formula with improved variety.
      * Uses bass/mid/high levels to create dynamic, varied colors.
