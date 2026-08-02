@@ -5,6 +5,9 @@ import ParticleFieldVisual from '../visuals/ParticleFieldVisual'
 import TunnelGridVisual from '../visuals/TunnelGridVisual'
 import { DEFAULT_VISUAL_ID } from '../visuals/visualRegistry'
 import MappingCompositor from '../mapping/MappingCompositor'
+import { useNowPlaying } from '../hooks/useNowPlaying'
+import { useNowPlayingStore } from '../metadata/nowPlayingStore'
+import NowPlayingOverlay from './NowPlayingOverlay'
 
 // BS-005: maps a visual id from visualRegistry to its component. Adding the
 // next visual (Kaleidoscope) is just another entry here plus a registry
@@ -27,6 +30,16 @@ const ProjectorApp = () => {
     // BS-006: quad-warp mapping edit mode, driven remotely from ProjectorPage
     // the same way blackout/testPattern/activeVisual already are.
     const [mappingEditMode, setMappingEditMode] = useState(false)
+    // BS-007 phase 2: Now Playing overlay toggle, driven remotely from
+    // ProjectorPage the same way blackout/testPattern/mappingEditMode are.
+    const [nowPlayingOverlay, setNowPlayingOverlay] = useState(false)
+
+    // BS-007 phase 2: get-system-media is a stateless, on-demand main-process
+    // query any window can invoke directly - so this window runs its OWN
+    // useNowPlaying() poll independently instead of relaying AudioFrame-style
+    // data over IPC. Unmodified hook, same as SystemPage.jsx's usage.
+    useNowPlaying()
+    const nowPlaying = useNowPlayingStore((state) => state.nowPlaying)
     // Ref to whichever visual component is currently mounted below — its
     // <canvas> DOM node gets forwarded here via React.forwardRef
     // (FluidNeonVisual.jsx / ParticleFieldVisual.jsx) so MappingCompositor
@@ -39,12 +52,14 @@ const ProjectorApp = () => {
         const unsubTestPattern = window.projector?.onTestPattern(setTestPattern)
         const unsubVisual = window.projector?.onVisualChanged(setActiveVisual)
         const unsubMappingEditMode = window.mapping?.onEditModeChanged(setMappingEditMode)
+        const unsubNowPlayingOverlay = window.projector?.onNowPlayingOverlayChanged(setNowPlayingOverlay)
 
         return () => {
             unsubBlackout?.()
             unsubTestPattern?.()
             unsubVisual?.()
             unsubMappingEditMode?.()
+            unsubNowPlayingOverlay?.()
         }
     }, [])
 
@@ -83,6 +98,8 @@ const ProjectorApp = () => {
             <MappingCompositor visualCanvasRef={activeVisualCanvasRef} editMode={mappingEditMode} />
 
             {testPattern && !blackout && <TestPatternOverlay />}
+
+            {nowPlayingOverlay && !blackout && <NowPlayingOverlay nowPlaying={nowPlaying} />}
 
             {blackout && (
                 <div style={{ position: 'absolute', inset: 0, background: '#000' }} />

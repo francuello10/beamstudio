@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Projector, Power, EyeOff, Crosshair, RefreshCw, Check, AlertCircle, Move, Layers, Plus, Trash2, Save, FolderOpen } from 'lucide-react'
+import { Projector, Power, EyeOff, Crosshair, RefreshCw, Check, AlertCircle, Move, Layers, Plus, Trash2, Save, FolderOpen, Music } from 'lucide-react'
 import { VISUALS } from '../visuals/visualRegistry'
 import { DEFAULT_SURFACE, createInsetSurface } from '../mapping/MappingCompositor'
 
@@ -23,6 +23,8 @@ const ProjectorPage = () => {
     const [status, setStatus] = useState({ connected: false, displayId: null })
     const [blackout, setBlackout] = useState(false)
     const [testPattern, setTestPattern] = useState(false)
+    // BS-007 phase 2: Now Playing overlay toggle for the projector output.
+    const [nowPlayingOverlay, setNowPlayingOverlay] = useState(false)
     const [activeVisual, setActiveVisual] = useState(VISUALS[0].id)
     const [refreshing, setRefreshing] = useState(false)
     // BS-006: projection mapping edit mode — shows/hides the quad-warp
@@ -99,6 +101,12 @@ const ProjectorPage = () => {
         const next = !testPattern
         setTestPattern(next)
         window.projector?.setTestPattern(next)
+    }
+
+    const handleNowPlayingOverlayToggle = () => {
+        const next = !nowPlayingOverlay
+        setNowPlayingOverlay(next)
+        window.projector?.setNowPlayingOverlay(next)
     }
 
     const handleVisualSelect = (visualId) => {
@@ -298,6 +306,16 @@ const ProjectorPage = () => {
                             >
                                 <Crosshair size={16} />
                                 <span>TEST PATTERN</span>
+                            </div>
+
+                            <div
+                                className={`bgr-toggle ${nowPlayingOverlay ? 'active' : ''}`}
+                                onClick={handleNowPlayingOverlayToggle}
+                                title="Now Playing overlay"
+                                style={{ height: '48px', padding: '0 16px', flex: 1, justifyContent: 'center' }}
+                            >
+                                <Music size={16} />
+                                <span>NOW PLAYING</span>
                             </div>
                         </div>
 
