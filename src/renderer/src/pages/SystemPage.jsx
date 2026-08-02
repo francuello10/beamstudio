@@ -1,9 +1,18 @@
 import React, { useState, useEffect } from 'react'
-import { Sparkles, Zap, Radio, Check, AlertCircle, Monitor } from 'lucide-react'
+import { Sparkles, Zap, Radio, Check, AlertCircle, Monitor, Music } from 'lucide-react'
 import logoImg from '../assets/logo.png'
 import sticktecImg from '../assets/sticktec.png'
 import { useDmxStore } from '../store/dmxStore'
 import { useConfigStore } from '../store/configStore'
+import { useNowPlayingStore } from '../metadata/nowPlayingStore'
+import { useNowPlaying } from '../hooks/useNowPlaying'
+
+const NOW_PLAYING_STATE_LABELS = {
+    playing: 'Reproduciendo',
+    paused: 'En pausa',
+    stopped: 'Detenido',
+    'no-player': 'No hay reproductor activo'
+}
 
 const AUDIO_SLOT_ROLES = [
     { label: 'Audio Slot 1', role: 'LEFT SIDE', color: '#00f2fe' },
@@ -18,6 +27,11 @@ const SystemPage = () => {
     const updatePerformance = useConfigStore(state => state.updatePerformance)
     const dmxFixtures = useDmxStore(state => state.dmxFixtures)
     const setDmxFixtures = useDmxStore(state => state.setDmxFixtures)
+
+    // BS-007: Now Playing metadata - independent poller/store, decoupled
+    // from audio-reactive (see src/renderer/src/metadata/NowPlaying.js).
+    useNowPlaying()
+    const nowPlaying = useNowPlayingStore(state => state.nowPlaying)
 
     const funcRanges = config?.funcRanges || []
     const perf = config?.performance || { dmxHz: 44, uiHz: 60, ambiFps: 60 }
@@ -159,6 +173,38 @@ const SystemPage = () => {
                         <button onClick={handleSaveKey} className={`action-button ${keySaved ? 'success' : 'active'}`}>
                             {keySaved ? 'SAVED' : 'SAVE CONFIG'}
                         </button>
+                    </div>
+                </div>
+
+                <div className="glass-card now-playing-card">
+                    <div className="card-header-icon">
+                        <Music size={20} className="accent-text" />
+                        <h3>Now Playing</h3>
+                    </div>
+                    <div style={{ marginTop: '16px' }}>
+                        {nowPlaying.state === 'no-player' ? (
+                            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>
+                                No hay reproductor activo.
+                            </p>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                <strong style={{ fontSize: '14px', color: 'white' }}>
+                                    {nowPlaying.title || 'Sin título'}
+                                </strong>
+                                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                    {nowPlaying.artist || 'Artista desconocido'}
+                                </span>
+                                <span style={{
+                                    fontSize: '11px',
+                                    fontWeight: 700,
+                                    color: nowPlaying.state === 'playing' ? 'var(--accent)' : 'var(--text-secondary)'
+                                }}>
+                                    {NOW_PLAYING_STATE_LABELS[nowPlaying.state] || NOW_PLAYING_STATE_LABELS['no-player']}
+                                    {' · '}
+                                    {nowPlaying.provider}
+                                </span>
+                            </div>
+                        )}
                     </div>
                 </div>
 
