@@ -739,7 +739,11 @@ export function useFluidSimulation() {
             if (!initGL()) return
         }
         window.dmx?.setDynamicRendererActive(true, 'renderer')
-        window.dmx?.setAllFixturesChannel?.('dim', 255)
+        // window.dmx has no setAllFixturesChannel - setChannel already applies
+        // to every fixture on the backend (see dmx:setChannel -> setAllFixturesChannel
+        // in src/main/index.js), so the optional-chained call below was silently
+        // no-op'ing and the cold-start dimmer fix never actually ran.
+        window.dmx?.setChannel('dim', 255)
 
         runningRef.current = true
         setRunning(true)
