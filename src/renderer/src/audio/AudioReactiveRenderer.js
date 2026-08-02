@@ -55,19 +55,19 @@ const buildCenterBassKickColor = (color, rawBass, boostLevel) => {
     // Keep Slot 2 in the selected/base hue. For this hardware the physical 4D
     // effect comes from brutal DIM jumps, not subtle RGB-only modulation.
     const kick = quantizeKick(rawBass, boostLevel, {
-        threshold: 0.13,
-        thresholdBoost: 0.04,
-        curve: 0.7,
-        curveBoost: 0.12,
+        threshold: 0.18,
+        thresholdBoost: 0.03,
+        curve: 0.56,
+        curveBoost: 0.08,
         minSteps: 2,
-        baseSteps: 6,
-        stepBoost: 1
+        baseSteps: 4,
+        stepBoost: 0.5
     })
     return withAudioDim(color, kick, boostLevel, {
-        floor: 0.08,
-        floorBoost: 0.025,
-        dimFloor: 20,
-        dimFloorBoost: 6,
+        floor: 0.02,
+        floorBoost: 0.004,
+        dimFloor: 8,
+        dimFloorBoost: 2,
         fallbackColor: { r: 255, g: 48, b: 96 }
     })
 }

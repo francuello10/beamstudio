@@ -39,20 +39,21 @@ export const computeBassProfile = (dataBass, {
     boostLevel = 1
 } = {}) => {
     if (!dataBass?.length) {
-        return { energy: 0, raw: 0, floor: 0, sub: 0, kick: 0, lowMid: 0, transient: 0 }
+        return { energy: 0, raw: 0, floor: 0, sub: 0, kick: 0, upperBass: 0, lowMid: 0, transient: 0 }
     }
 
     // True bass detector for lighting:
-    // - SUB: 35-90 Hz
-    // - KICK: 90-160 Hz
-    // - LOW-MID penalty: 160-350 Hz so guitars/vocals/rock body do not fake club bass.
-    const sub = averageFrequencyBand(dataBass, sampleRate, fftSize, 35, 90)
-    const kick = averageFrequencyBand(dataBass, sampleRate, fftSize, 90, 160)
-    const lowMid = averageFrequencyBand(dataBass, sampleRate, fftSize, 160, 350)
+    // - SUB: 35-85 Hz — physical speaker vibration / reggaeton low thump.
+    // - KICK: 70-125 Hz — foot-tap punch.
+    // - UPPER-BASS/LOW-MID penalty: 125-350 Hz so toms, voice, guitar and snare body do not fake the center light.
+    const sub = averageFrequencyBand(dataBass, sampleRate, fftSize, 35, 85)
+    const kick = averageFrequencyBand(dataBass, sampleRate, fftSize, 70, 125)
+    const upperBass = averageFrequencyBand(dataBass, sampleRate, fftSize, 125, 200)
+    const lowMid = averageFrequencyBand(dataBass, sampleRate, fftSize, 200, 350)
 
-    const coreBass = Math.max(sub * 1.25, kick * 1.08, sub * 0.78 + kick * 0.58)
-    const lowMidPenalty = Math.min(0.5, lowMid * 0.55)
-    const raw = clamp01(coreBass - lowMidPenalty)
+    const coreBass = Math.max(sub * 1.42, kick * 1.18, sub * 0.9 + kick * 0.58)
+    const upperMask = Math.min(0.68, upperBass * 0.52 + lowMid * 0.64)
+    const raw = clamp01(coreBass - upperMask)
 
     const floor = adaptiveFloor <= 0.0001 && previousRaw <= 0.0001
         ? raw
@@ -61,16 +62,16 @@ export const computeBassProfile = (dataBass, {
             : adaptiveFloor * 0.88 + raw * 0.12
 
     const sensitivity = Math.max(0.5, Math.min(4, boostLevel || 1))
-    const gate = Math.max(0.012, floor * (1.16 - sensitivity * 0.045) + (0.045 - sensitivity * 0.008))
+    const gate = Math.max(0.02, floor * (1.2 - sensitivity * 0.035) + (0.058 - sensitivity * 0.007))
     const aboveFloor = Math.max(0, raw - gate)
     const rise = Math.max(0, raw - previousRaw)
-    const transient = clamp01(rise * 7.5)
-    const sustained = clamp01(aboveFloor * 2.4)
-    const shaped = sustained * 0.65 + transient * 0.95
-    const curve = Math.max(0.45, 0.82 - sensitivity * 0.06)
+    const transient = clamp01(rise * 10)
+    const sustained = clamp01(aboveFloor * 2.6)
+    const shaped = sustained * 0.45 + transient * 1.2
+    const curve = Math.max(0.38, 0.76 - sensitivity * 0.065)
     const energy = clamp01(Math.pow(shaped, curve))
 
-    return { energy, raw, floor, sub, kick, lowMid, transient }
+    return { energy, raw, floor, sub, kick, upperBass, lowMid, transient }
 }
 
 export const computeBassEnergy = (dataBass, options) => computeBassProfile(dataBass, options).energy
