@@ -166,12 +166,15 @@ const projectorAPI = {
     open: (displayId) => ipcRenderer.invoke('projector:open', displayId),
     close: () => ipcRenderer.invoke('projector:close'),
     // Bugfix: lets a freshly-mounted projector window pull current
-    // blackout/testPattern/activeVisual/nowPlayingOverlay state instead of
-    // only ever reflecting toggles pushed after it happened to be listening.
+    // blackout/testPattern/nowPlayingOverlay state instead of only ever
+    // reflecting toggles pushed after it happened to be listening.
     getState: () => ipcRenderer.invoke('projector:getState'),
     setBlackout: (value) => ipcRenderer.send('projector:setBlackout', value),
     setTestPattern: (value) => ipcRenderer.send('projector:setTestPattern', value),
-    setVisual: (visualId) => ipcRenderer.send('projector:setVisual', visualId),
+    // BS-008: setVisual/onVisualChanged removed — each surface now carries
+    // its own visualId, relayed via mapping:setSurfaces/onSurfacesChanged
+    // below instead of this separate global channel. See main/index.js's
+    // lastKnownProjectorState comment for the grep evidence.
     // BS-007 phase 2: Now Playing overlay toggle - mirrors setBlackout/
     // setTestPattern's exact one-way send/subscribe shape.
     setNowPlayingOverlay: (value) => ipcRenderer.send('projector:setNowPlayingOverlay', value),
@@ -183,11 +186,6 @@ const projectorAPI = {
     // same way every other cross-window toggle already is, into the
     // projector window's own local useAudioStore.visualColorSyncEnabled.
     setVisualColorSync: (value) => ipcRenderer.send('projector:setVisualColorSync', value),
-    onVisualChanged: (cb) => {
-        const listener = (_e, visualId) => cb(visualId)
-        ipcRenderer.on('projector:visualChanged', listener)
-        return () => ipcRenderer.removeListener('projector:visualChanged', listener)
-    },
     onBlackout: (cb) => {
         const listener = (_e, v) => cb(v)
         ipcRenderer.on('projector:blackout', listener)

@@ -1,22 +1,27 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createProgram } from '../visuals/glUtils'
+import { DEFAULT_VISUAL_ID } from '../visuals/visualRegistry'
 
 /**
  * MappingCompositor — BS-006 phase 2: polygon masks/feather + multiple
- * surfaces, built directly on phase 1's quad-warp compositor.
+ * surfaces, built directly on phase 1's quad-warp compositor. BS-008: each
+ * surface now carries its own `visualId`, so different surfaces can show
+ * different visuals concurrently.
  *
- * Takes whichever visual is currently active — as a live HTMLCanvasElement
- * handed in via `visualCanvasRef` — and perspective-warps it onto one or more
- * quad "surfaces" using Heckbert's unit-square-to-quad projective mapping
- * (computeQuadWarpVertices, unchanged from phase 1). Each surface can also
- * carry a polygon mask + feather, rendered via a signed-distance alpha
- * multiplier in the fragment shader. This component's own <canvas> is the
- * ONLY thing actually shown on the projector; the source visual canvas stays
- * `visibility: hidden` in ProjectorApp.jsx and is only ever read here as a
- * texture source.
+ * Takes every distinct visual currently referenced by at least one surface —
+ * as live HTMLCanvasElements handed in via `visualCanvasRefs` (a
+ * `visualId -> {current: HTMLCanvasElement|null}` ref map, one entry per
+ * visual ProjectorApp.jsx has ever mounted) — and perspective-warps each
+ * surface's assigned visual onto its own quad using Heckbert's
+ * unit-square-to-quad projective mapping (computeQuadWarpVertices, unchanged
+ * from phase 1). Each surface can also carry a polygon mask + feather,
+ * rendered via a signed-distance alpha multiplier in the fragment shader.
+ * This component's own <canvas> is the ONLY thing actually shown on the
+ * projector; the source visual canvases stay `visibility: hidden` in
+ * ProjectorApp.jsx and are only ever read here as texture sources.
  *
  * @ai-constraints Never imports or references a specific visual's hook or
- * internals — it only ever touches a plain HTMLCanvasElement.
+ * internals — it only ever touches plain HTMLCanvasElements.
  */
 
 // Default/passthrough surface — identical geometry to "no mapping at all".
@@ -35,7 +40,13 @@ export const DEFAULT_SURFACE = {
     // Per-surface content rotation (radians), texture-sampling-only — see
     // uRotation/rotate() in FRAGMENT_SHADER. Does NOT affect corners/quad-warp
     // math (computeQuadWarpVertices) or the mask's sdPolygon evaluation.
-    rotation: 0
+    rotation: 0,
+    // BS-008: which visual this surface samples from (visualRegistry.js id).
+    // Defaults to DEFAULT_VISUAL_ID so a freshly-created single surface shows
+    // exactly what today's single global visual would have shown — this is
+    // the only surface that exists on a fresh install / before the operator
+    // ever touches mapping, so this default IS the whole app's default.
+    visualId: DEFAULT_VISUAL_ID
 }
 
 // Default mask seed: a slightly-inset quadrilateral in quad-local UV space,
@@ -310,6 +321,35 @@ function buildMaskUniformData(mask) {
     return data
 }
 
+/**
+ * BS-008: returns the cached WebGL texture object for a given visualId,
+ * creating (and caching into `texturesByVisualId`) it on first use. One
+ * texture object per distinct visualId — persisting across frames exactly
+ * like phase 1/2's single shared texture did, never recreated on every
+ * frame. Only the pixel data is re-uploaded (via texImage2D, by the caller)
+ * once per frame per distinct visual actually in use; the texture object
+ * itself is created at most once per visualId for the life of this
+ * component's WebGL context.
+ *
+ * Deliberate ceiling, not unbounded: visualRegistry.js defines exactly 5
+ * visuals today, so `texturesByVisualId` holds at most 5 WebGL2 texture
+ * objects in this single context — this design is sized for "up to 5
+ * distinct visuals live at once, one per mapped surface", the real ceiling
+ * for this feature, not an arbitrary N.
+ */
+function getOrCreateTexture(gl, texturesByVisualId, visualId) {
+    let texture = texturesByVisualId.get(visualId)
+    if (texture) return texture
+    texture = gl.createTexture()
+    gl.bindTexture(gl.TEXTURE_2D, texture)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+    texturesByVisualId.set(visualId, texture)
+    return texture
+}
+
 const CORNER_LABELS = ['TL', 'TR', 'BR', 'BL']
 
 let surfaceCounter = 1
@@ -336,16 +376,21 @@ export function createInsetSurface(referenceCorners, name) {
         x: p.x + (cx - p.x) * inset,
         y: p.y + (cy - p.y) * inset
     }))
-    return { id: nextSurfaceId(), name: name || `Surface ${surfaceCounter}`, corners, mask: null, feather: 0, rotation: 0 }
+    // BS-008: new surfaces default to DEFAULT_VISUAL_ID, same default as
+    // DEFAULT_SURFACE above — a predictable starting point the operator then
+    // retargets via ProjectorPage.jsx's per-surface visual picker.
+    return { id: nextSurfaceId(), name: name || `Surface ${surfaceCounter}`, corners, mask: null, feather: 0, rotation: 0, visualId: DEFAULT_VISUAL_ID }
 }
 
 /**
- * @param {{ current: HTMLCanvasElement|null }} visualCanvasRef - ref to the
- *   currently-active visual's own <canvas>, forwarded down from
- *   ProjectorApp.jsx. May be null momentarily while visuals switch.
+ * @param {Map<string, { current: HTMLCanvasElement|null }>} visualCanvasRefs -
+ *   visualId -> ref map for every visual ProjectorApp.jsx has ever mounted
+ *   (BS-008). A given surface's own visual is looked up in here by its
+ *   `visualId` field every frame. A ref's `.current` may be null momentarily
+ *   while its visual mounts.
  * @param {boolean} editMode - when true, renders draggable corner/mask handles.
  */
-const MappingCompositor = ({ visualCanvasRef, editMode }) => {
+const MappingCompositor = ({ visualCanvasRefs, editMode }) => {
     const containerRef = useRef(null)
     const canvasRef = useRef(null)
     const glStateRef = useRef(null)
@@ -474,12 +519,12 @@ const MappingCompositor = ({ visualCanvasRef, editMode }) => {
         gl.enableVertexAttribArray(aUV)
         gl.vertexAttribPointer(aUV, 2, gl.FLOAT, false, STRIDE, 3 * Float32Array.BYTES_PER_ELEMENT)
 
-        const texture = gl.createTexture()
-        gl.bindTexture(gl.TEXTURE_2D, texture)
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+        // BS-008: one WebGL texture object per distinct visualId, created
+        // lazily (see getOrCreateTexture) and cached here for the life of
+        // this WebGL context — replaces phase 1/2's single shared `texture`.
+        // Deliberate ceiling: at most 5 entries (visualRegistry.js's 5
+        // visuals), not unbounded.
+        const texturesByVisualId = new Map()
         // Canvas pixel data is uploaded top-row-first; flipping here is the
         // standard WebGL fix (MDN) so a sampled v=0 corresponds to the top
         // of the source visual canvas instead of rendering it upside down.
@@ -500,12 +545,12 @@ const MappingCompositor = ({ visualCanvasRef, editMode }) => {
         gl.enable(gl.BLEND)
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 
-        glStateRef.current = { gl, program, vertexBuffer, texture, vao, uTexture, uMaskPoints, uMaskPointCount, uFeather, uRotation }
+        glStateRef.current = { gl, program, vertexBuffer, texturesByVisualId, vao, uTexture, uMaskPoints, uMaskPointCount, uFeather, uRotation }
 
         function renderFrame() {
             const state = glStateRef.current
             if (!state) return
-            const { gl: ctx, program: prog, texture: tex, vao: vertexArray, uTexture: texUniform, uMaskPoints: maskUniform, uMaskPointCount: maskCountUniform, uFeather: featherUniform, uRotation: rotationUniform } = state
+            const { gl: ctx, program: prog, texturesByVisualId: textures, vao: vertexArray, uTexture: texUniform, uMaskPoints: maskUniform, uMaskPointCount: maskCountUniform, uFeather: featherUniform, uRotation: rotationUniform } = state
 
             const cssWidth = canvas.clientWidth || 1
             const cssHeight = canvas.clientHeight || 1
@@ -520,22 +565,50 @@ const MappingCompositor = ({ visualCanvasRef, editMode }) => {
             ctx.clearColor(0, 0, 0, 1)
             ctx.clear(ctx.COLOR_BUFFER_BIT)
 
-            const sourceCanvas = visualCanvasRef?.current
-            if (!sourceCanvas || !sourceCanvas.width || !sourceCanvas.height) return
-
             ctx.useProgram(prog)
             ctx.bindVertexArray(vertexArray)
             ctx.activeTexture(ctx.TEXTURE0)
-            ctx.bindTexture(ctx.TEXTURE_2D, tex)
-            try {
-                ctx.texImage2D(ctx.TEXTURE_2D, 0, ctx.RGBA, ctx.RGBA, ctx.UNSIGNED_BYTE, sourceCanvas)
-            } catch (e) {
-                // Source canvas can be transiently unreadable while a visual
-                // is mid-teardown/remount (e.g. switching visuals) — skip
-                // this frame, next one will succeed once it settles.
-                return
-            }
             ctx.uniform1i(texUniform, 0)
+
+            // BS-008: upload one texture PER DISTINCT visualId actually
+            // referenced by a current surface (dedup — 3 surfaces all
+            // pointing at 'fluidNeon' still only cost ONE upload/frame), from
+            // that visual's own live canvas in visualCanvasRefs. Texture
+            // OBJECTS persist across frames (getOrCreateTexture only creates
+            // once per visualId); only the pixel data is re-uploaded here,
+            // every frame, same as phase 1/2's single-texture upload did.
+            // `fallbackTexture` — the first texture successfully uploaded
+            // this frame — is the graceful fallback for a surface whose own
+            // visualId has no known texture (stale/unmounted visual): draw
+            // something sane instead of garbage, per the per-surface loop
+            // below.
+            let fallbackTexture = null
+            const distinctVisualIds = new Set()
+            surfacesRef.current.forEach((surface) => {
+                distinctVisualIds.add(surface.visualId || DEFAULT_VISUAL_ID)
+            })
+            distinctVisualIds.forEach((visualId) => {
+                const sourceCanvas = visualCanvasRefs?.get(visualId)?.current
+                if (!sourceCanvas || !sourceCanvas.width || !sourceCanvas.height) return
+                const tex = getOrCreateTexture(ctx, textures, visualId)
+                ctx.bindTexture(ctx.TEXTURE_2D, tex)
+                try {
+                    ctx.texImage2D(ctx.TEXTURE_2D, 0, ctx.RGBA, ctx.RGBA, ctx.UNSIGNED_BYTE, sourceCanvas)
+                } catch (e) {
+                    // Source canvas can be transiently unreadable while a
+                    // visual is mid-teardown/remount — skip this visual's
+                    // upload this frame, next one will succeed once it
+                    // settles. Other visuals still upload/draw normally.
+                    return
+                }
+                if (!fallbackTexture) fallbackTexture = tex
+            })
+
+            // Nothing usable to draw yet this frame (e.g. very first frames
+            // before any visual canvas has a real size) — leave the clear
+            // color on screen and try again next frame, same bail-out as
+            // phase 1/2's single-canvas guard.
+            if (!fallbackTexture) return
 
             // Draw every surface in array order (painter's algorithm — later
             // surfaces land on top). Each surface's quad is uploaded into the
@@ -554,6 +627,14 @@ const MappingCompositor = ({ visualCanvasRef, editMode }) => {
                 ctx.uniform1i(maskCountUniform, maskPointCount)
                 ctx.uniform1f(featherUniform, surface.feather || 0)
                 ctx.uniform1f(rotationUniform, surface.rotation || 0)
+                // BS-008: bind THIS surface's own assigned visual's texture
+                // right before drawing it — this is what lets each surface
+                // sample a different visual within the same draw loop.
+                // Falls back to fallbackTexture for stale/unknown visualIds
+                // (e.g. a loaded preset referencing a visual that failed to
+                // mount) instead of drawing with whatever texture happened
+                // to be bound last.
+                ctx.bindTexture(ctx.TEXTURE_2D, textures.get(surface.visualId || DEFAULT_VISUAL_ID) || fallbackTexture)
                 ctx.drawArrays(ctx.TRIANGLES, 0, QUAD_TRIANGLE_ORDER.length)
             })
         }
@@ -566,7 +647,8 @@ const MappingCompositor = ({ visualCanvasRef, editMode }) => {
         return () => {
             cancelAnimationFrame(rafId)
             gl.deleteBuffer(vertexBuffer)
-            gl.deleteTexture(texture)
+            texturesByVisualId.forEach((tex) => gl.deleteTexture(tex))
+            texturesByVisualId.clear()
             gl.deleteVertexArray(vao)
             gl.deleteProgram(program)
             glStateRef.current = null

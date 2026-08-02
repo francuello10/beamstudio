@@ -6,7 +6,7 @@ import TunnelGridVisual from '../visuals/TunnelGridVisual'
 import KaleidoscopeVisual from '../visuals/KaleidoscopeVisual'
 import CeilingDomeVisual from '../visuals/CeilingDomeVisual'
 import { DEFAULT_VISUAL_ID } from '../visuals/visualRegistry'
-import MappingCompositor from '../mapping/MappingCompositor'
+import MappingCompositor, { DEFAULT_SURFACE } from '../mapping/MappingCompositor'
 import { useNowPlaying } from '../hooks/useNowPlaying'
 import { useNowPlayingStore } from '../metadata/nowPlayingStore'
 import NowPlayingOverlay from './NowPlayingOverlay'
@@ -35,10 +35,18 @@ const VISUAL_COMPONENTS = {
 const ProjectorApp = () => {
     const [blackout, setBlackout] = useState(false)
     const [testPattern, setTestPattern] = useState(false)
-    const [activeVisual, setActiveVisual] = useState(DEFAULT_VISUAL_ID)
     // BS-006: quad-warp mapping edit mode, driven remotely from ProjectorPage
-    // the same way blackout/testPattern/activeVisual already are.
+    // the same way blackout/testPattern already are.
     const [mappingEditMode, setMappingEditMode] = useState(false)
+    // BS-008: this window's own read-only mirror of the surfaces array — the
+    // same mapping:getSurfaces/onSurfacesChanged pull-and-subscribe pattern
+    // ProjectorPage.jsx already uses for its own surfaces mirror. Needed here
+    // (not just inside MappingCompositor, which owns the two-way sync) so
+    // this component can compute which distinct visuals to mount BEFORE
+    // MappingCompositor ever reads a canvas ref — this component never
+    // pushes surfaces back out, so there's no feedback-loop risk, exactly
+    // like ProjectorPage.jsx's own mirror.
+    const [surfaces, setSurfaces] = useState([DEFAULT_SURFACE])
     // BS-007 phase 2: Now Playing overlay toggle, driven remotely from
     // ProjectorPage the same way blackout/testPattern/mappingEditMode are.
     const [nowPlayingOverlay, setNowPlayingOverlay] = useState(false)
@@ -49,17 +57,9 @@ const ProjectorApp = () => {
     // data over IPC. Unmodified hook, same as SystemPage.jsx's usage.
     useNowPlaying()
     const nowPlaying = useNowPlayingStore((state) => state.nowPlaying)
-    // Ref to whichever visual component is currently mounted below — its
-    // <canvas> DOM node gets forwarded here via React.forwardRef
-    // (FluidNeonVisual.jsx / ParticleFieldVisual.jsx) so MappingCompositor
-    // can read it as a texture source without ever importing a specific
-    // visual's hook or internals.
-    const activeVisualCanvasRef = useRef(null)
-
     useEffect(() => {
         const unsubBlackout = window.projector?.onBlackout(setBlackout)
         const unsubTestPattern = window.projector?.onTestPattern(setTestPattern)
-        const unsubVisual = window.projector?.onVisualChanged(setActiveVisual)
         const unsubMappingEditMode = window.mapping?.onEditModeChanged(setMappingEditMode)
         const unsubNowPlayingOverlay = window.projector?.onNowPlayingOverlayChanged(setNowPlayingOverlay)
         // Ecosystem Color-Sync: unlike the toggles above, this one has no
@@ -71,17 +71,16 @@ const ProjectorApp = () => {
             useAudioStore.getState().setVisualColorSyncEnabled(value)
         })
 
-        // Bugfix: setBlackout/setTestPattern/setVisual/setNowPlayingOverlay/
-        // setEditMode are one-way relays with no state of their own - a
-        // freshly-opened (or reopened after being closed) window only ever
-        // saw pushes that happened after it started listening above, so it
-        // silently reverted to these useState defaults regardless of what
-        // was actually live. Pull current state once on mount instead.
+        // Bugfix: setBlackout/setTestPattern/setNowPlayingOverlay/setEditMode
+        // are one-way relays with no state of their own - a freshly-opened
+        // (or reopened after being closed) window only ever saw pushes that
+        // happened after it started listening above, so it silently
+        // reverted to these useState defaults regardless of what was
+        // actually live. Pull current state once on mount instead.
         window.projector?.getState?.().then((state) => {
             if (!state) return
             setBlackout(state.blackout)
             setTestPattern(state.testPattern)
-            if (state.activeVisual) setActiveVisual(state.activeVisual)
             setNowPlayingOverlay(state.nowPlayingOverlay)
             if (state.visualColorSyncEnabled !== undefined) {
                 useAudioStore.getState().setVisualColorSyncEnabled(state.visualColorSyncEnabled)
@@ -94,11 +93,32 @@ const ProjectorApp = () => {
         return () => {
             unsubBlackout?.()
             unsubTestPattern?.()
-            unsubVisual?.()
             unsubMappingEditMode?.()
             unsubNowPlayingOverlay?.()
             unsubVisualColorSync?.()
         }
+    }, [])
+
+    // BS-008: read-only surfaces mirror (see the `surfaces` state comment
+    // above) — same pull-on-mount + subscribe shape as every other
+    // mapping:getSurfaces/onSurfacesChanged consumer in this codebase
+    // (MappingCompositor.jsx, ProjectorPage.jsx).
+    useEffect(() => {
+        const unsubSurfacesChanged = window.mapping?.onSurfacesChanged((updated) => {
+            if (!Array.isArray(updated) || updated.length === 0) return
+            setSurfaces(updated)
+        })
+        return () => unsubSurfacesChanged?.()
+    }, [])
+
+    useEffect(() => {
+        let cancelled = false
+        ;(async () => {
+            const cached = await window.mapping?.getSurfaces()
+            if (cancelled || !Array.isArray(cached) || cached.length === 0) return
+            setSurfaces(cached)
+        })()
+        return () => { cancelled = true }
     }, [])
 
     // BS-005: this window is a separate renderer process from the main
@@ -113,27 +133,67 @@ const ProjectorApp = () => {
         return () => unsubscribe?.()
     }, [])
 
-    // Keep the active visual mounted for the whole life of this window and
-    // just overlay blackout/test-pattern on top instead of unmounting it, so
-    // e.g. the Fluid Neon WebGL context is never recreated. All 4 planned
-    // visuals plus Ceiling Dome are wired in now; a future visual would
-    // still just be another VISUAL_COMPONENTS entry — no new branch here.
-    const ActiveVisualComponent = VISUAL_COMPONENTS[activeVisual]
+    // BS-008: distinct visualIds actually referenced by at least one CURRENT
+    // surface (dedup — N surfaces pointing at the same visual only need ONE
+    // live instance). Falls back to DEFAULT_VISUAL_ID if surfaces somehow
+    // resolves empty (shouldn't happen — MappingCompositor/ProjectorPage
+    // both always keep at least one surface — but this keeps the projector
+    // showing SOMETHING rather than a blank mount list).
+    const distinctVisualIds = new Set()
+    surfaces.forEach((surface) => {
+        const id = surface.visualId || DEFAULT_VISUAL_ID
+        if (VISUAL_COMPONENTS[id]) distinctVisualIds.add(id)
+    })
+    if (distinctVisualIds.size === 0) distinctVisualIds.add(DEFAULT_VISUAL_ID)
+
+    // "Ever mounted this session" set — grows only, never shrinks. Some
+    // visuals (Fluid Neon today, per useFluidSimulation.js's own comments)
+    // don't support clean unmount/remount, so once a visualId has been
+    // mounted here because some surface referenced it, it stays mounted for
+    // the rest of this window's life even if every surface later stops
+    // using it — this avoids remount churn generically, not as a
+    // FluidNeon-specific special case. Mutated directly during render
+    // (mirrors MappingCompositor.jsx's own `surfacesRef.current = surfaces`
+    // idiom) — Set.add is idempotent, so this is safe under React's
+    // double-invocation in StrictMode/dev.
+    const everMountedVisualIdsRef = useRef(new Set())
+    distinctVisualIds.forEach((id) => everMountedVisualIdsRef.current.add(id))
+
+    // One stable canvas ref per ever-mounted visualId, created lazily and
+    // never replaced once created — keyed extension of this component's
+    // previous single activeVisualCanvasRef, so MappingCompositor.jsx can
+    // still read each canvas via a plain ref without React re-renders.
+    const canvasRefsByVisualIdRef = useRef(new Map())
+    const getCanvasRef = (visualId) => {
+        let ref = canvasRefsByVisualIdRef.current.get(visualId)
+        if (!ref) {
+            ref = { current: null }
+            canvasRefsByVisualIdRef.current.set(visualId, ref)
+        }
+        return ref
+    }
 
     return (
         <div className="projector-root" style={{ position: 'relative', width: '100vw', height: '100vh', background: '#000', overflow: 'hidden' }}>
-            {/* BS-006: the active visual still renders every frame (so its
-                own rAF loop / WebGL context is never disturbed) but is kept
-                out of the final paint — MappingCompositor reads its live
-                pixels as a texture instead of it being shown directly.
+            {/* BS-006/BS-008: every ever-mounted visual still renders every
+                frame (so its own rAF loop / WebGL context is never
+                disturbed) but is kept out of the final paint —
+                MappingCompositor reads each one's live pixels as a texture
+                instead of any of them being shown directly.
                 visibility:hidden (NOT display:none) keeps it reliably
                 rendering as a WebGL2 texture source across Chromium
-                versions. */}
+                versions. Deliberate ceiling: up to 5 concurrent WebGL2
+                contexts here (one per distinct visual — visualRegistry.js
+                defines exactly 5 today), not an unbounded number. */}
             <div style={{ position: 'absolute', visibility: 'hidden', width: '100vw', height: '100vh' }}>
-                {ActiveVisualComponent ? <ActiveVisualComponent ref={activeVisualCanvasRef} /> : null}
+                {Array.from(everMountedVisualIdsRef.current).map((visualId) => {
+                    const VisualComponent = VISUAL_COMPONENTS[visualId]
+                    if (!VisualComponent) return null
+                    return <VisualComponent key={visualId} ref={getCanvasRef(visualId)} />
+                })}
             </div>
 
-            <MappingCompositor visualCanvasRef={activeVisualCanvasRef} editMode={mappingEditMode} />
+            <MappingCompositor visualCanvasRefs={canvasRefsByVisualIdRef.current} editMode={mappingEditMode} />
 
             {testPattern && !blackout && <TestPatternOverlay />}
 

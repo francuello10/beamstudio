@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Projector, Power, EyeOff, Crosshair, RefreshCw, Check, AlertCircle, Move, Layers, Plus, Trash2, Save, FolderOpen, Music, RotateCw, Palette } from 'lucide-react'
-import { VISUALS } from '../visuals/visualRegistry'
+import { VISUALS, DEFAULT_VISUAL_ID } from '../visuals/visualRegistry'
 import { DEFAULT_SURFACE, createInsetSurface } from '../mapping/MappingCompositor'
 
 // BS-005: visual library — Fluid Neon exists today, the remaining 3 (Particle
@@ -32,7 +32,11 @@ const ProjectorPage = () => {
     const [testPattern, setTestPattern] = useState(false)
     // BS-007 phase 2: Now Playing overlay toggle for the projector output.
     const [nowPlayingOverlay, setNowPlayingOverlay] = useState(false)
-    const [activeVisual, setActiveVisual] = useState(VISUALS[0].id)
+    // BS-008: the single global `activeVisual` picker is gone — each surface
+    // now carries its own `visualId` (see MappingCompositor.jsx's
+    // DEFAULT_SURFACE/createInsetSurface), and the picker below retargets
+    // whichever surface is currently selected (selectedSurfaceId below),
+    // same as the rename/rotation controls already do.
     // Ecosystem Color-Sync toggle ("Sync colors with lights"). This page runs
     // in the main window while the visual hooks it controls run in the
     // projector output window's own separate renderer process (same
@@ -124,9 +128,13 @@ const ProjectorPage = () => {
         window.projector?.setNowPlayingOverlay(next)
     }
 
+    // BS-008: retargets the CURRENTLY SELECTED surface's own visualId field,
+    // via the exact same pushSurfaces() -> window.mapping.setSurfaces()
+    // mechanism handleRenameSelected/handleRotationChange below already use
+    // — no separate global IPC call anymore (the old projector:setVisual
+    // relay is gone, see main/index.js and preload/index.js).
     const handleVisualSelect = (visualId) => {
-        setActiveVisual(visualId)
-        window.projector?.setVisual(visualId)
+        pushSurfaces(surfaces.map(s => (s.id === selectedSurfaceId ? { ...s, visualId } : s)))
     }
 
     const handleVisualColorSyncToggle = () => {
@@ -350,21 +358,31 @@ const ProjectorPage = () => {
                             </div>
                         </div>
 
-                        <div style={{ display: 'flex', gap: '12px' }}>
-                            {VISUALS.map((visual) => (
-                                <div
-                                    key={visual.id}
-                                    className={`bgr-toggle ${activeVisual === visual.id ? 'active' : ''}`}
-                                    onClick={() => handleVisualSelect(visual.id)}
-                                    title={visual.label}
-                                    style={{ height: '48px', padding: '0 16px', flex: 1, justifyContent: 'center' }}
-                                >
-                                    <span>{visual.label.toUpperCase()}</span>
-                                </div>
-                            ))}
+                        {/* BS-008: this picker now targets whichever surface is
+                            currently selected below (Projection Mapping —
+                            Surfaces card), not one global visual — the label
+                            makes that target explicit since this card is
+                            visually separate from the surface list. */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <span style={{ fontSize: '11px', opacity: 0.7 }}>
+                                Visual for: {selectedSurface?.name || DEFAULT_SURFACE.name}
+                            </span>
+                            <div style={{ display: 'flex', gap: '12px' }}>
+                                {VISUALS.map((visual) => (
+                                    <div
+                                        key={visual.id}
+                                        className={`bgr-toggle ${(selectedSurface?.visualId || DEFAULT_VISUAL_ID) === visual.id ? 'active' : ''}`}
+                                        onClick={() => handleVisualSelect(visual.id)}
+                                        title={visual.label}
+                                        style={{ height: '48px', padding: '0 16px', flex: 1, justifyContent: 'center' }}
+                                    >
+                                        <span>{visual.label.toUpperCase()}</span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
 
-                        {COLOR_SYNC_VISUAL_IDS.includes(activeVisual) && (
+                        {COLOR_SYNC_VISUAL_IDS.includes(selectedSurface?.visualId || DEFAULT_VISUAL_ID) && (
                             <div style={{ display: 'flex', gap: '12px' }}>
                                 <div
                                     className={`bgr-toggle ${visualColorSync ? 'active' : ''}`}

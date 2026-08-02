@@ -48,19 +48,22 @@ const MAPPING_PRESETS_PATH = join(app.getPath('userData'), 'mapping-presets.json
 // to relay to.
 let lastKnownSurfaces = null
 
-// Bugfix: projector:setBlackout/setTestPattern/setVisual/setNowPlayingOverlay
-// and mapping:setEditMode were pure one-way relays with no server-side cache
+// Bugfix: projector:setBlackout/setTestPattern/setNowPlayingOverlay and
+// mapping:setEditMode were pure one-way relays with no server-side cache
 // - a freshly-opened (or reopened after being closed) projector window had no
 // way to learn the CURRENT toggle state, only updates pushed after it happened
 // to be listening. Mirrors the lastKnownSurfaces pattern above: cached
 // unconditionally on every set*, pulled on mount via projector:getState.
-// activeVisual starts null (not a real visual id) so ProjectorApp.jsx can
-// tell "never set yet" apart from an actual pulled value and keep its own
-// default in that case.
+// BS-008: the old activeVisual field lived here too, but it's gone now that
+// each surface carries its own visualId (relayed via mapping:setSurfaces /
+// lastKnownSurfaces above instead) — see MappingCompositor.jsx/
+// ProjectorApp.jsx/ProjectorPage.jsx. Removed rather than left dead: grepped
+// the whole renderer/main/preload tree first and confirmed ProjectorApp.jsx
+// and ProjectorPage.jsx were its only callers, and both were rewritten to
+// stop using it.
 let lastKnownProjectorState = {
     blackout: false,
     testPattern: false,
-    activeVisual: null,
     nowPlayingOverlay: false,
     mappingEditMode: false,
     // Ecosystem Color-Sync ("Sync colors with lights") toggle - same
@@ -1830,10 +1833,6 @@ function setupIPC() {
     ipcMain.on('projector:setTestPattern', (event, value) => {
         lastKnownProjectorState.testPattern = value
         projectorWindow?.webContents.send('projector:testPattern', value)
-    })
-    ipcMain.on('projector:setVisual', (event, visualId) => {
-        lastKnownProjectorState.activeVisual = visualId
-        projectorWindow?.webContents.send('projector:visualChanged', visualId)
     })
     // BS-007 phase 2: Now Playing overlay toggle - relayed the exact same
     // one-way way as setBlackout/setTestPattern above. The projector window
