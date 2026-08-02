@@ -194,7 +194,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
             if (fallbackToDefault && requestedDeviceId) {
                 setSourceError(selectedDeviceId
                     ? 'Selected audio input is unavailable. BeamStudio fell back to the default input.'
-                    : 'Preferred monitor input is unavailable. BeamStudio fell back to the default input.')
+                    : 'Preferred monitor input is unavailable. BeamStudio did not fall back to the microphone.')
             }
 
             streamRef.current = stream
@@ -433,12 +433,17 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 return
             }
 
-            if (err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError') {
-                setSourceError('No audio input is available. On Linux, BeamStudio currently depends on a monitor/loopback input exposed by PipeWire or PulseAudio.')
+            if (err?.name === 'SystemAudioSourceNotFoundError') {
+                setSourceError('No system monitor/loopback input was detected. BeamStudio will not use the computer microphone in Auto mode. Select a monitor/loopback device or expose one from PipeWire/PulseAudio.')
                 return
             }
 
-            setSourceError('Audio detection failed to start. On Linux, BeamStudio currently analyzes monitor/loopback inputs, not native desktop loopback.')
+            if (err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError') {
+                setSourceError('No audio input is available. BeamStudio needs the monitor/loopback source for what people actually hear.')
+                return
+            }
+
+            setSourceError('Audio detection failed to start. BeamStudio only auto-captures monitor/loopback system audio, not the computer microphone.')
         }
     }, [refreshInputs, selectedDeviceId, sendDmxBatch, stop, autoGenre, detectedGenre, manualGenre, onAudioUpdate, audioSensitivity])
 

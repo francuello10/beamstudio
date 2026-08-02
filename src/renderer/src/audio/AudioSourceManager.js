@@ -8,6 +8,12 @@ const stopStream = (stream) => {
 
 const getStreamDeviceId = (stream) => stream?.getAudioTracks?.()[0]?.getSettings?.().deviceId || ''
 
+const createSystemAudioSourceError = (message) => {
+    const error = new Error(message)
+    error.name = 'SystemAudioSourceNotFoundError'
+    return error
+}
+
 export const readStoredAudioInputId = () => {
     try {
         return localStorage.getItem(AUDIO_INPUT_STORAGE_KEY) || ''
@@ -78,10 +84,14 @@ export const requestAudioInputStream = async ({
                     audio: { ...constraints, deviceId: { exact: requestedDeviceId } },
                     video: false
                 })
+            } else if (!unlockedPreferredInput) {
+                stopStream(stream)
+                throw createSystemAudioSourceError('No system monitor/loopback input was detected.')
             }
         }
     } catch (error) {
         if (!requestedDeviceId) throw error
+        if (!selectedDeviceId) throw createSystemAudioSourceError('The preferred system monitor/loopback input is unavailable.')
 
         fallbackToDefault = true
         stream = await navigator.mediaDevices.getUserMedia({

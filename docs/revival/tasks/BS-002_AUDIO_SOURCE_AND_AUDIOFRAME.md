@@ -44,6 +44,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - Doceavo slice activo: audio reactive dejó de ser un modo exclusivo y ahora puede modular un look base sólido como REUNIÓN.
 - Treceavo slice activo: el RGB manual del Mixer alimenta `audioBaseColors`, por lo que Quick Palettes, ColorWheel y faders RGB funcionan como base para el booster.
 - Catorceavo slice activo: la captura de audio hace una segunda enumeración después del permiso para preferir automáticamente monitor/loopback y evitar caer al micrófono por labels ocultas en Linux.
+- Quinceavo slice activo: el modo automático rechaza el micrófono; si no hay monitor/loopback, no arranca y muestra error claro.
 
 ## Alcance
 
@@ -66,6 +67,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - [x] Audio mueve medidores en Linux con la fuente activa validada por el usuario.
 - [ ] Spotify/Tidal/YouTube mueven medidores con micrófono físico muteado en una prueba explícita por app.
 - [x] En Linux, si los labels aparecen recién después del permiso, BeamStudio reenumera y cambia automáticamente a monitor/loopback cuando existe.
+- [x] En modo automático, BeamStudio no usa el micrófono como fallback para audio reactive.
 - [ ] La fuente seleccionada sobrevive reinicio.
 - [ ] Si falta el device, se informa error claro y fallback.
 - [ ] `AudioFrame` siempre tiene campos válidos.
