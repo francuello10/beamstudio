@@ -89,6 +89,23 @@ checkPattern(
   'renderer:no-artnet-toggle'
 )
 
+const audioAnalyzerPath = path.join(root, 'src/renderer/src/audio/AudioAnalyzer.js')
+const audioAnalyzerContent = readFileSync(audioAnalyzerPath, 'utf8')
+const spatialResponseMatch = audioAnalyzerContent.match(/export const buildSpatialResponse =[\s\S]*?\n}\)/)
+const spatialResponseSource = spatialResponseMatch?.[0] || ''
+addCheck(
+  'audio:spatial-no-mono-vocal-injection',
+  !!spatialResponseSource && !/vocalPulse/.test(spatialResponseSource),
+  spatialResponseSource ? 'vocalPulse not present in buildSpatialResponse' : 'buildSpatialResponse not found'
+)
+
+addCheck(
+  'audio:spatial-preserves-left-right-difference',
+  /left:\s*Math\.min\(1\.0,\s*midHighL\s*\*\s*1\.12\)/.test(spatialResponseSource)
+    && /right:\s*Math\.min\(1\.0,\s*midHighR\s*\*\s*1\.12\)/.test(spatialResponseSource),
+  'left/right derive from their own mid-high channel'
+)
+
 const failed = checks.filter(check => !check.pass)
 
 for (const check of checks) {

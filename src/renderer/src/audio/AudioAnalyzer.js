@@ -167,10 +167,10 @@ export const computeMidHigh = (bandsL, bandsR) => ({
     midHighR: bandsR.slice(4).reduce((a, b) => a + b, 0) / 12
 })
 
-export const buildSpatialResponse = ({ midHighL, bassSmooth, midHighR, vocalPulse = 0 }) => ({
-    left: Math.min(1.0, midHighL * 1.12 + vocalPulse * 0.34),
+export const buildSpatialResponse = ({ midHighL, bassSmooth, midHighR }) => ({
+    left: Math.min(1.0, midHighL * 1.12),
     center: Math.min(1.0, bassSmooth * 1.0),
-    right: Math.min(1.0, midHighR * 1.12 + vocalPulse * 0.34)
+    right: Math.min(1.0, midHighR * 1.12)
 })
 
 export const buildSpectralResponse = (bandsL, bandsR) => {

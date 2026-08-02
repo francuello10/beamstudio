@@ -511,13 +511,16 @@ export function useFluidSimulation() {
                     splat(0.5 + (Math.random() - 0.5) * 0.2, 0.1, 0, 4.0 * spatial.center, color, 2.0 * spatial.center, 1.5)
                 }
             }
-            if (spatial.left > 0.1 && Math.random() < spatial.left * 0.3) {
+            const leftImpulse = Math.min(1, spatial.left * 3.2)
+            const rightImpulse = Math.min(1, spatial.right * 3.2)
+
+            if (leftImpulse > 0.04 && Math.random() < leftImpulse * 0.28) {
                 const color = activePalette.colors[0]
-                splat(0.15, 0.3 + Math.random() * 0.4, 2.0 * spatial.left, 0, color, 1.0 * spatial.left, 0.8)
+                splat(0.15, 0.3 + Math.random() * 0.4, 1.5 * leftImpulse, 0, color, 0.75 * leftImpulse, 0.7)
             }
-            if (spatial.right > 0.1 && Math.random() < spatial.right * 0.3) {
+            if (rightImpulse > 0.04 && Math.random() < rightImpulse * 0.28) {
                 const color = activePalette.colors[1]
-                splat(0.85, 0.3 + Math.random() * 0.4, -2.0 * spatial.right, 0, color, 1.0 * spatial.right, 0.8)
+                splat(0.85, 0.3 + Math.random() * 0.4, -1.5 * rightImpulse, 0, color, 0.75 * rightImpulse, 0.7)
             }
         } else if (currentMode === 'EQ') {
             // EQ MODE: Spectral Fountains

@@ -332,6 +332,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
             }
 
             const baseAudioConstraints = {
+                channelCount: { ideal: 2 },
                 echoCancellation: false,
                 autoGainControl: false,
                 noiseSuppression: false,
@@ -502,7 +503,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 vocalPulse.current = Math.max(vocalEnergy, vocalPulse.current * vocalDecay)
                 const vocalOutput = vocalPulse.current
 
-                const spatial = buildSpatialResponse({ midHighL, bassSmooth: centerBassOutput, midHighR, vocalPulse: vocalOutput })
+                const spatial = buildSpatialResponse({ midHighL, bassSmooth: centerBassOutput, midHighR })
                 const spectral = buildSpectralResponse(bandsL, bandsR)
 
                 const energies = spatial
