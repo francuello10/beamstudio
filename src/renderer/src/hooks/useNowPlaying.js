@@ -51,6 +51,7 @@ export const useNowPlaying = () => {
                     createNowPlaying({
                         title: media.title,
                         artist: media.artist,
+                        album: media.album,
                         artwork: media.artUrl,
                         playbackStatus: media.playbackStatus,
                         progress: hasProgress

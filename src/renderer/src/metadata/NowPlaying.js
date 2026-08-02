@@ -21,6 +21,11 @@
 export const createEmptyNowPlaying = () => ({
     title: '',
     artist: '',
+    // Album name via MPRIS `xesam:album` - confirmed available on this
+    // machine against a real live Spotify session (unlike a composer/
+    // songwriter field, which MPRIS does not expose at all - deliberately
+    // not part of this contract).
+    album: '',
     artwork: null,
     state: 'no-player',
     progress: null,
@@ -53,6 +58,7 @@ export const normalizeNowPlayingState = (rawPlaybackStatus) => {
 export const createNowPlaying = ({
     title,
     artist,
+    album,
     artwork,
     state,
     playbackStatus,
@@ -62,6 +68,8 @@ export const createNowPlaying = ({
 } = {}) => ({
     title: typeof title === 'string' ? title.trim() : '',
     artist: typeof artist === 'string' ? artist.trim() : '',
+    // Same normalization style as title/artist: trimmed string, '' default.
+    album: typeof album === 'string' ? album.trim() : '',
     // Artwork via MPRIS `mpris:artUrl`: reliably present for some players
     // (e.g. Spotify) but not guaranteed across every MPRIS-compatible player
     // or desktop environment, so this stays null unless a real URL string
