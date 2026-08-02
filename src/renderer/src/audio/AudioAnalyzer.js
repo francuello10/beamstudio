@@ -13,39 +13,65 @@ export const extractBands = (data, count = 16) => {
 
 const clamp01 = (value) => Math.max(0, Math.min(1, value))
 
-export const computeBassEnergy = (dataBass) => {
-    if (!dataBass?.length) return 0
+const averageFrequencyBand = (data, sampleRate, fftSize, minHz, maxHz) => {
+    if (!data?.length || !sampleRate || !fftSize) return 0
 
-    // Skip bin 0 so the center/bass slot reacts to musical low-end pulses,
-    // not DC / analyser floor. Use a small weighted window because fftSize=256
-    // makes the first musical bass bins broad.
-    const bassWeights = [1.4, 1.2, 0.9, 0.6, 0.4]
-    let bassSum = 0
-    let weightSum = 0
+    const hzPerBin = sampleRate / fftSize
+    const startBin = Math.max(1, Math.floor(minHz / hzPerBin))
+    const endBin = Math.min(data.length - 1, Math.ceil(maxHz / hzPerBin))
+    if (endBin < startBin) return 0
 
-    for (let i = 0; i < bassWeights.length; i++) {
-        const bin = i + 1
-        if (bin >= dataBass.length) break
-        const weight = bassWeights[i]
-        bassSum += dataBass[bin] * weight
-        weightSum += weight
+    let sum = 0
+    let count = 0
+    for (let bin = startBin; bin <= endBin; bin++) {
+        sum += data[bin]
+        count++
     }
 
-    if (weightSum === 0) return 0
-
-    const bassAvg = bassSum / weightSum
-    const floorStart = Math.min(8, dataBass.length)
-    const floorEnd = Math.min(18, dataBass.length)
-    let floorAvg = 0
-
-    if (floorEnd > floorStart) {
-        for (let i = floorStart; i < floorEnd; i++) floorAvg += dataBass[i]
-        floorAvg /= floorEnd - floorStart
-    }
-
-    const lowPulse = Math.max(0, bassAvg - floorAvg * 0.35) / 255
-    return clamp01(Math.pow(lowPulse * 1.65, 0.75))
+    return count ? sum / count / 255 : 0
 }
+
+export const computeBassProfile = (dataBass, {
+    sampleRate = 48000,
+    fftSize = 2048,
+    previousRaw = 0,
+    adaptiveFloor = 0,
+    boostLevel = 1
+} = {}) => {
+    if (!dataBass?.length) {
+        return { energy: 0, raw: 0, floor: 0, sub: 0, kick: 0, lowMid: 0, transient: 0 }
+    }
+
+    // True bass detector for lighting:
+    // - SUB: 35-90 Hz
+    // - KICK: 90-160 Hz
+    // - LOW-MID penalty: 160-350 Hz so guitars/vocals/rock body do not fake club bass.
+    const sub = averageFrequencyBand(dataBass, sampleRate, fftSize, 35, 90)
+    const kick = averageFrequencyBand(dataBass, sampleRate, fftSize, 90, 160)
+    const lowMid = averageFrequencyBand(dataBass, sampleRate, fftSize, 160, 350)
+
+    const coreBass = Math.max(sub * 1.25, kick * 1.08, sub * 0.78 + kick * 0.58)
+    const lowMidPenalty = Math.min(0.5, lowMid * 0.55)
+    const raw = clamp01(coreBass - lowMidPenalty)
+
+    const floor = raw > adaptiveFloor
+        ? adaptiveFloor * 0.995 + raw * 0.005
+        : adaptiveFloor * 0.92 + raw * 0.08
+
+    const sensitivity = Math.max(0.5, Math.min(4, boostLevel || 1))
+    const gate = Math.max(0.012, floor * (1.16 - sensitivity * 0.045) + (0.045 - sensitivity * 0.008))
+    const aboveFloor = Math.max(0, raw - gate)
+    const rise = Math.max(0, raw - previousRaw)
+    const transient = clamp01(rise * 7.5)
+    const sustained = clamp01(aboveFloor * 2.4)
+    const shaped = sustained * 0.65 + transient * 0.95
+    const curve = Math.max(0.45, 0.82 - sensitivity * 0.06)
+    const energy = clamp01(Math.pow(shaped, curve))
+
+    return { energy, raw, floor, sub, kick, lowMid, transient }
+}
+
+export const computeBassEnergy = (dataBass, options) => computeBassProfile(dataBass, options).energy
 
 export const applyPeakHold = ({
     bandsL,

@@ -58,6 +58,8 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - Veintiseisavo slice activo: el boost pasó a criterio 4D/fiesta electrónica para hardware no-AAA: bass decay más corto, analyser bass más rápido, saltos DIM/RGB cuantizados y overlay de DIM también en laterales con menor intensidad que el centro.
 - Veintisieteavo slice activo: el filtro de fuentes audio acepta monitores explícitos y fuentes genéricas `Default`/PipeWire/Pulse que no digan mic/webcam/camera, para no bloquear Linux cuando el monitor no trae label descriptivo.
 - Veintiochoavo slice activo: las bases RGB ahora se normalizan a potencia alta para audio; el color elegido define hue, no límite de brillo, y los bajos mueven DIM/RGB con saltos más visibles en fixtures no-AAA.
+- Veintinueveavo slice activo: el bass center dejó de usar bins low-mid amplios; ahora detecta SUB 35-90 Hz + KICK 90-160 Hz con FFT 2048, penaliza 160-350 Hz y usa transiente/adaptive floor para que rock/voz/guitarra no disparen falso bajo.
+- Treintavo slice activo: si la música entra en silencio/pausa sostenida, el audio engine deja de mandar frames DMX y congela la salida física en vez de seguir animando una escena fija.
 
 ## Alcance
 
@@ -101,6 +103,8 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - [x] La salida audio modula DIM/RGB en los tres slots: Slot 2 pega más al bajo y laterales acompañan con saltos de fiesta electrónica.
 - [x] En Linux, BeamStudio puede usar fuente genérica `Default`/PipeWire/Pulse como system audio si no está etiquetada como micrófono/cámara.
 - [x] El audio normaliza colores base a potencia alta para que un frame previo oscuro no deje las luces casi quietas.
+- [x] Slot 2 usa bass real por frecuencia: SUB 35-90 Hz, KICK 90-160 Hz y penalización low-mid 160-350 Hz.
+- [x] En pausa/silencio sostenido, BeamStudio congela la salida DMX audio y mantiene la escena fija sin pulso artificial.
 - [ ] Silencio no genera NaN, Infinity ni flashes erráticos.
 - [ ] El DSP no escribe DMX directamente salvo contrato explícito.
 - [ ] La UI no renderiza innecesariamente a 60 Hz.

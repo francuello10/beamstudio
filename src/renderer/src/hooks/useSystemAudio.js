@@ -10,7 +10,7 @@ import {
     buildFrameTelemetry,
     buildSpatialResponse,
     buildSpectralResponse,
-    computeBassEnergy,
+    computeBassProfile,
     computeLowMid,
     computeMidHigh,
     computeStereoWidth,
@@ -100,6 +100,9 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
     const peakHoldR = useRef(new Array(16).fill(0))
     const peakHoldBass = useRef(0)
     const bassPulse = useRef(0)
+    const bassFloor = useRef(0)
+    const previousBassRaw = useRef(0)
+    const lastSignalAt = useRef(0)
 
     // Genre detection history
     const genreHistory = useRef([])
@@ -157,6 +160,9 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
         setAudioTelemetryDSP({ left: 0, center: 0, right: 0 })
         peakHoldBass.current = 0
         bassPulse.current = 0
+        bassFloor.current = 0
+        previousBassRaw.current = 0
+        lastSignalAt.current = 0
         smoothedOutput.current = [
             { r: 0, g: 0, b: 0 },
             { r: 0, g: 0, b: 0 },
@@ -253,8 +259,8 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
             splitter.connect(merger, 0, 0)
             splitter.connect(merger, 1, 1)
             analyserBass.current = audioCtx.current.createAnalyser()
-            analyserBass.current.fftSize = 256
-            analyserBass.current.smoothingTimeConstant = 0.08 // [T2] Brutal 4D kicks for non-AAA fixtures
+            analyserBass.current.fftSize = 2048
+            analyserBass.current.smoothingTimeConstant = 0.06 // [T2] True sub/kick detector with fast lighting response
             merger.connect(analyserBass.current)
 
             setActive(true)
@@ -273,7 +279,17 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
 
                 const bandsL = extractBands(dataL)
                 const bandsR = extractBands(dataR)
-                const bassEnergy = computeBassEnergy(dataBass)
+                const boostLevel = Math.max(0.5, Math.min(4, audioSensitivity || 1))
+                const bassProfile = computeBassProfile(dataBass, {
+                    sampleRate: audioCtx.current?.sampleRate || 48000,
+                    fftSize: analyserBass.current?.fftSize || 2048,
+                    previousRaw: previousBassRaw.current,
+                    adaptiveFloor: bassFloor.current,
+                    boostLevel
+                })
+                bassFloor.current = bassProfile.floor
+                previousBassRaw.current = bassProfile.raw
+                const bassEnergy = bassProfile.energy
                 const peakState = applyPeakHold({
                     bandsL,
                     bandsR,
@@ -287,7 +303,6 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
 
                 // Output bass must be rhythmic, not a slow VU hold. Peak hold is useful
                 // for meters, but it flattens the physical center light into “always on”.
-                const boostLevel = Math.max(0.5, Math.min(4, audioSensitivity || 1))
                 const bassDecay = Math.max(0.48, 0.78 - boostLevel * 0.075)
                 bassPulse.current = Math.max(bassEnergy, bassPulse.current * bassDecay)
                 const bassOutput = bassPulse.current
@@ -325,7 +340,9 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 const highEnergy = spectral.slice(10).reduce((sum, value) => sum + value, 0) / 6
                 const midEnergy = spectral.slice(4, 10).reduce((sum, value) => sum + value, 0) / 6
                 const volume = Math.min(1.0, (bassOutput + midHighL + midHighR) / 3)
-                const silence = volume < 0.025
+                const signalEnergy = Math.max(bassProfile.raw, midEnergy, highEnergy, midHighL, midHighR)
+                if (signalEnergy > 0.018) lastSignalAt.current = now
+                const silence = lastSignalAt.current === 0 || now - lastSignalAt.current > 350
                 const clipping = Math.max(...spectral, bassOutput, midHighL, midHighR) >= 0.98
                 const frameTelemetry = buildFrameTelemetry({
                     bassEnergy,
@@ -359,6 +376,22 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                     status: { silence, clipping },
                     genre: autoGenre ? detectedGenre : manualGenre
                 })
+
+                if (silence) {
+                    useAudioStore.getState().updateAudioAnalysis(
+                        { left: 0, center: 0, right: 0 },
+                        spectral,
+                        audioFrame
+                    )
+                    setAudioTelemetryDSP({ left: 0, center: 0, right: 0 })
+                    if (onAudioUpdate) onAudioUpdate({ left: 0, center: 0, right: 0 })
+                    setVisualizerData({
+                        left: [...peakHoldL.current],
+                        right: [...peakHoldR.current],
+                        bass: 0
+                    })
+                    return
+                }
 
                 // ═══════════════════════════════════════════════
                 // BASS PULSE MODE — Pure bass-driven ON/OFF lights
