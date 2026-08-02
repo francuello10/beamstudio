@@ -63,7 +63,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
         right: new Array(16).fill(0),
         bass: 0
     })
-    const [modifierMode, setModifierMode] = useState(false)
+    const [modifierMode, setModifierMode] = useState(true)
     const [bassPulseMode, setBassPulseMode] = useState(false)
     const [energyFactor, setEnergyFactor] = useState(1)
 
@@ -343,8 +343,8 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                     smoothedOutput.current = applyModifierAndSmoothing({
                         currentColors: smoothedOutput.current,
                         targetColors: pulseRender.colors,
-                        inputColors: null,
-                        modifierMode: false,
+                        inputColors: inputColorsRef.current,
+                        modifierMode: true,
                         audioFrame,
                         audioSensitivity
                     })

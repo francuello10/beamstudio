@@ -8,6 +8,14 @@ import { useAudioStore } from '../store/audioStore'
 
 const percent = (value) => `${Math.round((value || 0) * 100)}%`
 
+const isVisibleColor = (color = {}) => (color.r || 0) + (color.g || 0) + (color.b || 0) > 0
+
+const normalizeColors = (colors = []) => colors.map(color => ({
+    r: color?.r || 0,
+    g: color?.g || 0,
+    b: color?.b || 0
+}))
+
 const colorPreview = (color = {}) => ({
     background: `rgb(${color.r || 0}, ${color.g || 0}, ${color.b || 0})`,
     boxShadow: `0 0 18px rgba(${color.r || 0}, ${color.g || 0}, ${color.b || 0}, 0.45)`
@@ -30,6 +38,8 @@ const AudioPage = () => {
     const setAudioTelemetryDSP = useAudioStore(state => state.setAudioTelemetryDSP)
     const setAudioData = useAudioStore(state => state.setAudioData)
     const audioFrame = useAudioStore(state => state.audioFrame)
+    const audioBaseColors = useAudioStore(state => state.audioBaseColors)
+    const setAudioBaseColors = useAudioStore(state => state.setAudioBaseColors)
 
     const {
         start, stop, active, detectedGenre, autoGenre, setAutoGenre,
@@ -37,7 +47,7 @@ const AudioPage = () => {
         bassPulseMode, setBassPulseMode,
         availableInputs, selectedDeviceId, setSelectedDeviceId, refreshInputs, sourceError,
         activeSource, reconnecting
-    } = useSystemAudio((colors) => sendPixelMapBuffer(colors, 'audio'), null, setAudioTelemetryDSP)
+    } = useSystemAudio((colors) => sendPixelMapBuffer(colors, 'audio'), audioBaseColors, setAudioTelemetryDSP)
 
     React.useEffect(() => {
         if (active) window.dmx?.setDynamicRendererActive(true, 'audio')
@@ -47,6 +57,14 @@ const AudioPage = () => {
     React.useEffect(() => {
         setAudioData({ audioActive: active, activeAudioSource: activeSource })
     }, [active, activeSource, setAudioData])
+
+    const handleStart = React.useCallback(async () => {
+        const currentColors = normalizeColors(pixelMapBuffer)
+        if (currentColors.some(isVisibleColor)) {
+            setAudioBaseColors(currentColors)
+        }
+        await start()
+    }, [pixelMapBuffer, setAudioBaseColors, start])
 
     const currentGenre = autoGenre ? detectedGenre : manualGenre
     const mapping = [
@@ -84,7 +102,7 @@ const AudioPage = () => {
                     </div>
 
                     <p className="subtitle" style={{ marginBottom: '18px' }}>
-                        System input → DSP analysis → fixture-slot DMX mapping
+                        Base look → DSP modulation → fixture-slot DMX mapping
                     </p>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '10px', marginBottom: '12px' }}>
@@ -222,7 +240,7 @@ const AudioPage = () => {
                             Mapping behavior
                         </div>
                         <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
-                            Slot order follows the fixture patch. RGB receives the reactive color; DIM keeps the current master dimmer; FUNC/SPD/FLASH are left untouched. Extra fixtures reuse the last slot color.
+                            Slot order follows the fixture patch. If you set REUNIÓN or another solid look first, Bass Pulse / Genre modulates that base color. RGB changes reactively; DIM keeps the current master dimmer; FUNC/SPD/FLASH are left untouched. Extra fixtures reuse the last slot color.
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
                             {mapping.map((item) => (
@@ -253,7 +271,7 @@ const AudioPage = () => {
                     <div className="controls-row" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
                         <motion.button
                             className={`action-button ${active ? 'stop' : 'start'}`}
-                            onClick={active ? stop : start}
+                            onClick={active ? stop : handleStart}
                             style={{ height: '52px', padding: '0 40px', margin: 0, fontSize: '14px' }}
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}

@@ -864,6 +864,7 @@ function clearOutputOwner(owner) {
 }
 
 function isAsyncOutputSourceAllowed(source = 'renderer') {
+    if (source === 'audio' && dmxState.audioReactiveActive) return true
     return dmxState.outputOwner === source
 }
 

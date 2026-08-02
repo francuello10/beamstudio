@@ -41,6 +41,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - Noveno slice activo en `main`: Ambilight y Fluid consumen `audioFrame` como contrato principal en lugar de depender de campos sueltos.
 - Décimo slice activo en `main`: se corrigió la importación faltante de `useAudioStore` en `useSystemAudio`, validado por el usuario en Linux.
 - Onceavo slice activo: la UI de audio se simplificó para mostrar fuente activa, estado de señal, modo y mapeo por slot de fixture/DMX.
+- Doceavo slice activo: audio reactive dejó de ser un modo exclusivo y ahora puede modular un look base sólido como REUNIÓN.
 
 ## Alcance
 
@@ -54,6 +55,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - Separar análisis de presentación.
 - Noise floor, normalización y valores válidos ante silencio.
 - Reducir renders React de alta frecuencia.
+- Modular colores base sólidos con Bass Pulse/Genre sin reemplazar conceptualmente el look activo.
 - Cleanup completo de streams, tracks, animation frames y AudioContext.
 
 ## Criterios de aceptación
@@ -63,6 +65,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - [ ] La fuente seleccionada sobrevive reinicio.
 - [ ] Si falta el device, se informa error claro y fallback.
 - [ ] `AudioFrame` siempre tiene campos válidos.
+- [x] Bass Pulse/Genre pueden actuar sobre un color base sólido como REUNIÓN.
 - [ ] Silencio no genera NaN, Infinity ni flashes erráticos.
 - [ ] El DSP no escribe DMX directamente salvo contrato explícito.
 - [ ] La UI no renderiza innecesariamente a 60 Hz.

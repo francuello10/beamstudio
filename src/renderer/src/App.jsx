@@ -111,9 +111,10 @@ function App() {
     const resetDmx = useDmxStore(state => state.resetDmx)
     const dispatchDmxAttributeUpdate = useDmxStore(state => state.dispatchDmxAttributeUpdate)
     const dispatchBulkDmxUpdate = useDmxStore(state => state.dispatchBulkDmxUpdate)
+    const dmxFixtures = useDmxStore(state => state.dmxFixtures)
 
     // Audio Store
-    const setSpatialEnergies = useAudioStore(state => state.setSpatialEnergies)
+    const setAudioBaseColors = useAudioStore(state => state.setAudioBaseColors)
 
     // Initial Data Loading
     useEffect(() => {
@@ -134,14 +135,19 @@ function App() {
     // Global Actions
     const handleReset = useCallback(async () => {
         resetDmx()
+        setAudioBaseColors([])
         await window.dmx?.reset()
-    }, [resetDmx])
+    }, [resetDmx, setAudioBaseColors])
 
     const handleMeet = useCallback(async () => {
-        const warmWhite = { red: 255, green: 180, blue: 120, func: 0, spd: 0, flash: 0, dim: 150 }
+        const warmWhite = { red: 255, green: 180, blue: 100, func: 0, spd: 0, flash: 0, dim: 150 }
+        const warmBaseColors = (dmxFixtures.length ? dmxFixtures : [null, null, null])
+            .map(() => ({ r: warmWhite.red, g: warmWhite.green, b: warmWhite.blue }))
+
+        setAudioBaseColors(warmBaseColors)
         dispatchBulkDmxUpdate(warmWhite)
         await window.dmx?.colorMacro('WARM')
-    }, [dispatchBulkDmxUpdate])
+    }, [dispatchBulkDmxUpdate, dmxFixtures, setAudioBaseColors])
 
     const handleIntenseFlash = useCallback(() => {
         window.dmx?.intenseFlash()
