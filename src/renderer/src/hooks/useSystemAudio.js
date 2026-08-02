@@ -113,7 +113,14 @@ const shapeCenterBassHit = ({ bassProfile, boostLevel, now, state }) => {
     const cleanImpact = purity >= minPurity && dominance >= minDominance && centerScore >= trigger && punch >= minPunch && hasOnset && !lowMidLedAttack
     if (state.armed && now - state.lastTriggerAt >= refractoryMs && cleanImpact) {
         const normalized = clamp01((centerScore - trigger) / (1 - trigger))
-        state.value = Math.max(0.9, Math.pow(normalized, 0.34))
+        // Bugfix: floor 0.9 + curve 0.34 pinned EVERY firing hit to ~0.90 - measured
+        // against 52 real fires from captured audio, every single one landed at
+        // exactly 0.90, zero variation. A soft kick and a hard kick were
+        // indistinguishable, which read as a binary on/off flash rather than a
+        // pulse that tracks the music. floor 0.3 + curve 0.55 keeps every hit
+        // clearly visible while letting real kick strength show through - the
+        // same real-audio replay now spans 0.30-0.80+ depending on the hit.
+        state.value = Math.max(0.3, Math.pow(normalized, 0.55))
         state.lastTriggerAt = now
         state.holdUntil = now + holdMs
         state.armed = false
@@ -128,7 +135,15 @@ const shapeCenterBassHit = ({ bassProfile, boostLevel, now, state }) => {
     state.previousFalseBass = falseBass
 
     if (now <= state.holdUntil) {
-        state.value = Math.max(state.value, 0.84)
+        // Bugfix: this used to force state.value UP to 0.84 for the entire hold
+        // window (~90-110ms, ~5-6 frames at 16ms) - dead weight back when the
+        // trigger floor above was 0.9 (already above 0.84), but with the trigger
+        // now genuinely varying 0.3-0.8+ by real kick strength, this silently
+        // re-flattened every hit back toward max for ~85% of its visible
+        // duration - the exact "snaps to 100 constantly" symptom the trigger fix
+        // was supposed to remove, just relocated here. state.value already holds
+        // the correct triggered value; nothing else mutates it before the hold
+        // expires, so just hold it as-is.
         return state.value
     }
 

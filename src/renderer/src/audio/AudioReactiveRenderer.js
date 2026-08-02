@@ -137,10 +137,14 @@ export const buildBassPulseColors = (audioFrame) => {
     }
 }
 
-export const buildGenreColors = (audioFrame) => {
+// centerBassOverride lets a caller fix the center slot's hue at a specific
+// bass intensity instead of the live value - see applyModifierAndSmoothing's
+// use of it below, which needs the genre's fully-saturated reference hue, not
+// whatever centerBassHit happens to be at that instant.
+export const buildGenreColors = (audioFrame, centerBassOverride = null) => {
     const genre = audioFrame.genre || 'UNKNOWN'
     const bass = audioFrame.levels.bass
-    const centerBass = clamp01(audioFrame.levels.centerBassHit ?? bass ?? 0)
+    const centerBass = centerBassOverride ?? clamp01(audioFrame.levels.centerBassHit ?? bass ?? 0)
     const left = audioFrame.stereo.midHighLeft
     const right = audioFrame.stereo.midHighRight
     const vocalPulse = clamp01(audioFrame.levels.vocal || audioFrame.levels.melodyPulse || 0)
@@ -203,7 +207,8 @@ export const applyModifierAndSmoothing = ({
 }) => {
     let nextTargetColors = targetColors
 
-    const sourceColors = inputColors && inputColors.length >= 3 ? inputColors : targetColors
+    const hasRealInputColors = inputColors && inputColors.length >= 3
+    const sourceColors = hasRealInputColors ? inputColors : targetColors
 
     if (modifierMode && sourceColors && sourceColors.length >= 3) {
         const boostLevel = Math.max(0.5, Math.min(4, audioSensitivity || 1))
@@ -213,7 +218,23 @@ export const applyModifierAndSmoothing = ({
             const bass = Math.pow(rawBass, 0.62)
             const vocalPulse = Math.pow(clamp01(audioFrame.levels.vocal || audioFrame.levels.melodyPulse || 0), 0.62)
             if (index === 1) {
-                return buildCenterBassKickColor(color, centerBassHit, boostLevel)
+                // Bugfix: when there's no explicit base-color override, `color`
+                // here used to be targetColors[1] - buildGenreColors' own center
+                // entry, ALREADY scaled down by the live bassGlow at that instant.
+                // buildCenterBassKickColor then re-normalized it (stretches
+                // whichever channel is highest up to 255) and applied its OWN,
+                // separately-calibrated kick/dim curve on top - two independent
+                // bass-driven modulations stacked, with the additive offset terms
+                // in each genre's formula (e.g. ELECTRO's +40/+15/+30) shifting hue
+                // differently at different bassGlow levels along the way. Using
+                // the genre's fully-saturated reference hue (centerBassOverride: 1)
+                // instead keeps Slot 2 in one fixed base hue, exactly like the
+                // comment on buildCenterBassKickColor already says it should - kick
+                // intensity is now the only thing that varies. A real manual/scene
+                // base color (hasRealInputColors) is already a fixed hue and needs
+                // no substitution.
+                const centerReferenceColor = hasRealInputColors ? color : buildGenreColors(audioFrame, 1)[1]
+                return buildCenterBassKickColor(centerReferenceColor, centerBassHit, boostLevel)
             }
 
             const sideEnergy = index === 0 ? audioFrame.stereo.midHighLeft : audioFrame.stereo.midHighRight
