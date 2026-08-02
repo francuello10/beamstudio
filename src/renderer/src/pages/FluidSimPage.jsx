@@ -9,6 +9,12 @@ import { useAudioStore } from '../store/audioStore'
 import '../fluidsim.css'
 
 const FluidSimPage = () => {
+    const audioModeLabels = {
+        OFF: 'OFF',
+        STEREO: '2.1',
+        EQ: 'EQ'
+    }
+
     // Fullscreen (native Fullscreen API on the canvas wrapper, so what's on
     // screen here matches what the projector output would show — no chrome,
     // just the visualizer, edge to edge).
@@ -130,7 +136,7 @@ const FluidSimPage = () => {
                                         onClick={() => handleModeChange(mode)}
                                         className={`mode-btn ${audioMode === mode ? 'active' : ''}`}
                                     >
-                                        {mode}
+                                        {audioModeLabels[mode] || mode}
                                     </button>
                                 ))}
                             </div>

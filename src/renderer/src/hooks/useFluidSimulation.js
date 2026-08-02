@@ -504,7 +504,7 @@ export function useFluidSimulation() {
         const spectral = audioFrame.spectral
 
         if (currentMode === 'STEREO') {
-            // STEREO MODE: 3 Discrete Impulse Zones
+            // 2.1 MODE: L/R side impulses + center bass impulse.
             if (spatial.center > 0.1) {
                 if (Math.random() < spatial.center * 0.4) {
                     const color = activePalette.colors[Math.floor(Math.random() * activePalette.colors.length)]
