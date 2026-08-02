@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { lerpColor } from '../utils/palettes'
+import { hslToRgb, lerpColor, rgbToHsl } from '../utils/palettes'
 import { useAudioStore } from '../store/audioStore'
 
 /**
- * useGpuAmbilight v6.1 — Ultra-smooth GPU Screen Sync ("Deco Edition")
+ * useGpuAmbilight v6.2 — Ultra-smooth GPU Screen Sync ("Deco Edition")
  *
  * CTO Improvements over v5:
  * ─────────────────────────────────────────
@@ -14,27 +14,92 @@ import { useAudioStore } from '../store/audioStore'
  * 5. BACKGROUND SUPPORT: Hybrid rAF / setTimeout loop
  * 6. Smoothing factor is configurable at runtime (see `smoothingFactor` /
  *    `setSmoothingFactor` below) instead of a hardcoded constant.
+ * 7. Per-zone "most vivid pixel" sampling (see below) replaces the old
+ *    whole-frame 3x1 downscale, which averaged a full third of the screen
+ *    into a muted, gray-washed color. Saturation is then boosted further via
+ *    `saturationBoost` / `setSaturationBoost`, same runtime-configurable
+ *    pattern as `smoothingFactor`.
  */
+
+// Per-zone sample grid size (NxN). Big enough to avoid single-pixel noise,
+// small enough to stay cheap in a 60fps loop. The offscreen canvas is sized
+// to fit all 3 zones side by side: ZONE_SAMPLE_SIZE * 3 wide.
+const ZONE_SAMPLE_SIZE = 8
 
 /**
- * Pure pixel extraction — reads the current video frame through a
- * GPU-accelerated 3x1 downscale and returns the raw L/C/R zone colors.
- * No audio logic lives here; that concern is handled by `applyAudioModulation`.
+ * Scans a zone's NxN sample block (a horizontal slice of the shared offscreen
+ * canvas's raw pixel data, starting at column `zoneStartX`) and returns the
+ * most saturated ("vivid") pixel in it — chroma = max(r,g,b) - min(r,g,b).
+ * Near-black pixels (max channel < 20) are excluded so they can't win by
+ * chroma=0 unless the whole zone is genuinely black. This is what lets one
+ * bright accent color pop through instead of being diluted by a browser
+ * bilinear average of muted UI chrome / dark backgrounds.
  */
-const extractZoneColors = (video, ctx, isMono) => {
-    ctx.drawImage(video, 0, 0, 3, 1)
-    const data = ctx.getImageData(0, 0, 3, 1).data
+const pickVividPixel = (data, canvasWidth, zoneStartX, size) => {
+    let bestChroma = -1
+    let best = { r: 0, g: 0, b: 0 }
+
+    for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+            const idx = (y * canvasWidth + (zoneStartX + x)) * 4
+            const r = data[idx]
+            const g = data[idx + 1]
+            const b = data[idx + 2]
+            const maxc = Math.max(r, g, b)
+            if (maxc < 20) continue // near-black — don't let true black "win" by default
+
+            const chroma = maxc - Math.min(r, g, b)
+            if (chroma > bestChroma) {
+                bestChroma = chroma
+                best = { r, g, b }
+            }
+        }
+    }
+
+    return best
+}
+
+// Boosts a color's HSL saturation by `boostFactor` (clamped to 100%) while
+// leaving hue and lightness untouched, so mid-saturation source pixels still
+// pop without pushing toward pure white/black.
+const boostSaturation = (color, boostFactor) => {
+    const { h, s, l } = rgbToHsl(color.r, color.g, color.b)
+    return hslToRgb(h, Math.min(100, s * boostFactor), l)
+}
+
+/**
+ * Pure pixel extraction — samples each screen third (L/C/R) separately at an
+ * NxN grid via the 9-arg drawImage crop form (instead of one whole-frame 3x1
+ * downscale), picks the most saturated pixel per zone, then applies a
+ * saturation boost. No audio logic lives here; that concern is handled by
+ * `applyAudioModulation`.
+ */
+const extractZoneColors = (video, ctx, isMono, sampleSize, saturationBoost) => {
+    const canvasWidth = sampleSize * 3
+    const videoWidth = video.videoWidth
+    const videoHeight = video.videoHeight
+    const zoneSourceWidth = videoWidth / 3
+
+    for (let zone = 0; zone < 3; zone++) {
+        ctx.drawImage(
+            video,
+            zone * zoneSourceWidth, 0, zoneSourceWidth, videoHeight, // source rect (crop this third)
+            zone * sampleSize, 0, sampleSize, sampleSize // dest rect (this zone's slot)
+        )
+    }
+
+    const data = ctx.getImageData(0, 0, canvasWidth, sampleSize).data
 
     if (isMono) {
-        const monoColor = { r: data[4], g: data[5], b: data[6] }
+        const centerVivid = pickVividPixel(data, canvasWidth, sampleSize, sampleSize)
+        const monoColor = boostSaturation(centerVivid, saturationBoost)
         return [monoColor, monoColor, monoColor]
     }
 
-    return [
-        { r: data[0], g: data[1], b: data[2] },
-        { r: data[4], g: data[5], b: data[6] },
-        { r: data[8], g: data[9], b: data[10] }
-    ]
+    return [0, 1, 2].map(zone => {
+        const vivid = pickVividPixel(data, canvasWidth, zone * sampleSize, sampleSize)
+        return boostSaturation(vivid, saturationBoost)
+    })
 }
 
 /**
@@ -93,6 +158,15 @@ export const useGpuAmbilight = (dispatchPixelMapUpdate) => {
     const [smoothingFactor, setSmoothingFactor] = useState(0.15)
     const smoothingFactorRef = useRef(0.15)
     useEffect(() => { smoothingFactorRef.current = smoothingFactor }, [smoothingFactor])
+
+    // Configurable saturation-boost factor applied to the most-vivid pixel
+    // picked per zone (see `extractZoneColors` / `boostSaturation` above).
+    // Default 1.5 gives a noticeably punchier, "videogame-like" look without
+    // clipping mid-saturation colors to pure white. Same runtime-configurable
+    // pattern as `smoothingFactor` so a page can expose a slider later.
+    const [saturationBoost, setSaturationBoost] = useState(1.5)
+    const saturationBoostRef = useRef(1.5)
+    useEffect(() => { saturationBoostRef.current = saturationBoost }, [saturationBoost])
 
     // Removed local boost state in favor of store state
     const [colors, setColors] = useState([
@@ -183,7 +257,7 @@ export const useGpuAmbilight = (dispatchPixelMapUpdate) => {
             await videoRef.current.play()
 
             if (!canvasRef.current) {
-                canvasRef.current = new OffscreenCanvas(3, 1)
+                canvasRef.current = new OffscreenCanvas(ZONE_SAMPLE_SIZE * 3, ZONE_SAMPLE_SIZE)
             }
 
             setCapturing(true)
@@ -200,8 +274,10 @@ export const useGpuAmbilight = (dispatchPixelMapUpdate) => {
                 if (!capturingRef.current) return
                 if (!videoRef.current || videoRef.current.paused || videoRef.current.ended) return
 
-                // 1. Pixel extraction (GPU-accelerated 3x1 downscale)
-                const rawColors = extractZoneColors(videoRef.current, ctx, isMonoRef.current)
+                // 1. Pixel extraction — per-zone most-vivid-pixel sampling
+                const rawColors = extractZoneColors(
+                    videoRef.current, ctx, isMonoRef.current, ZONE_SAMPLE_SIZE, saturationBoostRef.current
+                )
 
                 // 2. Audio-driven modulation (no-op when audio mode is OFF)
                 const currentMode = useAudioStore.getState().audioMode
@@ -245,6 +321,7 @@ export const useGpuAmbilight = (dispatchPixelMapUpdate) => {
     return {
         start, stop, capturing, colors,
         isMono, setIsMono,
-        smoothingFactor, setSmoothingFactor
+        smoothingFactor, setSmoothingFactor,
+        saturationBoost, setSaturationBoost
     }
 }

@@ -513,6 +513,37 @@ export const DYNAMIC_SCENES = {
 }
 
 // === UTILITY FUNCTIONS ===
+
+// Standard RGB (0-255) -> HSL (h: 0-360, s/l: 0-100) conversion — inverse of
+// hslToRgb below. Used by Ambilight's saturation-boost pass to push a
+// selected screen-sample pixel to a punchier, more vivid look without
+// touching its lightness.
+export function rgbToHsl(r, g, b) {
+    r /= 255
+    g /= 255
+    b /= 255
+    const max = Math.max(r, g, b)
+    const min = Math.min(r, g, b)
+    const l = (max + min) / 2
+    const d = max - min
+
+    let h = 0
+    let s = 0
+
+    if (d !== 0) {
+        s = d / (1 - Math.abs(2 * l - 1))
+        switch (max) {
+            case r: h = ((g - b) / d) % 6; break
+            case g: h = (b - r) / d + 2; break
+            default: h = (r - g) / d + 4; break
+        }
+        h *= 60
+        if (h < 0) h += 360
+    }
+
+    return { h, s: s * 100, l: l * 100 }
+}
+
 export function hslToRgb(h, s, l) {
     s /= 100
     l /= 100
