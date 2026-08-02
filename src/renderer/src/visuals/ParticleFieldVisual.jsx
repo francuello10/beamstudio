@@ -1,5 +1,6 @@
-import React, { useEffect } from 'react'
+import React, { forwardRef, useEffect } from 'react'
 import { useParticleField } from '../hooks/useParticleField'
+import { mergeRefs } from './refUtils'
 
 /**
  * ParticleFieldVisual — projector visual wrapper around the Particle Field
@@ -11,10 +12,14 @@ import { useParticleField } from '../hooks/useParticleField'
  * (stop() fully releases its GL resources), since ProjectorApp actually
  * unmounts the previous visual component when the operator switches visuals.
  *
+ * BS-006: forwards its canvas DOM node via ref (mirrors FluidNeonVisual.jsx)
+ * so MappingCompositor.jsx can read it as a texture source without this
+ * component touching useParticleField.js's own internal canvasRef handling.
+ *
  * @ai-constraints Pure canvas/WebGL visual driven only by AudioFrame — no
  * DMX/fixture output, no useDmxStore/window.dmx/window.ambilight usage.
  */
-const ParticleFieldVisual = () => {
+const ParticleFieldVisual = forwardRef((props, forwardedRef) => {
     const { canvasRef, start, stop } = useParticleField()
 
     useEffect(() => {
@@ -25,12 +30,14 @@ const ParticleFieldVisual = () => {
 
     return (
         <canvas
-            ref={canvasRef}
+            ref={mergeRefs(canvasRef, forwardedRef)}
             width={1024}
             height={576}
             style={{ width: '100%', height: '100%', display: 'block' }}
         />
     )
-}
+})
+
+ParticleFieldVisual.displayName = 'ParticleFieldVisual'
 
 export default ParticleFieldVisual
