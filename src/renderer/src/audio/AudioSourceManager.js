@@ -8,7 +8,8 @@ const stopStream = (stream) => {
     stream?.getTracks?.().forEach(track => track.stop())
 }
 
-const getStreamDeviceId = (stream) => stream?.getAudioTracks?.()[0]?.getSettings?.().deviceId || ''
+const getStreamSettings = (stream) => stream?.getAudioTracks?.()[0]?.getSettings?.() || {}
+const getStreamDeviceId = (stream) => getStreamSettings(stream).deviceId || ''
 
 export const createSystemAudioSourceError = (message) => {
     const error = new Error(message)
@@ -142,7 +143,8 @@ export const resolveActiveAudioSource = ({
     preferredInput,
     fallbackToDefault
 }) => {
-    const actualDeviceId = stream.getAudioTracks?.()[0]?.getSettings?.().deviceId || requestedDeviceId || ''
+    const streamSettings = getStreamSettings(stream)
+    const actualDeviceId = streamSettings.deviceId || requestedDeviceId || ''
     const matchedInput = refreshedInputs.find(input => input.deviceId === actualDeviceId)
 
     return {
@@ -151,6 +153,8 @@ export const resolveActiveAudioSource = ({
             || preferredInput?.label
             || (selectedDeviceId ? 'Selected system monitor' : 'Auto speaker monitor'),
         fallbackToDefault,
+        channelCount: streamSettings.channelCount || 0,
+        sampleRate: streamSettings.sampleRate || 0,
         isMonitor: !!matchedInput?.isMonitor || !!preferredInput?.isMonitor,
         isGenericSystem: !!matchedInput?.isGenericSystem || !!preferredInput?.isGenericSystem
     }

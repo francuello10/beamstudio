@@ -47,6 +47,18 @@ const FluidSimPage = () => {
     const setAudioTelemetryDSP = useAudioStore(state => state.setAudioTelemetryDSP)
     const audioMode = useAudioStore(state => state.audioMode)
     const audioFrame = useAudioStore(state => state.audioFrame)
+    const sourceChannelLabel = audioFrame.source.channelCount
+        ? `${audioFrame.source.channelCount}ch capture`
+        : 'capture channels unknown'
+    const stereoWidthPercent = Math.round(audioFrame.telemetry.stereoWidth || audioFrame.levels.stereoWidth * 100 || 0)
+    const stereoHealthLabel = audioMode === 'OFF'
+        ? 'audio off'
+        : audioFrame.source.channelCount === 1
+            ? 'MONO SOURCE'
+            : stereoWidthPercent <= 2
+                ? 'LOW WIDTH'
+                : `WIDTH ${stereoWidthPercent}%`
+    const formatEnergy = (value) => `${Math.round(Math.min(1, Math.max(0, value || 0)) * 100)}%`
 
     // Audio Engine
     const { start: startAudio, stop: stopAudio, energyFactor } = useSystemAudio(
@@ -186,7 +198,7 @@ const FluidSimPage = () => {
                     <div className="extraction-monitor" style={{ marginTop: '20px' }}>
                         <div className="monitor-header">
                             <span className="live-indicator"><div className="dot"></div> GPU SPATIAL MONITOR</span>
-                            <span className="resolution-label">3x1 WebGL Downsample • 60Hz Telemetry</span>
+                            <span className="resolution-label">AudioFrame 2.1 • {sourceChannelLabel} • {stereoHealthLabel}</span>
                         </div>
                         <div className="monitor-canvas-wrapper" style={{ display: 'flex', gap: '4px', background: '#000', padding: '10px', height: '100px', position: 'relative', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
                             {currentColors.map((c, i) => {
@@ -233,7 +245,10 @@ const FluidSimPage = () => {
                                             textShadow: '0 1px 4px rgba(0,0,0,0.8)',
                                             zIndex: 2
                                         }}>
-                                            {energyLabels[i]}
+                                            <div>{energyLabels[i]}</div>
+                                            <div style={{ fontSize: '10px', marginTop: '4px', color: 'rgba(255,255,255,0.65)' }}>
+                                                {formatEnergy(energy)}
+                                            </div>
                                         </div>
                                     </div>
                                 )

@@ -3,7 +3,9 @@ export const createEmptyAudioFrame = () => ({
     source: {
         deviceId: '',
         label: '',
-        fallbackToDefault: false
+        fallbackToDefault: false,
+        channelCount: 0,
+        sampleRate: 0
     },
     levels: {
         bass: 0,
@@ -54,7 +56,9 @@ export const createAudioFrame = ({
     source: {
         deviceId: source?.deviceId || '',
         label: source?.label || '',
-        fallbackToDefault: !!source?.fallbackToDefault
+        fallbackToDefault: !!source?.fallbackToDefault,
+        channelCount: Number.isFinite(source?.channelCount) ? source.channelCount : 0,
+        sampleRate: Number.isFinite(source?.sampleRate) ? source.sampleRate : 0
     },
     levels: {
         bass: Math.max(0, Math.min(1, levels?.bass || 0)),

@@ -70,6 +70,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - Treinta y sieteavo slice activo: el boost x4 dejó de volver demasiado sensible al centro; Slot 2 exige pureza sub/kick contra upper-bass/low-mid, punch transiente, dominancia física y refractory largo en todos los perfiles de render, mientras el medidor UI muestra el hit real del centro.
 - Treinta y ochoavo slice activo: Slot 2 dejó de contar energía sostenida sobre el piso como punch; ahora exige onset/rise real de sub/kick también en x1 para cortar falsos positivos.
 - Treinta y nueveavo slice activo: `AudioFrame.spatial.left/right` volvió a ser estéreo real de canal; la guía vocal/melódica mono dejó de inyectarse en ambos lados y queda para los renderers que quieran usarla explícitamente.
+- Cuarentavo slice activo: `AudioFrame.source` publica `channelCount`/`sampleRate` negociados y Fluid Sim muestra captura 1ch/2ch, ancho estéreo y porcentajes L/C/R para distinguir bug interno de fuente mono/dual-mono.
 
 ## Alcance
 
@@ -121,6 +122,7 @@ El sound reactive no puede ser bueno si BeamStudio escucha el micrófono equivoc
 - [x] El medidor central de Audio UI muestra `CENTER HIT`, no un peak-hold de sub permanente.
 - [x] Slot 2 exige onset/rise real de sub/kick; la energía sostenida por encima del piso no cuenta como punch.
 - [x] `AudioFrame.spatial.left/right` no recibe inyección mono de vocal/melody; preserva diferencias L/R reales para visuales.
+- [x] La UI de Fluid permite diagnosticar si la fuente llega mono/dual-mono antes de asumir un bug de separación interna.
 - [x] En pausa/silencio sostenido, BeamStudio congela la salida DMX audio y mantiene la escena fija sin pulso artificial.
 - [x] El detector de pausa ignora ruido constante: sólo considera actividad musical cuando hay transiente o energía por encima del piso adaptativo.
 - [x] Al iniciar audio con música pausada, BeamStudio calibra piso antes de mandar DMX para no mover luces por ruido base.
