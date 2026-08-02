@@ -92,7 +92,7 @@ Sin evidencia y comandos repetibles no se puede distinguir una regresión nueva 
 ## Evidencia de cierre
 
 ```md
-- Commit: fac1896
+- Commit: 072599c
 - PR:
 - OS:
 - Hardware:

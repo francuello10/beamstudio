@@ -1,14 +1,15 @@
 ---
 id: BS-001
 title: "Regresión y reparación del núcleo DMX"
-status: proposed
+status: in-progress
 priority: P0
 size: L
 milestone: M0
 depends_on: ["BS-000"]
-owner:
-branch:
+owner: Fran Cuello
+branch: fix/bs-001-dmx-regression
 pr:
+started_at: 2026-08-02
 absorbs: ["old BS-002", "GStack CHANNEL_MAP residual", "GStack fixture/settings persistence verification"]
 ---
 
@@ -29,6 +30,26 @@ DMX es la base física del producto. Cualquier feature audiovisual depende de qu
 - La ruta Linux usa SerialPort, no D2XX.
 - El estado activo de escena puede no asignarse antes de responder por IPC.
 - GStack marcó persistencia de fixtures/settings, pero debe verificarse contra el código actual antes de implementar.
+- `BS-000` ya dejó baseline útil: `npm ci`, `npm run build`, `npm run check` y `npm run doctor` pasan en Ubuntu 24.04.4.
+- El inventario de hardware muestra un FTDI presente por USB (`0403:6001`), lo cual favorece la futura validación DMX.
+- Un `yarn dev` real ya mostró auto-conexión DMX Linux sobre `/dev/ttyUSB0`, worker conectado y apertura serial a `250k`.
+- `BS-000` todavía no cerró las verificaciones manuales de páginas recorridas, arranque/cierre repetido y prueba con KMTronic desconectado.
+
+## Readiness al 2026-08-02
+
+**Estado:** en ejecución. `BS-000` fue cerrada el 2026-08-02 con waiver explícito del owner sobre la QA manual restante.
+
+### A favor
+
+- Hay baseline reproducible.
+- El build está sano.
+- Ya existe `check`/`doctor`.
+- El hardware USB relevante aparece conectado en el inventario.
+- Ya existe evidencia de una sesión real con auto-conexión DMX Linux exitosa.
+
+### Decisión
+
+Arrancar `BS-001` ahora sobre `fix/bs-001-dmx-regression`. El riesgo manual diferido de `BS-000` queda aceptado por el owner y no bloquea más esta tarea.
 
 ## Alcance
 

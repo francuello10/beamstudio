@@ -872,6 +872,17 @@ function setAllFixturesChannel(channel, value) {
     fixtures.forEach((_, i) => setFixtureChannel(i, channel, value))
 }
 
+function getFixtureProfile(fixture) {
+    return FIXTURE_PROFILES[fixture?.mode] || FIXTURE_PROFILES['P06']
+}
+
+function getFixtureMasterDimValue(fixture) {
+    if (!fixture) return 0
+    const profile = getFixtureProfile(fixture)
+    if (!profile.hasMasterDimmer || profile.map.DIM === undefined) return 0
+    return dmxState.channels[fixture.startChannel - 1 + profile.map.DIM] || 0
+}
+
 // RESET ALL - Set all channels to 0
 function resetAll() {
     stopDynamicScene()
@@ -982,10 +993,13 @@ function startDynamicScene(sceneId) {
     if (!scene) return false
     // @ai-constraints "Cold Start" Fix: If DIM is 0 (from Reset), default to 255 so the scene is visible.
     // The user can then lower the fader to adjust, but we avoid starting in pitch black.
-    const isCold = fixtures.every(f => dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM] === 0)
+    const isCold = fixtures.every(f => getFixtureMasterDimValue(f) === 0)
     if (isCold) {
         setAllFixturesChannel('dim', 255)
     }
+
+    dmxState.dynamicScene = sceneId
+    dmxState.dynamicSceneFrame = 0
 
     dynamicSceneInterval = setInterval(() => {
         const result = scene.handler(dmxState.dynamicSceneFrame)
@@ -994,12 +1008,12 @@ function startDynamicScene(sceneId) {
         if (scene.perFixture && Array.isArray(result)) {
             fixtures.forEach((f, i) => {
                 const color = result[i] || result[result.length - 1]
-                const currentDim = dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM] || 0
+                const currentDim = getFixtureMasterDimValue(f)
                 setFixtureColor(i, color.r, color.g, color.b, currentDim)
             })
         } else {
             fixtures.forEach((f, i) => {
-                const currentDim = dmxState.channels[f.startChannel - 1 + CHANNEL_MAP.DIM] || 0
+                const currentDim = getFixtureMasterDimValue(f)
                 setFixtureColor(i, result.r, result.g, result.b, currentDim)
             })
         }
@@ -1011,6 +1025,7 @@ function startDynamicScene(sceneId) {
 function stopDynamicScene() {
     if (dynamicSceneInterval) { clearInterval(dynamicSceneInterval); dynamicSceneInterval = null }
     dmxState.dynamicScene = null
+    dmxState.dynamicSceneFrame = 0
 }
 
 // ============================================================================
