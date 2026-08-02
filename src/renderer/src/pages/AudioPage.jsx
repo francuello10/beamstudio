@@ -35,6 +35,8 @@ const audioSlotRoles = [
 ]
 
 const AudioPage = () => {
+    const [isStarting, setIsStarting] = React.useState(false)
+
     const dmxFixtures = useDmxStore(state => state.dmxFixtures)
     const pixelMapBuffer = useDmxStore(state => state.pixelMapBuffer)
     const dmxUniverseState = useDmxStore(state => state.dmxUniverseState)
@@ -69,12 +71,20 @@ const AudioPage = () => {
     }, [active, activeSource, setAudioActive, setAudioData])
 
     const handleStart = React.useCallback(async () => {
-        const currentColors = normalizeColors(pixelMapBuffer)
-        if (currentColors.some(isVisibleColor)) {
-            setAudioBaseColors(currentColors)
+        // Guard against rapid double-click: a second start() before `active` flips true
+        // could race the first call across its await boundaries (mirrors AmbilightPage.jsx).
+        if (isStarting || active) return
+        setIsStarting(true)
+        try {
+            const currentColors = normalizeColors(pixelMapBuffer)
+            if (currentColors.some(isVisibleColor)) {
+                setAudioBaseColors(currentColors)
+            }
+            await start()
+        } finally {
+            setIsStarting(false)
         }
-        await start()
-    }, [pixelMapBuffer, setAudioBaseColors, start])
+    }, [isStarting, active, pixelMapBuffer, setAudioBaseColors, start])
 
     const currentGenre = autoGenre ? detectedGenre : manualGenre
     const audioStatusLabel = audioFrame.status.playbackPaused
@@ -316,11 +326,20 @@ Mixer/base palette → audio boost → clean Slot 2 bass hits
                         <motion.button
                             className={`action-button ${active ? 'stop' : 'start'}`}
                             onClick={active ? stop : handleStart}
-                            style={{ height: '52px', padding: '0 40px', margin: 0, fontSize: '14px' }}
+                            disabled={isStarting}
+                            style={{
+                                height: '52px', padding: '0 40px', margin: 0, fontSize: '14px',
+                                opacity: isStarting ? 0.6 : 1,
+                                cursor: isStarting ? 'not-allowed' : 'pointer'
+                            }}
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
                         >
-                            {active ? <><PowerOff size={20} /> Stop audio</> : <><Play size={20} /> Start audio</>}
+                            {active
+                                ? <><PowerOff size={20} /> Stop audio</>
+                                : isStarting
+                                    ? <>Starting...</>
+                                    : <><Play size={20} /> Start audio</>}
                         </motion.button>
                     </div>
                 </div>

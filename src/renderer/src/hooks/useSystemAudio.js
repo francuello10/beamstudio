@@ -162,6 +162,19 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
     const activeRef = useRef(active)
     useEffect(() => { activeRef.current = active }, [active])
 
+    // Genre/sensitivity mirrors: analyze()/loop() are created once inside start() and run
+    // forever via a self-rescheduling setTimeout, so they never re-close over fresh state —
+    // read live via ref instead of the closed-over state/param (same pattern as
+    // modifierModeRef/bassPulseModeRef above).
+    const autoGenreRef = useRef(autoGenre)
+    useEffect(() => { autoGenreRef.current = autoGenre }, [autoGenre])
+    const detectedGenreRef = useRef(detectedGenre)
+    useEffect(() => { detectedGenreRef.current = detectedGenre }, [detectedGenre])
+    const manualGenreRef = useRef(manualGenre)
+    useEffect(() => { manualGenreRef.current = manualGenre }, [manualGenre])
+    const audioSensitivityRef = useRef(audioSensitivity)
+    useEffect(() => { audioSensitivityRef.current = audioSensitivity }, [audioSensitivity])
+
     // === REFS ===
     const audioCtx = useRef(null)
     const analyserL = useRef(null)
@@ -317,8 +330,19 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
         window.audio?.stop()
     }, [])
 
+    // Reentrancy guards for start(): a device disconnect can fire both track.onended and the
+    // devicechange listener while both observe activeRef.current === true (one render behind
+    // stop()'s synchronous flip), and a fast double-click can race the same way. sessionIdRef
+    // lets a superseded loop stop rescheduling itself; startingRef blocks concurrent start()
+    // invocations outright so they never overwrite each other's stream/AudioContext refs.
+    const sessionIdRef = useRef(0)
+    const startingRef = useRef(false)
+
     // === MAIN ENGINE ===
     const start = useCallback(async () => {
+        if (startingRef.current) return
+        startingRef.current = true
+        const mySessionId = ++sessionIdRef.current
         try {
             stop()
             setSourceError(null)
@@ -417,6 +441,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
             const dataBass = new Uint8Array(analyserBass.current.frequencyBinCount)
 
             const analyze = () => {
+                if (sessionIdRef.current !== mySessionId) return
                 if (!analyserL.current) return
 
                 analyserL.current.getByteFrequencyData(dataL)
@@ -426,7 +451,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 const bandsL = extractBands(dataL)
                 const bandsR = extractBands(dataR)
                 const now = performance.now()
-                const boostLevel = Math.max(0.5, Math.min(4, audioSensitivity || 1))
+                const boostLevel = Math.max(0.5, Math.min(4, audioSensitivityRef.current || 1))
                 const bassProfile = computeBassProfile(dataBass, {
                     sampleRate: audioCtx.current?.sampleRate || 48000,
                     fftSize: analyserBass.current?.fftSize || 2048,
@@ -592,7 +617,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                     spectral: frameSpectral,
                     telemetry: frameTelemetry,
                     status: { silence, clipping, playbackPaused, playbackStatus },
-                    genre: autoGenre ? detectedGenre : manualGenre
+                    genre: autoGenreRef.current ? detectedGenreRef.current : manualGenreRef.current
                 })
 
                 if (silence) {
@@ -636,7 +661,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                         inputColors: inputColorsRef.current,
                         modifierMode: true,
                         audioFrame,
-                        audioSensitivity
+                        audioSensitivity: audioSensitivityRef.current
                     })
 
                     useAudioStore.getState().updateAudioAnalysis(spatial, spectral, audioFrame)
@@ -663,7 +688,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                 if (onAudioUpdate) onAudioUpdate(energies)
 
                 const globalEnergy = (bassEnergy + vocalOutput * 0.75 + (midHighL + midHighR) / 2) / 2.75
-                const boostFactor = 0.2 + (globalEnergy * 0.9 * audioSensitivity)
+                const boostFactor = 0.2 + (globalEnergy * 0.9 * audioSensitivityRef.current)
                 setEnergyFactor(boostFactor)
                 smoothedOutput.current = applyModifierAndSmoothing({
                     currentColors: smoothedOutput.current,
@@ -671,7 +696,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
                     inputColors: inputColorsRef.current,
                     modifierMode: modifierModeRef.current,
                     audioFrame,
-                    audioSensitivity
+                    audioSensitivity: audioSensitivityRef.current
                 })
 
                 sendDmxBatch(smoothedOutput.current)
@@ -685,6 +710,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
 
             // Loop Wrapper with Background Support
             const loop = () => {
+                if (sessionIdRef.current !== mySessionId) return
                 if (!streamRef.current) return
                 analyze()
                 // Hybrid: 16ms (60fps) usually, 33ms (30fps) if hidden to satisfy Electron throttling constraints
@@ -727,8 +753,10 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
             }
 
             setSourceError('Audio detection failed to start. BeamStudio only captures speaker monitor/loopback audio, never the computer microphone.')
+        } finally {
+            startingRef.current = false
         }
-    }, [refreshInputs, refreshPlaybackStatus, selectedDeviceId, sendDmxBatch, stop, autoGenre, detectedGenre, manualGenre, onAudioUpdate, audioSensitivity])
+    }, [refreshInputs, refreshPlaybackStatus, selectedDeviceId, sendDmxBatch, stop, onAudioUpdate])
 
     // Cleanup on unmount
     useEffect(() => () => stop(), [stop])
