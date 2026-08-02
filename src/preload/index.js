@@ -246,15 +246,20 @@ const nowPlayingAPI = {
 // output ownership or main-window-only chrome.
 // BS-006: `mapping` is exposed the same way as `projector` — the main window
 // calls setEditMode, the projector window listens via onEditModeChanged.
+// BS-007 phase 2: `nowPlaying` is ALSO always exposed (moved out of the
+// dmx/ambilight-style gate it started in) — the projector window renders its
+// own Now Playing overlay now, and getSystemMedia is a read-only metadata
+// query with no DMX/hardware capability, so there's no isolation reason to
+// withhold it there.
 if (process.contextIsolated) {
     try {
         contextBridge.exposeInMainWorld('electron', electronAPI)
         if (!isProjectorWindow) {
             contextBridge.exposeInMainWorld('dmx', dmxAPI)
             contextBridge.exposeInMainWorld('ambilight', ambilightAPI)
-            contextBridge.exposeInMainWorld('nowPlaying', nowPlayingAPI)
         }
         contextBridge.exposeInMainWorld('audio', audioAPI)
+        contextBridge.exposeInMainWorld('nowPlaying', nowPlayingAPI)
         if (!isProjectorWindow) {
             contextBridge.exposeInMainWorld('scene', sceneAPI)
             contextBridge.exposeInMainWorld('theme', themeAPI)
@@ -271,9 +276,9 @@ if (process.contextIsolated) {
     if (!isProjectorWindow) {
         window.dmx = dmxAPI
         window.ambilight = ambilightAPI
-        window.nowPlaying = nowPlayingAPI
     }
     window.audio = audioAPI
+    window.nowPlaying = nowPlayingAPI
     if (!isProjectorWindow) {
         window.scene = sceneAPI
         window.theme = themeAPI
