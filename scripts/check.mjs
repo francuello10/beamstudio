@@ -68,6 +68,13 @@ checkPattern(
   'main:unhandledRejection-hook'
 )
 
+checkPattern(
+  'src/main/index.js',
+  /\bCHANNEL_MAP\b/,
+  false,
+  'main:no-stale-CHANNEL_MAP'
+)
+
 const failed = checks.filter(check => !check.pass)
 
 for (const check of checks) {

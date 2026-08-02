@@ -1431,10 +1431,19 @@ function setupIPC() {
     // Dynamic Scenes - TOGGLE behavior
     ipcMain.handle('dmx:dynamicScene', (_, { sceneId, active }) => {
         if (active) {
+            if (dmxState.dynamicScene === sceneId && dynamicSceneInterval) {
+                return { success: true, sceneId, alreadyActive: true }
+            }
             dmxState.activeProgram = null
-            startDynamicScene(sceneId)
+            const started = startDynamicScene(sceneId)
+            if (!started) {
+                return { success: false, error: `Unknown dynamic scene: ${sceneId}`, sceneId: null }
+            }
             return { success: true, sceneId: dmxState.dynamicScene }
         } else {
+            if (!dynamicSceneInterval && !dmxState.dynamicScene) {
+                return { success: true, sceneId: null, alreadyStopped: true }
+            }
             stopDynamicScene()
             resetAll() // Reset to 0 when stopping
             return { success: true, sceneId: null }
@@ -1633,6 +1642,7 @@ function setupIPC() {
         programSpeed: dmxState.programSpeed,
         ambilightActive: dmxState.ambilightActive,
         audioReactiveActive: dmxState.audioReactiveActive,
+        dynamicRendererActive: dmxState.dynamicRendererActive,
         flashWhiteActive: dmxState.flashWhiteActive,
         fixtureColors: dmxState.fixtureColors
     }))

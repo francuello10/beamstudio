@@ -34,6 +34,9 @@ DMX es la base física del producto. Cualquier feature audiovisual depende de qu
 - El inventario de hardware muestra un FTDI presente por USB (`0403:6001`), lo cual favorece la futura validación DMX.
 - Un `yarn dev` real ya mostró auto-conexión DMX Linux sobre `/dev/ttyUSB0`, worker conectado y apertura serial a `250k`.
 - `BS-000` todavía no cerró las verificaciones manuales de páginas recorridas, arranque/cierre repetido y prueba con KMTronic desconectado.
+- Primer slice de `BS-001` ya eliminado: `startDynamicScene()` dejó de depender de `CHANNEL_MAP` y ahora usa lookup por perfil para el dimmer maestro.
+- Se agregó un guard en `check` para evitar que `CHANNEL_MAP` reaparezca en `src/main/index.js`.
+- La activación IPC de escenas dinámicas ahora responde mejor ante escena desconocida, doble start y doble stop.
 
 ## Readiness al 2026-08-02
 
