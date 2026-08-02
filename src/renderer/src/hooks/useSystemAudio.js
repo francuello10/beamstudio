@@ -107,6 +107,11 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
         return inputs
     }, [])
 
+    const getPreferredInput = useCallback((inputs) => {
+        if (!Array.isArray(inputs) || inputs.length === 0) return null
+        return inputs.find(input => input.isMonitor) || null
+    }, [])
+
     const setSelectedDeviceId = useCallback((deviceId) => {
         setSelectedDeviceIdState(deviceId)
         setSourceError(null)
@@ -159,6 +164,8 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
         try {
             stop()
             setSourceError(null)
+            const inputs = await refreshInputs().catch(() => [])
+            const preferredInput = !selectedDeviceId ? getPreferredInput(inputs) : null
 
             const baseAudioConstraints = {
                 echoCancellation: false,
@@ -169,18 +176,21 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
 
             let stream
             let fallbackToDefault = false
+            const requestedDeviceId = selectedDeviceId || preferredInput?.deviceId || ''
             try {
                 stream = await navigator.mediaDevices.getUserMedia({
-                    audio: selectedDeviceId
-                        ? { ...baseAudioConstraints, deviceId: { exact: selectedDeviceId } }
+                    audio: requestedDeviceId
+                        ? { ...baseAudioConstraints, deviceId: { exact: requestedDeviceId } }
                         : baseAudioConstraints,
                     video: false
                 })
             } catch (err) {
-                if (!selectedDeviceId) throw err
+                if (!requestedDeviceId) throw err
 
                 fallbackToDefault = true
-                setSourceError('Selected audio input is unavailable. BeamStudio fell back to the default input.')
+                setSourceError(selectedDeviceId
+                    ? 'Selected audio input is unavailable. BeamStudio fell back to the default input.'
+                    : 'Preferred monitor input is unavailable. BeamStudio fell back to the default input.')
                 stream = await navigator.mediaDevices.getUserMedia({
                     audio: baseAudioConstraints,
                     video: false
@@ -188,12 +198,14 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
             }
 
             streamRef.current = stream
-            const inputs = await refreshInputs().catch(() => [])
-            const actualDeviceId = stream.getAudioTracks?.()[0]?.getSettings?.().deviceId || selectedDeviceId || ''
-            const matchedInput = inputs.find(input => input.deviceId === actualDeviceId)
+            const refreshedInputs = await refreshInputs().catch(() => [])
+            const actualDeviceId = stream.getAudioTracks?.()[0]?.getSettings?.().deviceId || requestedDeviceId || ''
+            const matchedInput = refreshedInputs.find(input => input.deviceId === actualDeviceId)
             activeSourceRef.current = {
                 deviceId: actualDeviceId,
-                label: matchedInput?.label || (selectedDeviceId ? 'Selected audio input' : 'Default audio input'),
+                label: matchedInput?.label
+                    || preferredInput?.label
+                    || (selectedDeviceId ? 'Selected audio input' : 'Default audio input'),
                 fallbackToDefault
             }
 
@@ -560,7 +572,7 @@ export const useSystemAudio = (sendDmxBatch, inputColors = null, onAudioUpdate =
             console.error('[Audio DSP] Failed:', err)
             stop()
         }
-    }, [refreshInputs, selectedDeviceId, sendDmxBatch, stop, autoGenre, detectedGenre, manualGenre, onAudioUpdate, audioSensitivity])
+    }, [refreshInputs, getPreferredInput, selectedDeviceId, sendDmxBatch, stop, autoGenre, detectedGenre, manualGenre, onAudioUpdate, audioSensitivity])
 
     // Cleanup on unmount
     useEffect(() => () => stop(), [stop])
