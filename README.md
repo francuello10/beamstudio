@@ -29,6 +29,7 @@ BeamStudio is an Electron DMX controller for 3 RGB bars with live modes that can
 | Audio-reactive DMX | Ready | Header audio widget + `Audio` / `Dynamic` |
 | Ambilight | Ready with platform-specific capture notes | `Ambilight` |
 | Projector visuals | Ready | `Projector Output` |
+| Projector Studio beta | Beta, parallel fallback kept | `Projector Studio` |
 | Projection mapping | Ready | `Projector Output` + `Projection Mapping — Surfaces` |
 | Pose tracking visual | Ready | `Projector Output` → `Pose Skeleton` |
 | Webcam selection for pose tracking | Ready | `Projector Output` → `Pose Tracking Webcam` |
@@ -93,7 +94,22 @@ BeamStudio is an Electron DMX controller for 3 RGB bars with live modes that can
   - Captures screen content and maps left / center / right colors to fixtures.
   - Owns DMX output while active.
 
-### 6. Projection mapping
+### 6. Projector Studio beta
+
+- Page: `Projector Studio`
+- Source of truth:
+  - `src/renderer/src/pages/ProjectorStudioPage.jsx`
+  - `src/renderer/src/output/ProjectorApp.jsx`
+  - `src/renderer/src/visuals/NowPlayingCardVisual.jsx`
+  - `src/renderer/src/visuals/MusicEqualizerVisual.jsx`
+  - `src/renderer/src/visuals/BassPulseVisual.jsx`
+- What it does:
+  - Adds a parallel visual editor without replacing the stable `Projector Output` page.
+  - Shows a central preview of mapped zones.
+  - Lets each zone choose a layer: Black / Neutral, existing visuals, Now Playing Card, Frequency Equalizer, or Bass Pulse.
+  - Uses the existing mapping state and audio engine, no duplicate audio capture.
+
+### 7. Projection mapping
 
 - Page: `Projector Output`
 - Source of truth:
@@ -106,6 +122,17 @@ BeamStudio is an Electron DMX controller for 3 RGB bars with live modes that can
   - Supports multiple surfaces.
   - Each surface can have its own visual.
   - Surfaces can be rotated, masked, saved, and loaded as presets.
+
+## Projector Studio beta quick path
+
+1. Open `Projector Studio`.
+2. Select a zone in the left panel.
+3. Pick a layer in the inspector: `Now Playing Card`, `Frequency Equalizer`, `Bass Pulse`, an existing visual, or `Black / Neutral`.
+4. Use rotation and feather controls while watching the central preview.
+5. Click `Open projector` to send the same surfaces to the real projector window.
+6. Save a preset when the layout is useful.
+
+The old `Projector Output` page stays as the fallback and calibration surface. Use it for display selection, test pattern, webcam setup, and low-level mapping edits.
 
 ## Projection mapping tutorial
 
@@ -201,6 +228,7 @@ These are real operational notes, not theory:
 - `src/renderer/src/pages/DynamicScenesPageV2.jsx` — dynamic scenes and audio colorizer
 - `src/renderer/src/pages/AmbilightPage.jsx` — Ambilight UI
 - `src/renderer/src/pages/ProjectorPage.jsx` — projector control, mapping UI, webcam selection
+- `src/renderer/src/pages/ProjectorStudioPage.jsx` — beta visual editor for mapped zones
 - `src/renderer/src/output/ProjectorApp.jsx` — projector runtime window
 - `src/renderer/src/mapping/MappingCompositor.jsx` — quad warp and per-surface compositor
 - `src/renderer/src/hooks/useSystemAudio.js` — audio capture / analysis

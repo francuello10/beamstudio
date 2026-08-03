@@ -13,6 +13,7 @@ import AudioPage from './pages/AudioPage'
 import AmbilightPage from './pages/AmbilightPage'
 import FluidSimPage from './pages/FluidSimPage'
 import ProjectorPage from './pages/ProjectorPage'
+import ProjectorStudioPage from './pages/ProjectorStudioPage'
 import SystemPage from './pages/SystemPage'
 
 // Stores & Utils
@@ -190,6 +191,7 @@ function App() {
             case 'fluidsim': return <FluidSimPage />
             case 'ambilight': return <AmbilightPage />
             case 'projector': return <ProjectorPage />
+            case 'projectorStudio': return <ProjectorStudioPage />
             case 'system': return <SystemPage />
             default: return <ConsoleMixerPage />
         }
