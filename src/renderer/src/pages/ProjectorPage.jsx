@@ -33,6 +33,7 @@ const ProjectorPage = () => {
     const [testPattern, setTestPattern] = useState(false)
     // BS-007 phase 2: Now Playing overlay toggle for the projector output.
     const [nowPlayingOverlay, setNowPlayingOverlay] = useState(false)
+    const [nowPlayingRotationDeg, setNowPlayingRotationDeg] = useState(0)
     // BS-008: the single global `activeVisual` picker is gone — each surface
     // now carries its own `visualId` (see MappingCompositor.jsx's
     // DEFAULT_SURFACE/createInsetSurface), and the picker below retargets
@@ -137,6 +138,15 @@ const ProjectorPage = () => {
             window.projector?.setBlackout(false)
             window.projector?.setNowPlayingOverlay(false)
         }
+    }
+
+    const handleNowPlayingRotationChange = (degrees) => {
+        const numericDegrees = Number(degrees)
+        const normalizedDegrees = Number.isFinite(numericDegrees)
+            ? ((numericDegrees % 360) + 360) % 360
+            : 0
+        setNowPlayingRotationDeg(normalizedDegrees)
+        window.projector?.setNowPlayingRotation(normalizedDegrees)
     }
 
     const handleNowPlayingOverlayToggle = () => {
@@ -285,6 +295,7 @@ const ProjectorPage = () => {
             setBlackout(Boolean(state.blackout))
             setTestPattern(Boolean(state.testPattern))
             setNowPlayingOverlay(Boolean(state.nowPlayingOverlay))
+            setNowPlayingRotationDeg(Number.isFinite(state.nowPlayingRotationDeg) ? state.nowPlayingRotationDeg : 0)
             if (state.visualColorSyncEnabled !== undefined) setVisualColorSync(Boolean(state.visualColorSyncEnabled))
         })()
         return () => { cancelled = true }
@@ -463,6 +474,33 @@ const ProjectorPage = () => {
                             >
                                 <Music size={16} />
                                 <span>NOW PLAYING</span>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
+                                <RotateCw size={16} />
+                                Now Playing Rotation ({Math.round(nowPlayingRotationDeg)}°)
+                            </label>
+                            <input
+                                type="range"
+                                min={0}
+                                max={359}
+                                step={1}
+                                value={nowPlayingRotationDeg}
+                                onChange={(e) => handleNowPlayingRotationChange(e.target.value)}
+                            />
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                {[0, 90, 180, 270].map((deg) => (
+                                    <button
+                                        key={deg}
+                                        onClick={() => handleNowPlayingRotationChange(deg)}
+                                        className={`bgr-toggle ${Math.round(nowPlayingRotationDeg) === deg ? 'active' : ''}`}
+                                        style={{ flex: 1, height: '32px', padding: 0, justifyContent: 'center', fontSize: '11px' }}
+                                    >
+                                        <span>{deg}°</span>
+                                    </button>
+                                ))}
                             </div>
                         </div>
 

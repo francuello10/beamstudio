@@ -65,6 +65,7 @@ let lastKnownProjectorState = {
     blackout: false,
     testPattern: false,
     nowPlayingOverlay: false,
+    nowPlayingRotationDeg: 0,
     mappingEditMode: false,
     poseCameraDeviceId: null,
     // Ecosystem Color-Sync ("Sync colors with lights") toggle - same
@@ -1850,6 +1851,14 @@ function setupIPC() {
     ipcMain.on('projector:setNowPlayingOverlay', (event, value) => {
         lastKnownProjectorState.nowPlayingOverlay = value
         projectorWindow?.webContents.send('projector:nowPlayingOverlayChanged', value)
+    })
+    ipcMain.on('projector:setNowPlayingRotation', (event, degrees) => {
+        const numericDegrees = Number(degrees)
+        const normalizedDegrees = Number.isFinite(numericDegrees)
+            ? ((numericDegrees % 360) + 360) % 360
+            : 0
+        lastKnownProjectorState.nowPlayingRotationDeg = normalizedDegrees
+        projectorWindow?.webContents.send('projector:nowPlayingRotationChanged', normalizedDegrees)
     })
     // Ecosystem Color-Sync toggle - relayed the exact same one-way way as
     // setBlackout/setTestPattern/setNowPlayingOverlay above. The projector

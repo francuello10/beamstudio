@@ -178,6 +178,7 @@ const projectorAPI = {
     // BS-007 phase 2: Now Playing overlay toggle - mirrors setBlackout/
     // setTestPattern's exact one-way send/subscribe shape.
     setNowPlayingOverlay: (value) => ipcRenderer.send('projector:setNowPlayingOverlay', value),
+    setNowPlayingRotation: (degrees) => ipcRenderer.send('projector:setNowPlayingRotation', degrees),
     // Ecosystem Color-Sync toggle ("Sync colors with lights") - mirrors
     // setBlackout/setTestPattern/setNowPlayingOverlay's exact one-way
     // send/subscribe shape. ProjectorPage.jsx (main window) has no direct
@@ -201,6 +202,11 @@ const projectorAPI = {
         const listener = (_e, v) => cb(v)
         ipcRenderer.on('projector:nowPlayingOverlayChanged', listener)
         return () => ipcRenderer.removeListener('projector:nowPlayingOverlayChanged', listener)
+    },
+    onNowPlayingRotationChanged: (cb) => {
+        const listener = (_e, v) => cb(v)
+        ipcRenderer.on('projector:nowPlayingRotationChanged', listener)
+        return () => ipcRenderer.removeListener('projector:nowPlayingRotationChanged', listener)
     },
     onVisualColorSyncChanged: (cb) => {
         const listener = (_e, v) => cb(v)

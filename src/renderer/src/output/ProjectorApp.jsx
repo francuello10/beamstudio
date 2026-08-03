@@ -53,6 +53,7 @@ const ProjectorApp = () => {
     // BS-007 phase 2: Now Playing overlay toggle, driven remotely from
     // ProjectorPage the same way blackout/testPattern/mappingEditMode are.
     const [nowPlayingOverlay, setNowPlayingOverlay] = useState(false)
+    const [nowPlayingRotationDeg, setNowPlayingRotationDeg] = useState(0)
 
     // BS-007 phase 2: get-system-media is a stateless, on-demand main-process
     // query any window can invoke directly - so this window runs its OWN
@@ -65,6 +66,7 @@ const ProjectorApp = () => {
         const unsubTestPattern = window.projector?.onTestPattern(setTestPattern)
         const unsubMappingEditMode = window.mapping?.onEditModeChanged(setMappingEditMode)
         const unsubNowPlayingOverlay = window.projector?.onNowPlayingOverlayChanged(setNowPlayingOverlay)
+        const unsubNowPlayingRotation = window.projector?.onNowPlayingRotationChanged(setNowPlayingRotationDeg)
         const unsubPoseCameraDeviceId = window.projector?.onPoseCameraDeviceIdChanged(setPoseCameraDeviceId)
         // Ecosystem Color-Sync: unlike the toggles above, this one has no
         // local React state of its own here - it's written straight into
@@ -86,6 +88,7 @@ const ProjectorApp = () => {
             setBlackout(state.blackout)
             setTestPattern(state.testPattern)
             setNowPlayingOverlay(state.nowPlayingOverlay)
+            setNowPlayingRotationDeg(Number.isFinite(state.nowPlayingRotationDeg) ? state.nowPlayingRotationDeg : 0)
             setPoseCameraDeviceId(state.poseCameraDeviceId || null)
             if (state.visualColorSyncEnabled !== undefined) {
                 useAudioStore.getState().setVisualColorSyncEnabled(state.visualColorSyncEnabled)
@@ -100,6 +103,7 @@ const ProjectorApp = () => {
             unsubTestPattern?.()
             unsubMappingEditMode?.()
             unsubNowPlayingOverlay?.()
+            unsubNowPlayingRotation?.()
             unsubPoseCameraDeviceId?.()
             unsubVisualColorSync?.()
         }
@@ -208,7 +212,9 @@ const ProjectorApp = () => {
 
             {testPattern && !blackout && <TestPatternOverlay />}
 
-            {nowPlayingOverlay && !blackout && <NowPlayingOverlay nowPlaying={nowPlaying} />}
+            {nowPlayingOverlay && !blackout && (
+                <NowPlayingOverlay nowPlaying={nowPlaying} rotationDeg={nowPlayingRotationDeg} />
+            )}
 
             {blackout && (
                 <div style={{ position: 'absolute', inset: 0, background: '#000' }} />

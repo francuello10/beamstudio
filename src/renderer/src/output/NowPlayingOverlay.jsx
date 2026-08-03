@@ -30,7 +30,8 @@ const formatSeconds = (totalSeconds) => {
  * machine against a real live Spotify session (see NowPlaying.js) - never
  * fabricated here.
  */
-const NowPlayingOverlay = ({ nowPlaying }) => {
+const NowPlayingOverlay = ({ nowPlaying, rotationDeg = 0 }) => {
+    const normalizedRotationDeg = Number.isFinite(rotationDeg) ? rotationDeg : 0
     const isEmpty = !nowPlaying || nowPlaying.state === 'no-player'
     // BS-007 bugfix: same broken-image fallback as SystemPage.jsx's Now
     // Playing card - a failed <img> load falls back to the Music icon
@@ -52,7 +53,13 @@ const NowPlayingOverlay = ({ nowPlaying }) => {
             }}
         >
             {isEmpty ? (
-                <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '28px', fontWeight: 600 }}>
+                <div style={{
+                    color: 'rgba(255,255,255,0.6)',
+                    fontSize: '28px',
+                    fontWeight: 600,
+                    transform: `rotate(${normalizedRotationDeg}deg)`,
+                    transformOrigin: 'center'
+                }}>
                     Sin reproductor activo
                 </div>
             ) : (
@@ -67,7 +74,9 @@ const NowPlayingOverlay = ({ nowPlaying }) => {
                         background: 'rgba(20, 20, 24, 0.55)',
                         border: '1px solid rgba(255,255,255,0.1)',
                         backdropFilter: 'blur(24px)',
-                        maxWidth: '640px'
+                        maxWidth: '640px',
+                        transform: `rotate(${normalizedRotationDeg}deg)`,
+                        transformOrigin: 'center'
                     }}
                 >
                     {nowPlaying.artwork && !artFailed ? (
