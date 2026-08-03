@@ -405,7 +405,12 @@ const MappingCompositor = ({ visualCanvasRefs, editMode }) => {
     const surfacesRef = useRef(surfaces)
     surfacesRef.current = surfaces
 
+    const editModeRef = useRef(editMode)
+    editModeRef.current = editMode
+
     const [selectedSurfaceId, setSelectedSurfaceId] = useState(DEFAULT_SURFACE.id)
+    const selectedSurfaceIdRef = useRef(selectedSurfaceId)
+    selectedSurfaceIdRef.current = selectedSurfaceId
 
     // BS-006 phase 2: feedback-loop guard for the two-way setSurfaces/
     // onSurfacesChanged sync. When a remote surfaces array arrives via
@@ -627,7 +632,12 @@ const MappingCompositor = ({ visualCanvasRefs, editMode }) => {
             // one last happened to change) — recomputing+reuploading a
             // ~120-byte buffer per surface per frame is trivial CPU/GPU cost
             // for the surface counts this feature targets.
-            surfacesRef.current.forEach((surface) => {
+            const visibleSurfaces = editModeRef.current
+                ? surfacesRef.current.filter((surface) => surface.id === selectedSurfaceIdRef.current)
+                : surfacesRef.current
+            const drawableSurfaces = visibleSurfaces.length > 0 ? visibleSurfaces : surfacesRef.current.slice(0, 1)
+
+            drawableSurfaces.forEach((surface) => {
                 ctx.bufferData(ctx.ARRAY_BUFFER, buildVertexBufferData(surface.corners), ctx.DYNAMIC_DRAW)
                 const maskPointCount = surface.mask ? Math.min(surface.mask.length, MAX_MASK_POINTS) : 0
                 ctx.uniform2fv(maskUniform, buildMaskUniformData(surface.mask))
@@ -637,10 +647,8 @@ const MappingCompositor = ({ visualCanvasRefs, editMode }) => {
                 // BS-008: bind THIS surface's own assigned visual's texture
                 // right before drawing it — this is what lets each surface
                 // sample a different visual within the same draw loop.
-                // Falls back to fallbackTexture for stale/unknown visualIds
-                // (e.g. a loaded preset referencing a visual that failed to
-                // mount) instead of drawing with whatever texture happened
-                // to be bound last.
+                // In edit mode only the selected surface is drawn, so anything
+                // outside the active mapping target stays neutral black.
                 ctx.bindTexture(ctx.TEXTURE_2D, textures.get(surface.visualId || DEFAULT_VISUAL_ID) || fallbackTexture)
                 ctx.drawArrays(ctx.TRIANGLES, 0, QUAD_TRIANGLE_ORDER.length)
             })
@@ -741,10 +749,7 @@ const MappingCompositor = ({ visualCanvasRefs, editMode }) => {
             <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
 
             {editMode && (
-                <MappingGuideOverlay
-                    selectedSurface={selectedSurface}
-                    surfaces={surfaces}
-                />
+                <MappingGuideOverlay selectedSurface={selectedSurface} />
             )}
 
             {editMode && surfaces.map((surface) => {
@@ -811,31 +816,15 @@ const MappingCompositor = ({ visualCanvasRefs, editMode }) => {
     )
 }
 
-const MappingGuideOverlay = ({ selectedSurface, surfaces }) => {
+const MappingGuideOverlay = ({ selectedSurface }) => {
+    const selectedPoints = toSvgPoints(selectedSurface.corners)
+    const blackoutOutsideSelectedPath = `M 0 0 H 100 V 100 H 0 Z M ${selectedPoints} Z`
     const maskScreenPoints = selectedSurface.mask?.map((point) => (
         projectQuadPoint(selectedSurface.corners, point.x, point.y)
     ))
 
     return (
         <>
-            <div
-                style={{
-                    position: 'absolute',
-                    inset: 0,
-                    pointerEvents: 'none',
-                    backgroundImage: [
-                        'linear-gradient(rgba(255,255,255,0.16) 1px, transparent 1px)',
-                        'linear-gradient(90deg, rgba(255,255,255,0.16) 1px, transparent 1px)',
-                        'linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px)',
-                        'linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px)'
-                    ].join(', '),
-                    backgroundSize: '50% 50%, 50% 50%, 10% 10%, 10% 10%',
-                    backgroundPosition: 'center',
-                    mixBlendMode: 'screen',
-                    opacity: 0.9,
-                    zIndex: 2
-                }}
-            />
             <svg
                 viewBox="0 0 100 100"
                 preserveAspectRatio="none"
@@ -848,19 +837,18 @@ const MappingGuideOverlay = ({ selectedSurface, surfaces }) => {
                     zIndex: 3
                 }}
             >
-                {surfaces.map((surface) => {
-                    const selected = surface.id === selectedSurface.id
-                    return (
-                        <polygon
-                            key={surface.id}
-                            points={toSvgPoints(surface.corners)}
-                            fill={selected ? 'rgba(57, 255, 20, 0.10)' : 'rgba(255,255,255,0.04)'}
-                            stroke={selected ? '#39ff14' : 'rgba(255,255,255,0.45)'}
-                            strokeWidth={selected ? 0.35 : 0.2}
-                            vectorEffect="non-scaling-stroke"
-                        />
-                    )
-                })}
+                <path
+                    d={blackoutOutsideSelectedPath}
+                    fill="rgba(0,0,0,0.88)"
+                    fillRule="evenodd"
+                />
+                <polygon
+                    points={selectedPoints}
+                    fill="rgba(57, 255, 20, 0.08)"
+                    stroke="#39ff14"
+                    strokeWidth={0.35}
+                    vectorEffect="non-scaling-stroke"
+                />
                 {maskScreenPoints?.length >= 3 && (
                     <polygon
                         points={toSvgPoints(maskScreenPoints)}
@@ -872,34 +860,6 @@ const MappingGuideOverlay = ({ selectedSurface, surfaces }) => {
                     />
                 )}
             </svg>
-            <div
-                style={{
-                    position: 'absolute',
-                    top: '18px',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    maxWidth: 'min(760px, calc(100% - 48px))',
-                    padding: '14px 18px',
-                    borderRadius: '14px',
-                    background: 'rgba(0,0,0,0.78)',
-                    border: '1px solid rgba(57,255,20,0.55)',
-                    boxShadow: '0 0 28px rgba(57,255,20,0.20)',
-                    color: '#fff',
-                    fontFamily: 'sans-serif',
-                    pointerEvents: 'none',
-                    zIndex: 4,
-                    textAlign: 'center'
-                }}
-            >
-                <div style={{ fontSize: '13px', fontWeight: 800, letterSpacing: '0.12em', color: '#39ff14', marginBottom: '8px' }}>
-                    MAPPING EDIT MODE
-                </div>
-                <div style={{ display: 'flex', gap: '14px', justifyContent: 'center', flexWrap: 'wrap', fontSize: '12px', lineHeight: 1.35 }}>
-                    <span><strong style={{ color: '#39ff14' }}>GREEN circles</strong>: drag projector corners</span>
-                    <span><strong style={{ color: '#ff9500' }}>ORANGE squares</strong>: crop/mask edges</span>
-                    <span><strong>Surface:</strong> {selectedSurface.name}</span>
-                </div>
-            </div>
         </>
     )
 }
@@ -1005,27 +965,25 @@ const MaskControls = ({ surfaceName, hasMask, maskPointCount, feather, onAddMask
     <div
         style={{
             position: 'absolute',
-            left: '16px',
-            bottom: '16px',
+            left: '50%',
+            bottom: '18px',
+            transform: 'translateX(-50%)',
             display: 'flex',
-            flexDirection: 'column',
+            alignItems: 'center',
             gap: '10px',
-            padding: '14px 16px',
-            borderRadius: '12px',
-            background: 'rgba(0,0,0,0.84)',
-            border: '1px solid rgba(255,255,255,0.28)',
-            boxShadow: '0 0 24px rgba(0,0,0,0.65)',
+            padding: '8px 10px',
+            borderRadius: '999px',
+            background: 'rgba(0,0,0,0.88)',
+            border: '1px solid rgba(255,255,255,0.22)',
+            boxShadow: '0 0 18px rgba(0,0,0,0.75)',
             color: '#fff',
-            fontSize: '12px',
+            fontSize: '11px',
             fontFamily: 'sans-serif',
-            minWidth: '260px',
+            maxWidth: 'min(760px, calc(100% - 96px))',
             zIndex: 8
         }}
     >
-        <strong style={{ fontSize: '13px' }}>{surfaceName}</strong>
-        <div style={{ opacity: 0.82, lineHeight: 1.35 }}>
-            Fit green corners to the real wall/object. Add a mask only when you need to crop the projected content.
-        </div>
+        <strong style={{ fontSize: '11px', whiteSpace: 'nowrap' }}>{surfaceName}</strong>
         {!hasMask ? (
             <button onClick={onAddMask} style={buttonStyle}>Add Mask</button>
         ) : (
@@ -1034,7 +992,7 @@ const MaskControls = ({ surfaceName, hasMask, maskPointCount, feather, onAddMask
                     <button onClick={onAddVertex} style={buttonStyle}>Add Vertex</button>
                     <button onClick={onRemoveVertex} disabled={maskPointCount <= 3} style={{ ...buttonStyle, opacity: maskPointCount <= 3 ? 0.4 : 1 }}>Remove Vertex</button>
                 </div>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
                     Feather ({feather.toFixed(2)})
                     <input
                         type="range"
