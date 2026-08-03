@@ -27,6 +27,20 @@ This tutorial is the fastest safe path to get BeamStudio's projector output alig
 | `Save Preset` | Stores the current surface layout in `mapping-presets.json` |
 | `Show selected visual` | Clears `BLACKOUT`, `TEST PATTERN`, and `NOW PLAYING` so the selected surface visual is actually visible |
 
+## What the projector window shows in edit mode
+
+When `EDIT MAPPING` is on, the projector output is intentionally covered with a guide layer:
+
+| Marker | Meaning | Use it for |
+|--------|---------|------------|
+| Green circles labeled `TL`, `TR`, `BR`, `BL` | Surface corners | Drag them to the real corners of the wall, panel, ceiling piece, or object |
+| Green outline/fill | Selected surface | Shows which surface you are editing right now |
+| Orange numbered squares | Mask vertices | Crop the content when the surface is not rectangular |
+| Orange dashed outline | Mask boundary | Shows the cropped area |
+| Grid lines | Alignment reference | Check straightness, rotation, and projector keystone |
+
+If the handles sit on the physical edge of the projection, they stay inset on-screen so you can still grab them.
+
 ## First rule: know what is covering the output
 
 BeamStudio can show several layers in the projector window. If the wrong thing appears, check the status banner in `Projector Output`.
@@ -67,14 +81,15 @@ Expected result:
 Expected result:
 
 - you see the white calibration grid
-- corner handles become draggable in the projector output
+- the edit guide appears
+- green corner handles become draggable in the projector output
 
 ### Step 3. Fit the first surface
 
 Start with one surface only. This matters. If the first quad is wrong, five wrong quads just make the mess bigger.
 
 1. In `Projection Mapping — Surfaces`, select the default surface.
-2. Drag the quad corners in the projector window until the grid fits the real surface.
+2. Drag the green `TL`, `TR`, `BR`, and `BL` handles until the grid fits the real surface.
 3. If the image is rotated because of mounting direction, use the `Rotation` slider or the 0° / 90° / 180° / 270° buttons.
 
 ### Step 4. Choose the content

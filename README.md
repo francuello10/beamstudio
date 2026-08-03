@@ -120,11 +120,14 @@ Super short version:
 3. Click `Abrir proyector`.
 4. Turn on `TEST PATTERN`.
 5. Turn on `EDIT MAPPING`.
-6. Add or select a surface.
-7. Drag corners in the projector output window until the image fits the real surface.
-8. Choose the visual for that surface.
-9. If the status banner says `BLACKOUT`, `NOW PLAYING`, or `TEST PATTERN`, click `Show selected visual`.
-10. Save the preset.
+6. In the projector window, follow the overlay:
+   - green circles = drag the projector corners
+   - orange squares = crop/mask vertices
+7. Add or select a surface.
+8. Drag the green corners until the image fits the real surface.
+9. Choose the visual for that surface.
+10. If the status banner says `BLACKOUT`, `NOW PLAYING`, or `TEST PATTERN`, click `Show selected visual`.
+11. Save the preset.
 
 ## Tonight test checklist
 

@@ -351,6 +351,13 @@ function getOrCreateTexture(gl, texturesByVisualId, visualId) {
 }
 
 const CORNER_LABELS = ['TL', 'TR', 'BR', 'BL']
+const HANDLE_SAFE_INSET_PX = 28
+
+const toSvgPoints = (points) => points.map((p) => `${p.x * 100},${p.y * 100}`).join(' ')
+const handlePositionStyle = (x, y) => ({
+    left: `clamp(${HANDLE_SAFE_INSET_PX}px, ${x * 100}%, calc(100% - ${HANDLE_SAFE_INSET_PX}px))`,
+    top: `clamp(${HANDLE_SAFE_INSET_PX}px, ${y * 100}%, calc(100% - ${HANDLE_SAFE_INSET_PX}px))`
+})
 
 let surfaceCounter = 1
 function nextSurfaceId() {
@@ -733,12 +740,18 @@ const MappingCompositor = ({ visualCanvasRefs, editMode }) => {
         <div ref={containerRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
             <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
 
+            {editMode && (
+                <MappingGuideOverlay
+                    selectedSurface={selectedSurface}
+                    surfaces={surfaces}
+                />
+            )}
+
             {editMode && surfaces.map((surface) => {
                 const isSelected = surface.id === selectedSurface.id
                 if (!isSelected) {
-                    // Non-selected surfaces only get a small centroid selector
-                    // dot — full corner/mask handles for every surface at once
-                    // would be unusable clutter with more than 1-2 surfaces.
+                    // Non-selected surfaces only get a centroid selector — full
+                    // handles for every surface at once become unusable clutter.
                     const cx = surface.corners.reduce((s, p) => s + p.x, 0) / surface.corners.length
                     const cy = surface.corners.reduce((s, p) => s + p.y, 0) / surface.corners.length
                     return (
@@ -769,6 +782,7 @@ const MappingCompositor = ({ visualCanvasRefs, editMode }) => {
                             return (
                                 <MaskHandle
                                     key={`mask-${i}`}
+                                    index={i + 1}
                                     x={screenPos.x}
                                     y={screenPos.y}
                                     onPointerDown={handlePointerDown}
@@ -797,6 +811,99 @@ const MappingCompositor = ({ visualCanvasRefs, editMode }) => {
     )
 }
 
+const MappingGuideOverlay = ({ selectedSurface, surfaces }) => {
+    const maskScreenPoints = selectedSurface.mask?.map((point) => (
+        projectQuadPoint(selectedSurface.corners, point.x, point.y)
+    ))
+
+    return (
+        <>
+            <div
+                style={{
+                    position: 'absolute',
+                    inset: 0,
+                    pointerEvents: 'none',
+                    backgroundImage: [
+                        'linear-gradient(rgba(255,255,255,0.16) 1px, transparent 1px)',
+                        'linear-gradient(90deg, rgba(255,255,255,0.16) 1px, transparent 1px)',
+                        'linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px)',
+                        'linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px)'
+                    ].join(', '),
+                    backgroundSize: '50% 50%, 50% 50%, 10% 10%, 10% 10%',
+                    backgroundPosition: 'center',
+                    mixBlendMode: 'screen',
+                    opacity: 0.9,
+                    zIndex: 2
+                }}
+            />
+            <svg
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                style={{
+                    position: 'absolute',
+                    inset: 0,
+                    width: '100%',
+                    height: '100%',
+                    pointerEvents: 'none',
+                    zIndex: 3
+                }}
+            >
+                {surfaces.map((surface) => {
+                    const selected = surface.id === selectedSurface.id
+                    return (
+                        <polygon
+                            key={surface.id}
+                            points={toSvgPoints(surface.corners)}
+                            fill={selected ? 'rgba(57, 255, 20, 0.10)' : 'rgba(255,255,255,0.04)'}
+                            stroke={selected ? '#39ff14' : 'rgba(255,255,255,0.45)'}
+                            strokeWidth={selected ? 0.35 : 0.2}
+                            vectorEffect="non-scaling-stroke"
+                        />
+                    )
+                })}
+                {maskScreenPoints?.length >= 3 && (
+                    <polygon
+                        points={toSvgPoints(maskScreenPoints)}
+                        fill="rgba(255,149,0,0.12)"
+                        stroke="#ff9500"
+                        strokeDasharray="1 0.8"
+                        strokeWidth={0.28}
+                        vectorEffect="non-scaling-stroke"
+                    />
+                )}
+            </svg>
+            <div
+                style={{
+                    position: 'absolute',
+                    top: '18px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    maxWidth: 'min(760px, calc(100% - 48px))',
+                    padding: '14px 18px',
+                    borderRadius: '14px',
+                    background: 'rgba(0,0,0,0.78)',
+                    border: '1px solid rgba(57,255,20,0.55)',
+                    boxShadow: '0 0 28px rgba(57,255,20,0.20)',
+                    color: '#fff',
+                    fontFamily: 'sans-serif',
+                    pointerEvents: 'none',
+                    zIndex: 4,
+                    textAlign: 'center'
+                }}
+            >
+                <div style={{ fontSize: '13px', fontWeight: 800, letterSpacing: '0.12em', color: '#39ff14', marginBottom: '8px' }}>
+                    MAPPING EDIT MODE
+                </div>
+                <div style={{ display: 'flex', gap: '14px', justifyContent: 'center', flexWrap: 'wrap', fontSize: '12px', lineHeight: 1.35 }}>
+                    <span><strong style={{ color: '#39ff14' }}>GREEN circles</strong>: drag projector corners</span>
+                    <span><strong style={{ color: '#ff9500' }}>ORANGE squares</strong>: crop/mask edges</span>
+                    <span><strong>Surface:</strong> {selectedSurface.name}</span>
+                </div>
+            </div>
+        </>
+    )
+}
+
 /** A single draggable quad-corner handle, shown only in edit mode. */
 const CornerHandle = ({ label, x, y, onPointerDown, onPointerMove, onPointerUp }) => (
     <div
@@ -805,24 +912,24 @@ const CornerHandle = ({ label, x, y, onPointerDown, onPointerMove, onPointerUp }
         onPointerUp={onPointerUp}
         style={{
             position: 'absolute',
-            left: `${x * 100}%`,
-            top: `${y * 100}%`,
+            ...handlePositionStyle(x, y),
             transform: 'translate(-50%, -50%)',
-            width: '22px',
-            height: '22px',
-            borderRadius: '50%',
+            width: '36px',
+            height: '36px',
+            borderRadius: '999px',
             background: '#39ff14',
-            border: '2px solid #000',
-            boxShadow: '0 0 6px rgba(0,0,0,0.8)',
+            border: '3px solid #000',
+            boxShadow: '0 0 0 2px rgba(255,255,255,0.9), 0 0 18px rgba(57,255,20,0.85)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '9px',
-            fontWeight: 700,
+            fontSize: '11px',
+            fontWeight: 900,
             color: '#000',
             cursor: 'grab',
             touchAction: 'none',
-            userSelect: 'none'
+            userSelect: 'none',
+            zIndex: 6
         }}
     >
         {label}
@@ -830,27 +937,35 @@ const CornerHandle = ({ label, x, y, onPointerDown, onPointerMove, onPointerUp }
 )
 
 /** A single draggable mask-vertex handle — visually distinct (orange square) from quad corner handles (green circles). */
-const MaskHandle = ({ x, y, onPointerDown, onPointerMove, onPointerUp }) => (
+const MaskHandle = ({ index, x, y, onPointerDown, onPointerMove, onPointerUp }) => (
     <div
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         style={{
             position: 'absolute',
-            left: `${x * 100}%`,
-            top: `${y * 100}%`,
+            ...handlePositionStyle(x, y),
             transform: 'translate(-50%, -50%)',
-            width: '16px',
-            height: '16px',
+            width: '28px',
+            height: '28px',
             borderRadius: '3px',
             background: '#ff9500',
-            border: '2px solid #000',
-            boxShadow: '0 0 6px rgba(0,0,0,0.8)',
+            border: '3px solid #000',
+            boxShadow: '0 0 0 2px rgba(255,255,255,0.85), 0 0 16px rgba(255,149,0,0.75)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '10px',
+            fontWeight: 900,
+            color: '#000',
             cursor: 'grab',
             touchAction: 'none',
-            userSelect: 'none'
+            userSelect: 'none',
+            zIndex: 7
         }}
-    />
+    >
+        {index}
+    </div>
 )
 
 /** Small clickable marker at a non-selected surface's centroid, used to switch which surface's handles are shown. */
@@ -860,19 +975,29 @@ const SurfaceSelector = ({ name, x, y, onSelect }) => (
         title={`Select ${name}`}
         style={{
             position: 'absolute',
-            left: `${x * 100}%`,
-            top: `${y * 100}%`,
+            ...handlePositionStyle(x, y),
             transform: 'translate(-50%, -50%)',
-            width: '18px',
-            height: '18px',
-            borderRadius: '50%',
-            background: 'rgba(255,255,255,0.25)',
+            minWidth: '96px',
+            height: '32px',
+            padding: '0 10px',
+            borderRadius: '999px',
+            background: 'rgba(0,0,0,0.7)',
             border: '2px dashed rgba(255,255,255,0.7)',
+            color: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontFamily: 'sans-serif',
+            fontSize: '11px',
+            fontWeight: 700,
             cursor: 'pointer',
             touchAction: 'none',
-            userSelect: 'none'
+            userSelect: 'none',
+            zIndex: 5
         }}
-    />
+    >
+        {name}
+    </div>
 )
 
 /** Edit-mode floating panel: add/remove mask, feather slider — for whichever surface is currently selected. */
@@ -884,18 +1009,23 @@ const MaskControls = ({ surfaceName, hasMask, maskPointCount, feather, onAddMask
             bottom: '16px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '8px',
-            padding: '10px 12px',
-            borderRadius: '8px',
-            background: 'rgba(0,0,0,0.75)',
-            border: '1px solid rgba(255,255,255,0.15)',
+            gap: '10px',
+            padding: '14px 16px',
+            borderRadius: '12px',
+            background: 'rgba(0,0,0,0.84)',
+            border: '1px solid rgba(255,255,255,0.28)',
+            boxShadow: '0 0 24px rgba(0,0,0,0.65)',
             color: '#fff',
-            fontSize: '11px',
+            fontSize: '12px',
             fontFamily: 'sans-serif',
-            minWidth: '180px'
+            minWidth: '260px',
+            zIndex: 8
         }}
     >
-        <strong>{surfaceName}</strong>
+        <strong style={{ fontSize: '13px' }}>{surfaceName}</strong>
+        <div style={{ opacity: 0.82, lineHeight: 1.35 }}>
+            Fit green corners to the real wall/object. Add a mask only when you need to crop the projected content.
+        </div>
         {!hasMask ? (
             <button onClick={onAddMask} style={buttonStyle}>Add Mask</button>
         ) : (
