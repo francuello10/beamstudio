@@ -3052,3 +3052,59 @@ select:disabled {
         grid-column: 1 / -1;
     }
 }
+
+.studio-panel-header.compact {
+    margin: 0 0 8px;
+}
+
+.studio-camera-card {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.studio-camera-card p {
+    margin: 0 0 10px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.studio-camera-feed {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transform: scaleX(-1);
+    transition: opacity 0.18s ease;
+}
+
+.studio-preview-stage.camera-on .studio-camera-feed {
+    opacity: 0.56;
+}
+
+.studio-preview-stage.camera-on {
+    background: #050505;
+}
+
+.studio-preview-stage.camera-on .studio-preview-overlay {
+    opacity: 0.72;
+}
+
+.studio-preview-stage.camera-on .studio-preview-svg {
+    background: rgba(0, 0, 0, 0.18);
+}
+
+.studio-preview-svg circle,
+.studio-preview-svg polygon,
+.studio-preview-svg line,
+.studio-preview-svg text {
+    user-select: none;
+}
+
+.studio-preview-svg circle:hover,
+.studio-preview-svg polygon:hover {
+    filter: drop-shadow(0 0 7px rgba(255, 255, 255, 0.65));
+}
