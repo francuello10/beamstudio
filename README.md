@@ -123,8 +123,8 @@ Super short version:
 6. Add or select a surface.
 7. Drag corners in the projector output window until the image fits the real surface.
 8. Choose the visual for that surface.
-9. Save the preset.
-10. Turn off `TEST PATTERN` and run the real visual.
+9. If the status banner says `BLACKOUT`, `NOW PLAYING`, or `TEST PATTERN`, click `Show selected visual`.
+10. Save the preset.
 
 ## Tonight test checklist
 
@@ -178,6 +178,7 @@ Super short version:
 - [ ] Click `Check Webcam`
 - [ ] Allow camera access
 - [ ] Pick the correct webcam
+- [ ] Click `Show selected visual` if the projector is showing Now Playing or Test Pattern
 - [ ] Confirm the skeleton is visible in the projector output
 
 ## Linux / Wayland notes

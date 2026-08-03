@@ -119,18 +119,36 @@ const ProjectorPage = () => {
         const next = !blackout
         setBlackout(next)
         window.projector?.setBlackout(next)
+        if (next) {
+            setTestPattern(false)
+            setNowPlayingOverlay(false)
+            window.projector?.setTestPattern(false)
+            window.projector?.setNowPlayingOverlay(false)
+        }
     }
 
     const handleTestPatternToggle = () => {
         const next = !testPattern
         setTestPattern(next)
         window.projector?.setTestPattern(next)
+        if (next) {
+            setBlackout(false)
+            setNowPlayingOverlay(false)
+            window.projector?.setBlackout(false)
+            window.projector?.setNowPlayingOverlay(false)
+        }
     }
 
     const handleNowPlayingOverlayToggle = () => {
         const next = !nowPlayingOverlay
         setNowPlayingOverlay(next)
         window.projector?.setNowPlayingOverlay(next)
+        if (next) {
+            setBlackout(false)
+            setTestPattern(false)
+            window.projector?.setBlackout(false)
+            window.projector?.setTestPattern(false)
+        }
     }
 
     // BS-008: retargets the CURRENTLY SELECTED surface's own visualId field,
@@ -140,6 +158,16 @@ const ProjectorPage = () => {
     // relay is gone, see main/index.js and preload/index.js).
     const handleVisualSelect = (visualId) => {
         pushSurfaces(surfaces.map(s => (s.id === selectedSurfaceId ? { ...s, visualId } : s)))
+        showSelectedVisual()
+    }
+
+    const showSelectedVisual = () => {
+        setBlackout(false)
+        setTestPattern(false)
+        setNowPlayingOverlay(false)
+        window.projector?.setBlackout(false)
+        window.projector?.setTestPattern(false)
+        window.projector?.setNowPlayingOverlay(false)
     }
 
     const handleVisualColorSyncToggle = () => {
@@ -250,6 +278,19 @@ const ProjectorPage = () => {
     }, [])
 
     useEffect(() => {
+        let cancelled = false
+        ;(async () => {
+            const state = await window.projector?.getState?.()
+            if (cancelled || !state) return
+            setBlackout(Boolean(state.blackout))
+            setTestPattern(Boolean(state.testPattern))
+            setNowPlayingOverlay(Boolean(state.nowPlayingOverlay))
+            if (state.visualColorSyncEnabled !== undefined) setVisualColorSync(Boolean(state.visualColorSyncEnabled))
+        })()
+        return () => { cancelled = true }
+    }, [])
+
+    useEffect(() => {
         refreshCameras()
         window.projector?.setPoseCameraDeviceId(poseCameraDeviceId || null)
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -308,6 +349,15 @@ const ProjectorPage = () => {
 
     const selectedSurface = surfaces.find(s => s.id === selectedSurfaceId) || surfaces[0]
     const rotationDegrees = Math.round((((selectedSurface?.rotation || 0) * 180) / Math.PI) % 360)
+    const selectedVisualId = selectedSurface?.visualId || DEFAULT_VISUAL_ID
+    const selectedVisual = VISUALS.find(visual => visual.id === selectedVisualId)
+    const outputStatus = blackout
+        ? 'BLACKOUT is hiding all projector output.'
+        : nowPlayingOverlay
+            ? 'NOW PLAYING is covering the selected visual.'
+            : testPattern
+                ? 'TEST PATTERN calibration mode is active.'
+                : `LIVE VISUAL: ${selectedVisual?.label || selectedVisualId}`
 
     const connectedDisplay = displays.find(d => d.id === status.displayId)
 
@@ -414,6 +464,31 @@ const ProjectorPage = () => {
                                 <Music size={16} />
                                 <span>NOW PLAYING</span>
                             </div>
+                        </div>
+
+                        <div style={{
+                            padding: '10px 12px',
+                            borderRadius: '10px',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            background: blackout || nowPlayingOverlay || testPattern ? 'rgba(255, 40, 100, 0.12)' : 'rgba(0, 255, 170, 0.08)',
+                            color: blackout || nowPlayingOverlay || testPattern ? '#ff7aa8' : 'var(--accent)',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            gap: '12px'
+                        }}>
+                            <span>{outputStatus}</span>
+                            {(blackout || nowPlayingOverlay || testPattern) && (
+                                <button
+                                    onClick={showSelectedVisual}
+                                    className="action-button active"
+                                    style={{ margin: 0, height: '32px', padding: '0 12px', fontSize: '11px', whiteSpace: 'nowrap' }}
+                                >
+                                    Show selected visual
+                                </button>
+                            )}
                         </div>
 
                         {/* BS-008: this picker now targets whichever surface is

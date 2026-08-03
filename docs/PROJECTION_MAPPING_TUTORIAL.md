@@ -25,6 +25,26 @@ This tutorial is the fastest safe path to get BeamStudio's projector output alig
 | `Visual for: <surface>` | Chooses which visual feeds the selected surface |
 | `Rotation` | Rotates only that surface's content, not the quad itself |
 | `Save Preset` | Stores the current surface layout in `mapping-presets.json` |
+| `Show selected visual` | Clears `BLACKOUT`, `TEST PATTERN`, and `NOW PLAYING` so the selected surface visual is actually visible |
+
+## First rule: know what is covering the output
+
+BeamStudio can show several layers in the projector window. If the wrong thing appears, check the status banner in `Projector Output`.
+
+Priority:
+
+```text
+BLACKOUT
+  covers everything
+NOW PLAYING
+  covers the selected visual
+TEST PATTERN
+  calibration mode
+LIVE VISUAL
+  the selected surface visual
+```
+
+If you selected `Pose Skeleton` but still see the music card, click `Show selected visual`. That is not you being dumb, that was a bad app state. The UI now makes it explicit.
 
 ## Happy path: first-time mapping
 
@@ -60,7 +80,7 @@ Start with one surface only. This matters. If the first quad is wrong, five wron
 ### Step 4. Choose the content
 
 1. In `Visual for: <surface>`, choose the visual you want.
-2. Turn off `TEST PATTERN`.
+2. If the status banner says `BLACKOUT`, `NOW PLAYING`, or `TEST PATTERN`, click `Show selected visual`.
 3. Verify the real visual is aligned, not only the grid.
 
 ## Multi-surface workflow
@@ -125,10 +145,10 @@ Use presets. Seriously. Rebuilding a room from scratch five minutes before peopl
 
 Check:
 
-- `BLACKOUT` is off
-- `TEST PATTERN` is off if you want the real visual
-- the selected surface has the intended visual
-- the quad is still on-screen after dragging
+- Read the status banner in `Projector Output`
+- Click `Show selected visual`
+- Confirm the selected surface has the intended visual
+- Confirm the quad is still on-screen after dragging
 
 ### The visual is visible but on the wrong real object
 
