@@ -106,6 +106,8 @@ BeamStudio is an Electron DMX controller for 3 RGB bars with live modes that can
 - What it does:
   - Adds a parallel visual editor without replacing the stable `Projector Output` page.
   - Shows a central preview of mapped zones.
+  - Supports creating, selecting, moving, and reshaping up to 5 zones directly in the Studio preview.
+  - Can show a webcam background for camera-assisted alignment while projecting a test signal.
   - Lets each zone choose a layer: Black / Neutral, existing visuals, Now Playing Card, Frequency Equalizer, or Bass Pulse.
   - Uses the existing mapping state and audio engine, no duplicate audio capture.
 
@@ -128,9 +130,11 @@ BeamStudio is an Electron DMX controller for 3 RGB bars with live modes that can
 1. Open `Projector Studio`.
 2. Select a zone in the left panel.
 3. Pick a layer in the inspector: `Now Playing Card`, `Frequency Equalizer`, `Bass Pulse`, an existing visual, or `Black / Neutral`.
-4. Use rotation and feather controls while watching the central preview.
-5. Click `Open projector` to send the same surfaces to the real projector window.
-6. Save a preset when the layout is useful.
+4. Drag a zone body to move it, or drag its green numbered corners to reshape it. The MVP supports up to 5 zones.
+5. For camera-assisted mapping, click `Camera`, point the webcam at the projection surface, then click `Test signal`. Use the orange reference points plus the green zone corners to line up the real wall.
+6. Use rotation and feather controls while watching the central preview.
+7. Click `Open projector` to send the same surfaces to the real projector window.
+8. Save a preset when the layout is useful.
 
 The old `Projector Output` page stays as the fallback and calibration surface. Use it for display selection, test pattern, webcam setup, and low-level mapping edits.
 
