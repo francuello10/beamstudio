@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Activity, Camera, CircleDot, Crosshair, EyeOff, Layers, MonitorUp, Music, Plus, Radio, RotateCw, Save, Sparkles, Trash2, Waves } from 'lucide-react'
+import { Activity, Camera, CircleDot, Crosshair, EyeOff, Layers, MonitorUp, Music, Plus, Radio, RotateCw, Save, Sparkles, Trash2 } from 'lucide-react'
 import { DEFAULT_SURFACE, createInsetSurface } from '../mapping/MappingCompositor'
 import { DEFAULT_VISUAL_ID, VISUALS } from '../visuals/visualRegistry'
 import { useAudioStore } from '../store/audioStore'
@@ -8,6 +8,23 @@ import { useNowPlayingStore } from '../metadata/nowPlayingStore'
 
 const MAX_STUDIO_ZONES = 5
 const MUSIC_LAYER_IDS = ['nowPlayingCard', 'musicEqualizer', 'bassPulse']
+const MUSIC_SPLIT_PRESET = [
+    {
+        name: 'Now Playing',
+        visualId: 'nowPlayingCard',
+        corners: [{ x: 0, y: 0 }, { x: 0.34, y: 0 }, { x: 0.34, y: 1 }, { x: 0, y: 1 }]
+    },
+    {
+        name: 'Frequency EQ',
+        visualId: 'musicEqualizer',
+        corners: [{ x: 0.34, y: 0 }, { x: 0.68, y: 0 }, { x: 0.68, y: 1 }, { x: 0.34, y: 1 }]
+    },
+    {
+        name: 'Bass Pulse',
+        visualId: 'bassPulse',
+        corners: [{ x: 0.68, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0.68, y: 1 }]
+    }
+]
 const DEFAULT_REFERENCE_POINTS = [
     { id: 'tl', x: 0.08, y: 0.08, label: 'A' },
     { id: 'tr', x: 0.92, y: 0.08, label: 'B' },
@@ -42,9 +59,23 @@ const formatDegrees = (radians = 0) => Math.round((((radians * 180) / Math.PI) %
 const degreesToRadians = (degrees) => (((Number(degrees) || 0) * Math.PI) / 180)
 const clamp01 = (value) => Math.max(0, Math.min(1, Number(value) || 0))
 const clampPoint = (point) => ({ x: clamp01(point.x), y: clamp01(point.y) })
+const cornersMatch = (a = [], b = []) => a.length === b.length && a.every((point, index) => (
+    Math.abs(point.x - b[index].x) < 0.001 && Math.abs(point.y - b[index].y) < 0.001
+))
 
 const getVisualLabel = (visualId) => VISUALS.find(visual => visual.id === visualId)?.label || visualId || 'Unknown'
 const pointsForSurface = (surface) => surface.corners.map(point => `${point.x * 100},${point.y * 100}`).join(' ')
+const clipPathForSurface = (surface) => `polygon(${surface.corners.map(point => `${point.x * 100}% ${point.y * 100}%`).join(', ')})`
+
+const getSurfaceBounds = (surface) => {
+    const xs = surface.corners.map(point => point.x * 100)
+    const ys = surface.corners.map(point => point.y * 100)
+    const left = Math.min(...xs)
+    const top = Math.min(...ys)
+    const width = Math.max(...xs) - left
+    const height = Math.max(...ys) - top
+    return { left, top, width: Math.max(width, 8), height: Math.max(height, 8) }
+}
 
 const getLayerColor = (visualId) => {
     if (visualId === 'blackNeutral') return '#050505'
@@ -54,6 +85,17 @@ const getLayerColor = (visualId) => {
     if (visualId === 'poseSkeleton') return '#00ff88'
     return '#8b5cf6'
 }
+
+const createStudioSurface = ({ id, name, corners, visualId }) => ({
+    ...DEFAULT_SURFACE,
+    id,
+    name,
+    corners,
+    mask: null,
+    feather: 0,
+    rotation: 0,
+    visualId
+})
 
 const ProjectorStudioPage = () => {
     useNowPlaying()
@@ -132,7 +174,6 @@ const ProjectorStudioPage = () => {
 
     const selectedSurface = surfaces.find(surface => surface.id === selectedSurfaceId) || surfaces[0] || DEFAULT_SURFACE
     const selectedVisualId = selectedSurface.visualId || DEFAULT_VISUAL_ID
-    const selectedLayerColor = getLayerColor(selectedVisualId)
     const spectral = Array.isArray(audioFrame?.spectral) ? audioFrame.spectral : []
     const bass = clamp01(audioFrame?.levels?.bass)
     const volume = clamp01(audioFrame?.levels?.volume)
@@ -226,18 +267,50 @@ const ProjectorStudioPage = () => {
         pushSurfaces(next, 'Removed zone from Studio layout.')
     }
 
+    const handleApplyMusicSplit = () => {
+        const now = Date.now()
+        const isPristineDefault = surfaces.length === 1 && surfaces[0].id === DEFAULT_SURFACE.id && cornersMatch(surfaces[0].corners, DEFAULT_SURFACE.corners)
+        const baseSurfaces = isPristineDefault ? [] : surfaces
+        const next = baseSurfaces.map((surface, index) => {
+            const preset = MUSIC_SPLIT_PRESET[index]
+            return preset ? { ...surface, name: preset.name, visualId: preset.visualId } : surface
+        })
+
+        for (let index = next.length; index < MUSIC_SPLIT_PRESET.length; index += 1) {
+            const preset = MUSIC_SPLIT_PRESET[index]
+            next.push(createStudioSurface({
+                id: `studio-music-${now}-${preset.visualId}`,
+                name: preset.name,
+                visualId: preset.visualId,
+                corners: preset.corners
+            }))
+        }
+
+        setSelectedSurfaceId(next[0].id)
+        pushSurfaces(next, isPristineDefault
+            ? 'Created a three-zone music layout: Now Playing, EQ, and Bass.'
+            : 'Music split applied without deleting existing zone geometry.')
+    }
+
     const handleOpenProjector = async () => {
+        window.projector?.setBlackout?.(false)
+        window.projector?.setTestPattern?.(false)
+        window.projector?.setNowPlayingOverlay?.(false)
+
         if (projectorStatus.connected) {
             window.mapping?.setSurfaces?.(surfaces)
-            setMessage('Projector is already live. Studio layout refreshed.')
+            setMessage('Projector is already live. Studio preview synced to output.')
             return
         }
 
         const result = await window.projector?.open?.()
         if (result?.ok) {
             setProjectorStatus({ connected: true, displayId: result.displayId })
-            setMessage('Projector opened. Studio layout is live.')
+            window.projector?.setBlackout?.(false)
+            window.projector?.setTestPattern?.(false)
+            window.projector?.setNowPlayingOverlay?.(false)
             window.mapping?.setSurfaces?.(surfaces)
+            setMessage('Projector opened and synced. The output matches this preview.')
         }
     }
 
@@ -359,6 +432,108 @@ const ProjectorStudioPage = () => {
         setDragging(null)
     }
 
+    const renderSurfacePreview = (surface, index) => {
+        const visualId = surface.visualId || DEFAULT_VISUAL_ID
+        const color = getLayerColor(visualId)
+        const bounds = getSurfaceBounds(surface)
+        const rotation = formatDegrees(surface.rotation)
+        const label = `${index + 1} · ${getVisualLabel(visualId)}`
+        const layerStyle = {
+            position: 'absolute',
+            inset: 0,
+            clipPath: clipPathForSurface(surface),
+            WebkitClipPath: clipPathForSurface(surface),
+            background: visualId === 'blackNeutral'
+                ? '#000'
+                : `radial-gradient(circle at 50% 50%, ${color}66, #050508 58%, #000 100%)`,
+            pointerEvents: 'none',
+            overflow: 'hidden'
+        }
+        const contentStyle = {
+            position: 'absolute',
+            left: `${bounds.left}%`,
+            top: `${bounds.top}%`,
+            width: `${bounds.width}%`,
+            height: `${bounds.height}%`,
+            transform: `rotate(${rotation}deg)`,
+            transformOrigin: '50% 50%'
+        }
+
+        if (visualId === 'blackNeutral') {
+            return (
+                <div key={surface.id} style={layerStyle}>
+                    <div style={{ position: 'absolute', left: `${bounds.left + 2}%`, top: `${bounds.top + 2}%`, color: '#777', fontSize: '12px', fontWeight: 800 }}>
+                        {index + 1} · BLACK
+                    </div>
+                </div>
+            )
+        }
+
+        return (
+            <div key={surface.id} style={layerStyle}>
+                <div style={contentStyle}>
+                    {visualId === 'nowPlayingCard' && (
+                        <div style={{ height: '100%', minHeight: 88, display: 'grid', placeItems: 'center', padding: '10%', textAlign: 'center' }}>
+                            <div style={{ width: 'min(72%, 190px)', aspectRatio: '1', borderRadius: 20, display: 'grid', placeItems: 'center', background: `linear-gradient(135deg, ${color}, #00f5ff)`, color: '#fff', fontSize: 44, fontWeight: 900, boxShadow: `0 0 42px ${color}88` }}>♪</div>
+                            <strong style={{ display: 'block', marginTop: 12, fontSize: 'clamp(13px, 2vw, 24px)', color: '#fff' }}>{nowPlaying.title || 'No active track'}</strong>
+                            <span style={{ display: 'block', marginTop: 4, fontSize: 'clamp(10px, 1.2vw, 14px)', color: 'rgba(255,255,255,0.7)' }}>{nowPlaying.artist || 'Now Playing card'}</span>
+                        </div>
+                    )}
+
+                    {visualId === 'musicEqualizer' && (
+                        <div style={{ height: '100%', display: 'flex', alignItems: 'end', justifyContent: 'center', gap: '3%', padding: '10% 8% 14%' }}>
+                            {new Array(16).fill(0).map((_, barIndex) => (
+                                <span
+                                    key={barIndex}
+                                    style={{
+                                        width: '4%',
+                                        minWidth: 4,
+                                        height: `${14 + clamp01(spectral[barIndex]) * 82}%`,
+                                        borderRadius: '999px 999px 5px 5px',
+                                        background: 'linear-gradient(180deg, #00f5ff, #8b5cf6 58%, #ff2d75)',
+                                        boxShadow: '0 0 18px rgba(0,245,255,0.42)'
+                                    }}
+                                />
+                            ))}
+                        </div>
+                    )}
+
+                    {visualId === 'bassPulse' && (
+                        <div style={{ position: 'relative', width: '100%', height: '100%', display: 'grid', placeItems: 'center' }}>
+                            {[0.28, 0.48, 0.68].map((size, ringIndex) => (
+                                <span
+                                    key={ringIndex}
+                                    style={{
+                                        position: 'absolute',
+                                        width: `${(size + bass * 0.22) * 100}%`,
+                                        aspectRatio: '1',
+                                        borderRadius: '50%',
+                                        border: `${2 + bass * 8}px solid ${ringIndex === 0 ? '#ff2d75' : ringIndex === 1 ? '#8b5cf6' : '#00f5ff'}`,
+                                        opacity: 0.34 + bass * 0.48,
+                                        boxShadow: `0 0 ${20 + bass * 70}px ${color}99`
+                                    }}
+                                />
+                            ))}
+                        </div>
+                    )}
+
+                    {!MUSIC_LAYER_IDS.includes(visualId) && (
+                        <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: '#fff', textAlign: 'center', padding: '10%' }}>
+                            <div>
+                                <Sparkles size={38} color={color} />
+                                <strong style={{ display: 'block', marginTop: 10, fontSize: 'clamp(12px, 1.6vw, 18px)' }}>{getVisualLabel(visualId)}</strong>
+                                <span style={{ color: 'rgba(255,255,255,0.62)', fontSize: 11 }}>Live visual source</span>
+                            </div>
+                        </div>
+                    )}
+                </div>
+                <div style={{ position: 'absolute', left: `${bounds.left + 1.2}%`, top: `${bounds.top + 1.2}%`, padding: '5px 8px', borderRadius: 999, background: 'rgba(0,0,0,0.62)', color: '#fff', border: `1px solid ${color}`, fontSize: 11, fontWeight: 900, letterSpacing: '0.03em' }}>
+                    {label}
+                </div>
+            </div>
+        )
+    }
+
     return (
         <div className="page projector-studio-page">
             <div className="studio-hero glass-card">
@@ -411,6 +586,9 @@ const ProjectorStudioPage = () => {
                             <Trash2 size={15} /> Remove
                         </button>
                     </div>
+                    <button className="action-button studio-action" onClick={handleApplyMusicSplit} style={{ width: '100%', marginTop: 12 }}>
+                        <Music size={15} /> Apply music layers
+                    </button>
 
                     <div className="studio-camera-card">
                         <div className="studio-panel-header compact">
@@ -444,12 +622,15 @@ const ProjectorStudioPage = () => {
                             <p>{studioSummary}</p>
                         </div>
                         <button className="action-button active" onClick={handleOpenProjector}>
-                            <MonitorUp size={16} /> Open projector
+                            <MonitorUp size={16} /> Open / Sync
                         </button>
                     </div>
 
                     <div className={`studio-preview-stage ${cameraActive ? 'camera-on' : ''}`}>
                         <video ref={videoRef} className="studio-camera-feed" autoPlay muted playsInline />
+                        <div style={{ position: 'absolute', inset: 0, background: cameraActive ? 'transparent' : '#000', opacity: cameraActive ? 0.82 : 1 }}>
+                            {surfaces.map(renderSurfacePreview)}
+                        </div>
                         <svg
                             ref={svgRef}
                             viewBox="0 0 100 100"
@@ -466,7 +647,7 @@ const ProjectorStudioPage = () => {
                                     <stop offset="1" stopColor="#00f5ff" stopOpacity="0.14" />
                                 </linearGradient>
                             </defs>
-                            <rect x="0" y="0" width="100" height="100" fill={cameraActive ? 'rgba(0,0,0,0.2)' : 'url(#studio-grid-glow)'} />
+                            <rect x="0" y="0" width="100" height="100" fill={cameraActive ? 'rgba(0,0,0,0.08)' : 'url(#studio-grid-glow)'} />
                             {[25, 50, 75].map(pos => (
                                 <React.Fragment key={pos}>
                                     <line x1={pos} y1="0" x2={pos} y2="100" stroke="rgba(255,255,255,0.1)" strokeWidth="0.15" />
@@ -521,39 +702,6 @@ const ProjectorStudioPage = () => {
                             ))}
                         </svg>
 
-                        <div className="studio-preview-overlay">
-                            {selectedVisualId === 'nowPlayingCard' && (
-                                <div className="studio-nowplaying-preview" style={{ transform: `rotate(${formatDegrees(selectedSurface.rotation)}deg)` }}>
-                                    <div className="studio-artwork-placeholder">♪</div>
-                                    <strong>{nowPlaying.title || 'No active track'}</strong>
-                                    <span>{nowPlaying.artist || 'Start music to fill this card'}</span>
-                                </div>
-                            )}
-
-                            {selectedVisualId === 'musicEqualizer' && (
-                                <div className="studio-eq-preview">
-                                    {new Array(16).fill(0).map((_, index) => (
-                                        <span key={index} style={{ height: `${12 + clamp01(spectral[index]) * 88}%` }} />
-                                    ))}
-                                </div>
-                            )}
-
-                            {selectedVisualId === 'bassPulse' && (
-                                <div className="studio-bass-preview" style={{ '--bass': bass }}>
-                                    <span />
-                                    <span />
-                                    <span />
-                                </div>
-                            )}
-
-                            {!MUSIC_LAYER_IDS.includes(selectedVisualId) && selectedVisualId !== 'blackNeutral' && (
-                                <div className="studio-visual-preview" style={{ '--layer-color': selectedLayerColor }}>
-                                    <Waves size={46} />
-                                    <strong>{getVisualLabel(selectedVisualId)}</strong>
-                                    <span>Live visual source</span>
-                                </div>
-                            )}
-                        </div>
                     </div>
 
                     <div className="studio-status-strip">
