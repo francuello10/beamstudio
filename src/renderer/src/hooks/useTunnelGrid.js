@@ -284,7 +284,10 @@ export function useTunnelGrid() {
             depth: false,
             stencil: false,
             antialias: false,
-            preserveDrawingBuffer: false,
+            // These canvases are sampled by MappingCompositor via texImage2D;
+            // keeping the drawing buffer prevents Chromium from presenting a
+            // cleared/black frame to the projector compositor.
+            preserveDrawingBuffer: true,
             powerPreference: 'high-performance'
         })
         if (!gl) { console.error('[useTunnelGrid] WebGL2 not supported'); return false }
