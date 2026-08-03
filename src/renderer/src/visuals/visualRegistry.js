@@ -14,4 +14,7 @@ export const VISUALS = [
     { id: 'poseSkeleton', label: 'Pose Skeleton' }
 ]
 
-export const DEFAULT_VISUAL_ID = VISUALS[0].id
+// Particle Field is the safest default for projector output: it does not
+// require Fluid Neon's floating-point framebuffer extension, which is not
+// available on every Electron/Linux GPU path.
+export const DEFAULT_VISUAL_ID = 'particleField'

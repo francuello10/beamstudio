@@ -181,26 +181,25 @@ const ProjectorApp = () => {
 
     return (
         <div className="projector-root" style={{ position: 'relative', width: '100vw', height: '100vh', background: '#000', overflow: 'hidden' }}>
-            {/* BS-006/BS-008: every ever-mounted visual still renders every
-                frame (so its own rAF loop / WebGL context is never
-                disturbed) but is kept out of the final paint —
-                MappingCompositor reads each one's live pixels as a texture
-                instead of any of them being shown directly.
-                visibility:hidden (NOT display:none) keeps it reliably
-                rendering as a WebGL2 texture source across Chromium
-                versions. Deliberate ceiling: one mounted source per visual
-                id from visualRegistry.js, not an unbounded surface count. */}
-            <div style={{ position: 'absolute', visibility: 'hidden', width: '100vw', height: '100vh' }}>
+            {/* BS-006/BS-008: source visuals must stay PAINTED, not
+                visibility:hidden/display:none. MappingCompositor samples
+                these canvases with texImage2D; Electron/Chromium may stop
+                or lose WebGL contexts for hidden canvases, which makes Live
+                Visual output black while DOM overlays still work. Keep them
+                alive behind the compositor instead. Deliberate ceiling: one
+                mounted source per visual id from visualRegistry.js. */}
+            <div style={{ position: 'absolute', inset: 0, width: '100vw', height: '100vh', overflow: 'hidden', pointerEvents: 'none' }}>
                 {Array.from(everMountedVisualIdsRef.current).map((visualId) => {
                     const VisualComponent = VISUAL_COMPONENTS[visualId]
                     if (!VisualComponent) return null
                     return (
-                        <VisualComponent
-                            key={visualId}
-                            ref={getCanvasRef(visualId)}
-                            active={distinctVisualIds.has(visualId)}
-                            cameraDeviceId={poseCameraDeviceId || undefined}
-                        />
+                        <div key={visualId} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+                            <VisualComponent
+                                ref={getCanvasRef(visualId)}
+                                active={distinctVisualIds.has(visualId)}
+                                cameraDeviceId={poseCameraDeviceId || undefined}
+                            />
+                        </div>
                     )
                 })}
             </div>

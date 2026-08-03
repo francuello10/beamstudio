@@ -792,8 +792,11 @@ export function useFluidSimulation() {
             window.dmx?.setDynamicRendererActive(false, 'renderer')
             const gl = glRef.current
             if (gl) {
-                const ext = gl.getExtension('WEBGL_lose_context')
-                if (ext) ext.loseContext()
+                // Do not force WEBGL_lose_context here. React StrictMode in
+                // development intentionally runs effect cleanup + setup twice;
+                // forcibly losing the context during that probe leaves the
+                // remounted projector source canvas permanently black. Deleting
+                // GL resources above is enough for normal teardown.
             }
             glRef.current = null
         }
