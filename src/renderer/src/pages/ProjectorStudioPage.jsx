@@ -59,6 +59,9 @@ const ProjectorStudioPage = () => {
     useNowPlaying()
     const svgRef = useRef(null)
     const videoRef = useRef(null)
+    const cameraStreamRef = useRef(null)
+    const cameraRequestIdRef = useRef(0)
+    const mountedRef = useRef(true)
     const audioFrame = useAudioStore(state => state.audioFrame)
     const nowPlaying = useNowPlayingStore(state => state.nowPlaying)
     const [surfaces, setSurfaces] = useState([DEFAULT_SURFACE])
@@ -100,6 +103,21 @@ const ProjectorStudioPage = () => {
     }, [])
 
     useEffect(() => {
+        let cancelled = false
+        ;(async () => {
+            const state = await window.projector?.getState?.()
+            if (!cancelled && state) {
+                setProjectorStatus({
+                    connected: Boolean(state.connected),
+                    displayId: state.displayId ?? null
+                })
+            }
+        })()
+        return () => { cancelled = true }
+    }, [])
+
+    useEffect(() => {
+        cameraStreamRef.current = cameraStream
         if (videoRef.current) videoRef.current.srcObject = cameraStream
         return () => {
             if (videoRef.current) videoRef.current.srcObject = null
@@ -107,8 +125,10 @@ const ProjectorStudioPage = () => {
     }, [cameraStream])
 
     useEffect(() => () => {
-        cameraStream?.getTracks().forEach(track => track.stop())
-    }, [cameraStream])
+        mountedRef.current = false
+        cameraRequestIdRef.current += 1
+        cameraStreamRef.current?.getTracks().forEach(track => track.stop())
+    }, [])
 
     const selectedSurface = surfaces.find(surface => surface.id === selectedSurfaceId) || surfaces[0] || DEFAULT_SURFACE
     const selectedVisualId = selectedSurface.visualId || DEFAULT_VISUAL_ID
@@ -207,6 +227,12 @@ const ProjectorStudioPage = () => {
     }
 
     const handleOpenProjector = async () => {
+        if (projectorStatus.connected) {
+            window.mapping?.setSurfaces?.(surfaces)
+            setMessage('Projector is already live. Studio layout refreshed.')
+            return
+        }
+
         const result = await window.projector?.open?.()
         if (result?.ok) {
             setProjectorStatus({ connected: true, displayId: result.displayId })
@@ -216,8 +242,10 @@ const ProjectorStudioPage = () => {
     }
 
     const handleProjectTestSignal = async () => {
-        const result = await window.projector?.open?.()
-        if (result?.ok) setProjectorStatus({ connected: true, displayId: result.displayId })
+        if (!projectorStatus.connected) {
+            const result = await window.projector?.open?.()
+            if (result?.ok) setProjectorStatus({ connected: true, displayId: result.displayId })
+        }
         window.projector?.setBlackout?.(false)
         window.projector?.setNowPlayingOverlay?.(false)
         window.projector?.setTestPattern?.(true)
@@ -235,13 +263,24 @@ const ProjectorStudioPage = () => {
             return
         }
 
+        const requestId = cameraRequestIdRef.current + 1
+        cameraRequestIdRef.current = requestId
+
         try {
-            cameraStream?.getTracks().forEach(track => track.stop())
+            cameraStreamRef.current?.getTracks().forEach(track => track.stop())
+            cameraStreamRef.current = null
+            setCameraStream(null)
             const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+            if (!mountedRef.current || cameraRequestIdRef.current !== requestId) {
+                stream.getTracks().forEach(track => track.stop())
+                return
+            }
+            cameraStreamRef.current = stream
             setCameraStream(stream)
             setCameraStatus('Camera background on. Aim it at the projection surface.')
             setMessage('Camera background enabled. Drag zones and reference points over the real wall.')
         } catch (error) {
+            if (!mountedRef.current || cameraRequestIdRef.current !== requestId) return
             setCameraStatus(error?.name === 'NotAllowedError'
                 ? 'Camera access denied. Allow webcam access and try again.'
                 : `Camera failed: ${error?.message || 'unknown error'}`)
@@ -249,7 +288,9 @@ const ProjectorStudioPage = () => {
     }
 
     const handleStopCamera = () => {
-        cameraStream?.getTracks().forEach(track => track.stop())
+        cameraRequestIdRef.current += 1
+        cameraStreamRef.current?.getTracks().forEach(track => track.stop())
+        cameraStreamRef.current = null
         setCameraStream(null)
         setCameraStatus('Camera background off.')
     }

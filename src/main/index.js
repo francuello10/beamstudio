@@ -1829,6 +1829,10 @@ function setupIPC() {
     // Projector Output
     ipcMain.handle('projector:listDisplays', () => serializeDisplays())
     ipcMain.handle('projector:open', (event, displayId) => {
+        if (projectorWindow && !projectorWindow.isDestroyed()) {
+            const sameDisplay = displayId == null || String(displayId) === String(projectorDisplayId)
+            if (sameDisplay) return { ok: true, displayId: projectorDisplayId, alreadyOpen: true }
+        }
         createProjectorWindow(displayId)
         return { ok: true, displayId: projectorDisplayId }
     })
@@ -1895,7 +1899,11 @@ function setupIPC() {
     // last-known toggle state on mount, instead of only ever reflecting
     // whatever it happened to be listening for after it opened - see
     // lastKnownProjectorState's comment above.
-    ipcMain.handle('projector:getState', () => lastKnownProjectorState)
+    ipcMain.handle('projector:getState', () => ({
+        ...lastKnownProjectorState,
+        connected: Boolean(projectorWindow && !projectorWindow.isDestroyed()),
+        displayId: projectorDisplayId
+    }))
     // Same fix as projector:getState above, exposed under the mapping:
     // prefix to match mapping:setEditMode/mapping:getSurfaces' existing
     // convention rather than mixing it into the projector: namespace.
