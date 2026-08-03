@@ -6,6 +6,10 @@ import TunnelGridVisual from '../visuals/TunnelGridVisual'
 import KaleidoscopeVisual from '../visuals/KaleidoscopeVisual'
 import CeilingDomeVisual from '../visuals/CeilingDomeVisual'
 import PoseSkeletonVisual from '../visuals/PoseSkeletonVisual'
+import BlackNeutralVisual from '../visuals/BlackNeutralVisual'
+import NowPlayingCardVisual from '../visuals/NowPlayingCardVisual'
+import MusicEqualizerVisual from '../visuals/MusicEqualizerVisual'
+import BassPulseVisual from '../visuals/BassPulseVisual'
 import { DEFAULT_VISUAL_ID } from '../visuals/visualRegistry'
 import MappingCompositor, { DEFAULT_SURFACE } from '../mapping/MappingCompositor'
 import { useNowPlaying } from '../hooks/useNowPlaying'
@@ -17,12 +21,16 @@ import NowPlayingOverlay from './NowPlayingOverlay'
 // plus Ceiling Dome are now present here; a future visual would still just
 // be another entry plus a registry entry in visualRegistry.js.
 const VISUAL_COMPONENTS = {
+    blackNeutral: BlackNeutralVisual,
     fluidNeon: FluidNeonVisual,
     particleField: ParticleFieldVisual,
     tunnelGrid: TunnelGridVisual,
     kaleidoscope: KaleidoscopeVisual,
     ceilingDome: CeilingDomeVisual,
-    poseSkeleton: PoseSkeletonVisual
+    poseSkeleton: PoseSkeletonVisual,
+    nowPlayingCard: NowPlayingCardVisual,
+    musicEqualizer: MusicEqualizerVisual,
+    bassPulse: BassPulseVisual
 }
 
 /**
