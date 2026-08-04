@@ -41,6 +41,10 @@ export const DEFAULT_SURFACE = {
     // uRotation/rotate() in FRAGMENT_SHADER. Does NOT affect corners/quad-warp
     // math (computeQuadWarpVertices) or the mask's sdPolygon evaluation.
     rotation: 0,
+    // Per-surface horizontal content mirror. This is texture-sampling-only,
+    // so it fixes physically mirrored/rear-projection setups without changing
+    // the operator's corner geometry or mask points.
+    mirrorX: false,
     // BS-008: which visual this surface samples from (visualRegistry.js id).
     // Defaults to DEFAULT_VISUAL_ID so a freshly-created single surface shows
     // exactly what today's single global visual would have shown — this is
@@ -88,6 +92,7 @@ uniform vec2 uMaskPoints[MAX_MASK_POINTS];
 uniform int uMaskPointCount; // 0 means "no mask" — treat as fully visible
 uniform float uFeather;
 uniform float uRotation; // radians — per-surface CONTENT rotation only
+uniform bool uMirrorX; // horizontal CONTENT mirror only
 out vec4 outColor;
 
 // Rotates a quad-local UV around its own center (0.5, 0.5). Deliberately
@@ -129,7 +134,9 @@ void main() {
             ? smoothstep(0.0, uFeather, -dist)
             : (dist <= 0.0 ? 1.0 : 0.0);
     }
-    vec4 texel = texture(uTexture, rotate(vUV, uRotation));
+    vec2 sampleUV = rotate(vUV, uRotation);
+    if (uMirrorX) sampleUV.x = 1.0 - sampleUV.x;
+    vec4 texel = texture(uTexture, sampleUV);
     outColor = vec4(texel.rgb, texel.a * maskAlpha);
 }
 `
@@ -513,6 +520,7 @@ const MappingCompositor = ({ visualCanvasRefs, editMode }) => {
         const uMaskPointCount = gl.getUniformLocation(program, 'uMaskPointCount')
         const uFeather = gl.getUniformLocation(program, 'uFeather')
         const uRotation = gl.getUniformLocation(program, 'uRotation')
+        const uMirrorX = gl.getUniformLocation(program, 'uMirrorX')
 
         const vao = gl.createVertexArray()
         gl.bindVertexArray(vao)
@@ -557,12 +565,12 @@ const MappingCompositor = ({ visualCanvasRefs, editMode }) => {
         gl.enable(gl.BLEND)
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
 
-        glStateRef.current = { gl, program, vertexBuffer, texturesByVisualId, vao, uTexture, uMaskPoints, uMaskPointCount, uFeather, uRotation }
+        glStateRef.current = { gl, program, vertexBuffer, texturesByVisualId, vao, uTexture, uMaskPoints, uMaskPointCount, uFeather, uRotation, uMirrorX }
 
         function renderFrame() {
             const state = glStateRef.current
             if (!state) return
-            const { gl: ctx, program: prog, texturesByVisualId: textures, vao: vertexArray, uTexture: texUniform, uMaskPoints: maskUniform, uMaskPointCount: maskCountUniform, uFeather: featherUniform, uRotation: rotationUniform } = state
+            const { gl: ctx, program: prog, texturesByVisualId: textures, vao: vertexArray, uTexture: texUniform, uMaskPoints: maskUniform, uMaskPointCount: maskCountUniform, uFeather: featherUniform, uRotation: rotationUniform, uMirrorX: mirrorXUniform } = state
 
             const cssWidth = canvas.clientWidth || 1
             const cssHeight = canvas.clientHeight || 1
@@ -644,6 +652,7 @@ const MappingCompositor = ({ visualCanvasRefs, editMode }) => {
                 ctx.uniform1i(maskCountUniform, maskPointCount)
                 ctx.uniform1f(featherUniform, surface.feather || 0)
                 ctx.uniform1f(rotationUniform, surface.rotation || 0)
+                ctx.uniform1i(mirrorXUniform, surface.mirrorX ? 1 : 0)
                 // BS-008: bind THIS surface's own assigned visual's texture
                 // right before drawing it — this is what lets each surface
                 // sample a different visual within the same draw loop.

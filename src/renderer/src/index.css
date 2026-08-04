@@ -2994,12 +2994,11 @@ select:disabled {
     height: 100%;
     object-fit: cover;
     opacity: 0;
-    transform: scaleX(-1);
     transition: opacity 0.18s ease;
 }
 
 .studio-preview-stage.camera-on .studio-camera-feed {
-    opacity: 0.56;
+    opacity: 0.82;
 }
 
 .studio-preview-stage.camera-on {

@@ -7,6 +7,19 @@ import { useAudioStore } from '../store/audioStore'
 import { useNowPlaying } from '../hooks/useNowPlaying'
 
 const MAX_STUDIO_ZONES = 12
+const LAYER0_SURFACE_ID = 'studio-layer-0'
+const LAYER0_SURFACE = {
+    ...DEFAULT_SURFACE,
+    id: LAYER0_SURFACE_ID,
+    name: 'Layer 0 · Background',
+    visualId: 'blackNeutral',
+    locked: true,
+    corners: DEFAULT_SURFACE.corners,
+    mask: null,
+    feather: 0,
+    rotation: 0,
+    mirrorX: false
+}
 const NOW_PLAYING_LAYER_IDS = ['nowPlayingCard', 'nowPlayingCover', 'nowPlayingTitle', 'nowPlayingArtist', 'nowPlayingAlbum', 'nowPlayingProgress', 'nowPlayingTime']
 const EQUALIZER_LAYER_IDS = ['musicEqualizer', 'musicEqualizerSmooth', 'musicEqualizerExaggerated', 'musicEqualizerWave', 'musicEqualizerRadial']
 const BASS_LAYER_IDS = ['bassPulse', 'bassPulseSmooth', 'bassPulseExaggerated']
@@ -111,7 +124,21 @@ const getLayerColor = (visualId) => {
     return '#8b5cf6'
 }
 
-const createStudioSurface = ({ id, name, corners, visualId }) => ({
+const requestCameraStreamWithTimeout = (constraints, timeoutMs = 8000) => {
+    let timeoutId
+    const timeout = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+            const error = new Error('Camera permission/request timed out. Check OS or browser camera permissions and try again.')
+            error.name = 'TimeoutError'
+            reject(error)
+        }, timeoutMs)
+    })
+
+    return Promise.race([navigator.mediaDevices.getUserMedia(constraints), timeout])
+        .finally(() => clearTimeout(timeoutId))
+}
+
+const createStudioSurface = ({ id, name, corners, visualId, locked = false }) => ({
     ...DEFAULT_SURFACE,
     id,
     name,
@@ -119,8 +146,33 @@ const createStudioSurface = ({ id, name, corners, visualId }) => ({
     mask: null,
     feather: 0,
     rotation: 0,
-    visualId
+    mirrorX: false,
+    visualId,
+    locked
 })
+
+const normalizeStudioSurfaces = (input) => {
+    const validSurfaces = Array.isArray(input) ? input.filter(Boolean) : []
+    const existingLayer0 = validSurfaces.find(surface => surface.id === LAYER0_SURFACE_ID)
+    const layer0 = {
+        ...LAYER0_SURFACE,
+        ...(existingLayer0 || {}),
+        id: LAYER0_SURFACE_ID,
+        name: existingLayer0?.name || LAYER0_SURFACE.name,
+        locked: true,
+        corners: LAYER0_SURFACE.corners,
+        mask: null,
+        feather: 0,
+        rotation: existingLayer0?.rotation || 0,
+        mirrorX: !!existingLayer0?.mirrorX,
+        visualId: existingLayer0?.visualId || 'blackNeutral'
+    }
+    const otherSurfaces = validSurfaces
+        .filter(surface => surface.id !== LAYER0_SURFACE_ID)
+        .map(surface => ({ ...surface, locked: false }))
+
+    return [layer0, ...otherSurfaces].slice(0, MAX_STUDIO_ZONES)
+}
 
 const ProjectorStudioPage = () => {
     useNowPlaying()
@@ -130,21 +182,22 @@ const ProjectorStudioPage = () => {
     const cameraRequestIdRef = useRef(0)
     const mountedRef = useRef(true)
     const audioFrame = useAudioStore(state => state.audioFrame)
-    const [surfaces, setSurfaces] = useState([DEFAULT_SURFACE])
-    const [selectedSurfaceId, setSelectedSurfaceId] = useState(DEFAULT_SURFACE.id)
+    const [surfaces, setSurfaces] = useState([LAYER0_SURFACE])
+    const [selectedSurfaceId, setSelectedSurfaceId] = useState(LAYER0_SURFACE_ID)
     const [projectorStatus, setProjectorStatus] = useState({ connected: false, displayId: null })
     const [presetName, setPresetName] = useState('Studio Beta')
     const [message, setMessage] = useState('Select a zone, choose a layer, see what will be projected.')
     const [dragging, setDragging] = useState(null)
     const [cameraStream, setCameraStream] = useState(null)
-    const [cameraStatus, setCameraStatus] = useState('Camera background off.')
+    const [cameraStarting, setCameraStarting] = useState(false)
+    const [cameraStatus, setCameraStatus] = useState('Layer 0 background is black. Camera preview off.')
     const [referencePoints, setReferencePoints] = useState(DEFAULT_REFERENCE_POINTS)
 
     useEffect(() => {
         const unsubscribe = window.mapping?.onSurfacesChanged((updated) => {
-            if (!Array.isArray(updated) || updated.length === 0) return
-            setSurfaces(updated)
-            setSelectedSurfaceId(current => (updated.some(surface => surface.id === current) ? current : updated[0].id))
+            const normalized = normalizeStudioSurfaces(updated)
+            setSurfaces(normalized)
+            setSelectedSurfaceId(current => (normalized.some(surface => surface.id === current) ? current : normalized[0].id))
         })
         return () => unsubscribe?.()
     }, [])
@@ -153,9 +206,11 @@ const ProjectorStudioPage = () => {
         let cancelled = false
         ;(async () => {
             const cached = await window.mapping?.getSurfaces?.()
-            if (!cancelled && Array.isArray(cached) && cached.length > 0) {
-                setSurfaces(cached)
-                setSelectedSurfaceId(current => (cached.some(surface => surface.id === current) ? current : cached[0].id))
+            if (!cancelled) {
+                const normalized = normalizeStudioSurfaces(cached)
+                setSurfaces(normalized)
+                setSelectedSurfaceId(current => (normalized.some(surface => surface.id === current) ? current : normalized[0].id))
+                if (JSON.stringify(cached || []) !== JSON.stringify(normalized)) window.mapping?.setSurfaces?.(normalized)
             }
         })()
         return () => { cancelled = true }
@@ -184,9 +239,21 @@ const ProjectorStudioPage = () => {
 
     useEffect(() => {
         cameraStreamRef.current = cameraStream
-        if (videoRef.current) videoRef.current.srcObject = cameraStream
+        const video = videoRef.current
+        if (!video) return undefined
+
+        video.srcObject = cameraStream
+        if (cameraStream) {
+            const playPromise = video.play?.()
+            if (playPromise?.catch) {
+                playPromise.catch((error) => {
+                    setCameraStatus(`Camera stream opened, but preview playback failed: ${error?.message || 'unknown error'}`)
+                })
+            }
+        }
+
         return () => {
-            if (videoRef.current) videoRef.current.srcObject = null
+            video.srcObject = null
         }
     }, [cameraStream])
 
@@ -225,14 +292,15 @@ const ProjectorStudioPage = () => {
     }
 
     const pushSurfaces = (next, nextMessage = 'Studio layout sent to projector.') => {
-        setSurfaces(next)
-        window.mapping?.setSurfaces?.(next)
+        const normalized = normalizeStudioSurfaces(next)
+        setSurfaces(normalized)
+        window.mapping?.setSurfaces?.(normalized)
         setMessage(nextMessage)
     }
 
     const updateSelectedSurface = (patch, nextMessage) => {
         pushSurfaces(
-            surfaces.map(surface => (surface.id === selectedSurface.id ? { ...surface, ...patch } : surface)),
+            surfaces.map(surface => (surface.id === selectedSurface.id ? { ...surface, ...patch, locked: !!surface.locked } : surface)),
             nextMessage
         )
     }
@@ -261,6 +329,14 @@ const ProjectorStudioPage = () => {
         )
     }
 
+    const handleMirrorXToggle = () => {
+        const nextMirrorX = !selectedSurface.mirrorX
+        updateSelectedSurface(
+            { mirrorX: nextMirrorX },
+            `${selectedSurface.name} horizontal mirror ${nextMirrorX ? 'enabled' : 'disabled'}.`
+        )
+    }
+
     const handleFeatherChange = (value) => {
         updateSelectedSurface(
             { feather: Math.max(0, Math.min(0.45, Number(value) || 0)) },
@@ -284,16 +360,21 @@ const ProjectorStudioPage = () => {
     }
 
     const handleRemoveSurface = () => {
+        if (selectedSurface.locked) {
+            setMessage('Layer 0 cannot be removed. Set it to Black / Neutral instead.')
+            return
+        }
         if (surfaces.length <= 1) return
         const next = surfaces.filter(surface => surface.id !== selectedSurface.id)
-        setSelectedSurfaceId(next[0].id)
+        setSelectedSurfaceId(next[0]?.id || LAYER0_SURFACE_ID)
         pushSurfaces(next, 'Removed zone from Studio layout.')
     }
 
     const handleApplyMusicSplit = () => {
         const now = Date.now()
-        const isPristineDefault = surfaces.length === 1 && surfaces[0].id === DEFAULT_SURFACE.id && cornersMatch(surfaces[0].corners, DEFAULT_SURFACE.corners)
-        const baseSurfaces = isPristineDefault ? [] : surfaces
+        const layer0Only = surfaces.length === 1 && surfaces[0].id === LAYER0_SURFACE_ID
+        const isPristineDefault = layer0Only && (surfaces[0].visualId || 'blackNeutral') === 'blackNeutral' && cornersMatch(surfaces[0].corners, DEFAULT_SURFACE.corners)
+        const baseSurfaces = surfaces
         const next = baseSurfaces.map((surface, index) => {
             const preset = MUSIC_SPLIT_PRESET[index]
             return preset ? { ...surface, name: preset.name, visualId: preset.visualId } : surface
@@ -309,7 +390,7 @@ const ProjectorStudioPage = () => {
             }))
         }
 
-        setSelectedSurfaceId(next[0].id)
+        setSelectedSurfaceId(next[1]?.id || next[0].id)
         pushSurfaces(next, isPristineDefault
             ? 'Created a three-zone music layout: Now Playing, EQ, and Bass.'
             : 'Music split applied without deleting existing zone geometry.')
@@ -355,31 +436,50 @@ const ProjectorStudioPage = () => {
 
     const handleStartCamera = async () => {
         if (!navigator.mediaDevices?.getUserMedia) {
-            setCameraStatus('Camera API is not available here.')
+            setCameraStatus('Camera API is not available in this renderer.')
             return
         }
 
         const requestId = cameraRequestIdRef.current + 1
         cameraRequestIdRef.current = requestId
+        setCameraStarting(true)
+        setCameraStatus('Requesting camera access for Layer 0 preview…')
 
         try {
             cameraStreamRef.current?.getTracks().forEach(track => track.stop())
             cameraStreamRef.current = null
             setCameraStream(null)
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+
+            let stream
+            try {
+                stream = await requestCameraStreamWithTimeout({
+                    video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+                    audio: false
+                })
+            } catch (error) {
+                if (error?.name !== 'OverconstrainedError') throw error
+                stream = await requestCameraStreamWithTimeout({ video: true, audio: false })
+            }
+
             if (!mountedRef.current || cameraRequestIdRef.current !== requestId) {
                 stream.getTracks().forEach(track => track.stop())
                 return
             }
             cameraStreamRef.current = stream
             setCameraStream(stream)
-            setCameraStatus('Camera background on. Aim it at the projection surface.')
-            setMessage('Camera background enabled. Drag zones and reference points over the real wall.')
+            setCameraStatus('Layer 0 camera preview on. Projector output background remains black.')
+            setMessage('Camera background enabled as locked Layer 0. Drag zones over the real wall.')
         } catch (error) {
             if (!mountedRef.current || cameraRequestIdRef.current !== requestId) return
             setCameraStatus(error?.name === 'NotAllowedError'
                 ? 'Camera access denied. Allow webcam access and try again.'
-                : `Camera failed: ${error?.message || 'unknown error'}`)
+                : error?.name === 'NotFoundError'
+                    ? 'No webcam detected.'
+                    : error?.name === 'TimeoutError'
+                        ? error.message
+                        : `Camera failed: ${error?.message || error?.name || 'unknown error'}`)
+        } finally {
+            if (mountedRef.current && cameraRequestIdRef.current === requestId) setCameraStarting(false)
         }
     }
 
@@ -388,7 +488,8 @@ const ProjectorStudioPage = () => {
         cameraStreamRef.current?.getTracks().forEach(track => track.stop())
         cameraStreamRef.current = null
         setCameraStream(null)
-        setCameraStatus('Camera background off.')
+        setCameraStarting(false)
+        setCameraStatus('Layer 0 background is black. Camera preview off.')
     }
 
     const handleSavePreset = async () => {
@@ -467,8 +568,10 @@ const ProjectorStudioPage = () => {
             clipPath: clipPathForSurface(surface),
             WebkitClipPath: clipPathForSurface(surface),
             background: visualId === 'blackNeutral'
-                ? '#000'
-                : `radial-gradient(circle at 50% 50%, ${color}66, #050508 58%, #000 100%)`,
+                ? (cameraActive ? 'rgba(0,0,0,0.42)' : '#000')
+                : cameraActive
+                    ? `radial-gradient(circle at 50% 50%, ${color}38, rgba(5,5,8,0.28) 58%, rgba(0,0,0,0.18) 100%)`
+                    : `radial-gradient(circle at 50% 50%, ${color}66, #050508 58%, #000 100%)`,
             pointerEvents: 'none',
             overflow: 'hidden'
         }
@@ -478,8 +581,10 @@ const ProjectorStudioPage = () => {
             top: `${bounds.top}%`,
             width: `${bounds.width}%`,
             height: `${bounds.height}%`,
-            transform: `rotate(${rotation}deg)`,
-            transformOrigin: '50% 50%'
+            transform: `rotate(${rotation}deg) scaleX(${surface.mirrorX ? -1 : 1})`,
+            transformOrigin: '50% 50%',
+            opacity: cameraActive ? 0.58 : 1,
+            mixBlendMode: cameraActive ? 'screen' : 'normal'
         }
 
         if (visualId === 'blackNeutral') {
@@ -510,7 +615,7 @@ const ProjectorStudioPage = () => {
                     )}
                 </div>
                 <div style={{ position: 'absolute', left: `${bounds.left + 1.2}%`, top: `${bounds.top + 1.2}%`, padding: '5px 8px', borderRadius: 999, background: 'rgba(0,0,0,0.62)', color: '#fff', border: `1px solid ${color}`, fontSize: 11, fontWeight: 900, letterSpacing: '0.03em' }}>
-                    {label}
+                    {label}{surface.mirrorX ? ' · MIRROR' : ''}
                 </div>
             </div>
         )
@@ -550,10 +655,10 @@ const ProjectorStudioPage = () => {
                                     className={`studio-zone-row ${isSelected ? 'active' : ''}`}
                                     onClick={() => setSelectedSurfaceId(surface.id)}
                                 >
-                                    <span className="studio-zone-index">{index + 1}</span>
+                                    <span className="studio-zone-index">{surface.locked ? 0 : index}</span>
                                     <span>
-                                        <strong>{surface.name}</strong>
-                                        <small>{getVisualLabel(visualId)}</small>
+                                        <strong>{surface.locked ? 'Layer 0 · Background' : surface.name}</strong>
+                                        <small>{surface.locked ? `${getVisualLabel(visualId)} · cannot delete` : getVisualLabel(visualId)}</small>
                                     </span>
                                     <span className="studio-zone-dot" style={{ background: getLayerColor(visualId) }} />
                                 </button>
@@ -564,7 +669,7 @@ const ProjectorStudioPage = () => {
                         <button className="action-button active studio-action" onClick={handleAddSurface} disabled={surfaces.length >= MAX_STUDIO_ZONES}>
                             <Plus size={15} /> Add zone
                         </button>
-                        <button className="action-button stop studio-action" onClick={handleRemoveSurface} disabled={surfaces.length <= 1}>
+                        <button className="action-button stop studio-action" onClick={handleRemoveSurface} disabled={selectedSurface.locked || surfaces.length <= 1}>
                             <Trash2 size={15} /> Remove
                         </button>
                     </div>
@@ -579,8 +684,8 @@ const ProjectorStudioPage = () => {
                         </div>
                         <p>{cameraStatus}</p>
                         <div className="studio-actions-row">
-                            <button className="action-button active studio-action" onClick={handleStartCamera}>
-                                <Camera size={15} /> Camera
+                            <button className="action-button active studio-action" onClick={handleStartCamera} disabled={cameraStarting}>
+                                <Camera size={15} /> {cameraStarting ? 'Opening…' : 'Camera'}
                             </button>
                             <button className="action-button stop studio-action" onClick={handleStopCamera} disabled={!cameraActive}>
                                 <EyeOff size={15} /> Off
@@ -610,7 +715,7 @@ const ProjectorStudioPage = () => {
 
                     <div className={`studio-preview-stage ${cameraActive ? 'camera-on' : ''}`}>
                         <video ref={videoRef} className="studio-camera-feed" autoPlay muted playsInline />
-                        <div style={{ position: 'absolute', inset: 0, background: cameraActive ? 'transparent' : '#000', opacity: cameraActive ? 0.82 : 1 }}>
+                        <div style={{ position: 'absolute', inset: 0, background: cameraActive ? 'transparent' : '#000', opacity: 1 }}>
                             {surfaces.map(renderSurfacePreview)}
                         </div>
                         <svg
@@ -700,7 +805,7 @@ const ProjectorStudioPage = () => {
                     </div>
 
                     <label className="studio-field-label">Selected zone</label>
-                    <input className="system-select studio-input" value={selectedSurface.name || ''} onChange={(event) => handleRename(event.target.value)} />
+                    <input className="system-select studio-input" value={selectedSurface.name || ''} onChange={(event) => handleRename(event.target.value)} disabled={selectedSurface.locked} />
 
                     <div className="studio-layer-groups">
                         {CONTENT_GROUPS.map(group => (
@@ -735,6 +840,13 @@ const ProjectorStudioPage = () => {
                                 </button>
                             ))}
                         </div>
+                    </div>
+
+                    <div className="studio-control-block">
+                        <label>Mirror</label>
+                        <button className={`bgr-toggle ${selectedSurface.mirrorX ? 'active' : ''}`} onClick={handleMirrorXToggle} style={{ width: '100%' }}>
+                            {selectedSurface.mirrorX ? 'Horizontal mirror ON' : 'Horizontal mirror OFF'}
+                        </button>
                     </div>
 
                     <div className="studio-control-block">

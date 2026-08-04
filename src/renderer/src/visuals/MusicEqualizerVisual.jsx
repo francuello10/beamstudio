@@ -30,12 +30,37 @@ const sampleSpectrum = (spectral, index, count) => {
     return lerp(clamp01(spectral[left]), clamp01(spectral[right]), position - left)
 }
 
-const isLiveAudioFrame = (audioFrame, now) => (
+const isFreshAudioFrame = (audioFrame, now) => (
     Number.isFinite(audioFrame?.timestamp) &&
-    now - audioFrame.timestamp < 3000 &&
+    now - audioFrame.timestamp < 3000
+)
+
+const isLiveAudioFrame = (audioFrame, now) => (
+    isFreshAudioFrame(audioFrame, now) &&
     !audioFrame?.status?.silence &&
     clamp01(audioFrame?.levels?.volume) > 0.01
 )
+
+const isPausedAudioFrame = (audioFrame, now) => (
+    isFreshAudioFrame(audioFrame, now) &&
+    (audioFrame?.status?.playbackPaused || String(audioFrame?.status?.playbackStatus || '').toLowerCase() === 'paused')
+)
+
+const drawStatusBadge = (ctx, label, width, frozen = false) => {
+    const badgeWidth = frozen ? 148 : 132
+    const x = width - badgeWidth - 28
+    const y = 24
+    ctx.save()
+    ctx.globalCompositeOperation = 'source-over'
+    ctx.fillStyle = frozen ? 'rgba(255, 159, 10, 0.18)' : 'rgba(0, 245, 255, 0.14)'
+    drawRoundedRect(ctx, x, y, badgeWidth, 38, 19)
+    ctx.fillStyle = frozen ? '#ffcf7a' : '#8fffee'
+    ctx.font = '800 17px Inter, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(label, x + badgeWidth / 2, y + 19)
+    ctx.restore()
+}
 
 /**
  * MusicEqualizerVisual — audio-frequency bars as a projector visual source.
@@ -50,6 +75,7 @@ const MusicEqualizerVisual = forwardRef(({ active = true, model = 'bars', intens
         let frameId = 0
         let peakHolds = new Array(40).fill(0)
         let smoothedBars = new Array(40).fill(0)
+        let lastLiveSnapshot = null
 
         const render = (now = 0) => {
             const canvas = canvasRef.current
@@ -61,18 +87,27 @@ const MusicEqualizerVisual = forwardRef(({ active = true, model = 'bars', intens
             const ctx = canvas.getContext('2d')
             const width = canvas.width
             const height = canvas.height
-            const { audioFrame } = useAudioStore.getState()
-            const hasLiveAudio = isLiveAudioFrame(audioFrame, now)
-            const spectral = hasLiveAudio && Array.isArray(audioFrame?.spectral)
+            const { audioFrame: currentAudioFrame } = useAudioStore.getState()
+            const currentIsLive = isLiveAudioFrame(currentAudioFrame, now)
+
+            const isFrozenPaused = !currentIsLive && isPausedAudioFrame(currentAudioFrame, now) && lastLiveSnapshot
+            const audioFrame = isFrozenPaused ? lastLiveSnapshot.audioFrame : currentAudioFrame
+            const renderTime = isFrozenPaused ? lastLiveSnapshot.renderTime : now
+            const hasAudioToDraw = currentIsLive || isFrozenPaused
+            if (isFrozenPaused) {
+                smoothedBars = [...(lastLiveSnapshot.smoothedBars || smoothedBars)]
+                peakHolds = [...(lastLiveSnapshot.peakHolds || peakHolds)]
+            }
+            const spectral = hasAudioToDraw && Array.isArray(audioFrame?.spectral)
                 ? audioFrame.spectral
                 : []
             const gain = INTENSITY_GAIN[intensity] || INTENSITY_GAIN.standard
-            const bass = clamp01(audioFrame?.levels?.bass * gain)
-            const mid = clamp01(audioFrame?.levels?.mid * gain)
-            const high = clamp01(audioFrame?.levels?.high * gain)
-            const volume = clamp01(audioFrame?.levels?.volume * gain)
-            const stereoWidth = clamp01(audioFrame?.levels?.stereoWidth)
-            const energy = hasLiveAudio ? Math.max(volume, bass * 0.75, mid * 0.55) : 0
+            const bass = hasAudioToDraw ? clamp01(audioFrame?.levels?.bass * gain) : 0
+            const mid = hasAudioToDraw ? clamp01(audioFrame?.levels?.mid * gain) : 0
+            const high = hasAudioToDraw ? clamp01(audioFrame?.levels?.high * gain) : 0
+            const volume = hasAudioToDraw ? clamp01(audioFrame?.levels?.volume * gain) : 0
+            const stereoWidth = hasAudioToDraw ? clamp01(audioFrame?.levels?.stereoWidth) : 0
+            const energy = hasAudioToDraw ? Math.max(volume, bass * 0.75, mid * 0.55) : 0
 
             ctx.clearRect(0, 0, width, height)
             ctx.fillStyle = '#02020a'
@@ -85,7 +120,7 @@ const MusicEqualizerVisual = forwardRef(({ active = true, model = 'bars', intens
             ctx.fillStyle = bg
             ctx.fillRect(0, 0, width, height)
 
-            if (!hasLiveAudio) {
+            if (!hasAudioToDraw) {
                 ctx.fillStyle = 'rgba(255,255,255,0.68)'
                 ctx.font = '800 34px Inter, sans-serif'
                 ctx.textAlign = 'center'
@@ -98,7 +133,7 @@ const MusicEqualizerVisual = forwardRef(({ active = true, model = 'bars', intens
             }
 
             ctx.globalCompositeOperation = 'lighter'
-            const horizonY = height * (0.55 + Math.sin(now * 0.0007) * 0.025)
+            const horizonY = height * (0.55 + Math.sin(renderTime * 0.0007) * 0.025)
             for (let row = 0; row < 7; row += 1) {
                 const y = horizonY + row * height * 0.055
                 ctx.strokeStyle = `rgba(0, 245, 255, ${0.035 + row * 0.008})`
@@ -140,6 +175,8 @@ const MusicEqualizerVisual = forwardRef(({ active = true, model = 'bars', intens
                     ctx.stroke()
                 }
                 ctx.globalCompositeOperation = 'source-over'
+                if (currentIsLive) lastLiveSnapshot = { audioFrame, renderTime, smoothedBars: [...smoothedBars], peakHolds: [...peakHolds] }
+                drawStatusBadge(ctx, isFrozenPaused ? 'PAUSED · FROZEN' : 'PLAYING', width, isFrozenPaused)
                 if (active) frameId = requestAnimationFrame(render)
                 return
             }
@@ -155,7 +192,7 @@ const MusicEqualizerVisual = forwardRef(({ active = true, model = 'bars', intens
 
                 const barHeight = Math.max(height * 0.035, smoothedBars[i] * maxBarHeight)
                 const x = marginX + i * (barWidth + gap)
-                const wobble = Math.sin(now * 0.004 + i * 0.55) * height * 0.012 * (0.3 + high)
+                const wobble = Math.sin(renderTime * 0.004 + i * 0.55) * height * 0.012 * (0.3 + high)
                 const y = centerY - barHeight + wobble
 
                 ctx.fillStyle = gradient
@@ -173,14 +210,14 @@ const MusicEqualizerVisual = forwardRef(({ active = true, model = 'bars', intens
             for (let i = 0; i <= 96; i += 1) {
                 const x = (i / 96) * width
                 const band = clamp01(sampleSpectrum(spectral, i, 96) * gain)
-                const wave = Math.sin(i * 0.32 + now * 0.006) * height * 0.045 * (0.2 + high)
+                const wave = Math.sin(i * 0.32 + renderTime * 0.006) * height * 0.045 * (0.2 + high)
                 const y = height * 0.28 + wave - band * height * 0.12
                 if (i === 0) ctx.moveTo(x, y)
                 else ctx.lineTo(x, y)
             }
             ctx.stroke()
 
-            const orbX = width * (0.5 + (stereoWidth - 0.5) * 0.22 + Math.sin(now * 0.001) * 0.03)
+            const orbX = width * (0.5 + (stereoWidth - 0.5) * 0.22 + Math.sin(renderTime * 0.001) * 0.03)
             const orb = ctx.createRadialGradient(orbX, height * 0.42, 0, orbX, height * 0.42, width * (0.12 + bass * 0.22))
             orb.addColorStop(0, `rgba(255,255,255,${0.16 + energy * 0.18})`)
             orb.addColorStop(0.38, `rgba(255,45,117,${0.08 + bass * 0.26})`)
@@ -190,6 +227,8 @@ const MusicEqualizerVisual = forwardRef(({ active = true, model = 'bars', intens
             ctx.arc(orbX, height * 0.42, width * (0.12 + bass * 0.22), 0, Math.PI * 2)
             ctx.fill()
             ctx.globalCompositeOperation = 'source-over'
+            if (currentIsLive) lastLiveSnapshot = { audioFrame, renderTime, smoothedBars: [...smoothedBars], peakHolds: [...peakHolds] }
+            drawStatusBadge(ctx, isFrozenPaused ? 'PAUSED · FROZEN' : 'PLAYING', width, isFrozenPaused)
 
             if (active) frameId = requestAnimationFrame(render)
         }
