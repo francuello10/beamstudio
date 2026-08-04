@@ -23,6 +23,7 @@ const LAYER0_SURFACE = {
 const NOW_PLAYING_LAYER_IDS = ['nowPlayingCard', 'nowPlayingCover', 'nowPlayingTitle', 'nowPlayingArtist', 'nowPlayingAlbum', 'nowPlayingProgress', 'nowPlayingTime']
 const EQUALIZER_LAYER_IDS = ['musicEqualizer', 'musicEqualizerSmooth', 'musicEqualizerExaggerated', 'musicEqualizerWave', 'musicEqualizerRadial']
 const BASS_LAYER_IDS = ['bassPulse', 'bassPulseSmooth', 'bassPulseExaggerated']
+const WMP9_LAYER_IDS = ['wmp9XpBars', 'wmp9ClassicScope', 'wmp9SpaceTunnel', 'wmp9Aquarium', 'wmp9DaVinci', 'wmp9Goo', 'wmp9XpPlayer', 'wmp9ClassicPlayer', 'wmp9SpacePlayer', 'wmp9AquariumPlayer', 'wmp9DaVinciPlayer', 'wmp9GooPlayer']
 const MUSIC_LAYER_IDS = [...NOW_PLAYING_LAYER_IDS, ...EQUALIZER_LAYER_IDS, ...BASS_LAYER_IDS]
 const MUSIC_SPLIT_PRESET = [
     {
@@ -86,9 +87,15 @@ const CONTENT_GROUPS = [
         ]
     },
     {
+        title: 'WMP9 / XP visuals',
+        items: VISUALS
+            .filter(visual => WMP9_LAYER_IDS.includes(visual.id))
+            .map(visual => ({ ...visual, description: 'Assignable WMP9-inspired visual layer.', icon: Sparkles }))
+    },
+    {
         title: 'Visual library',
         items: VISUALS
-            .filter(visual => !['blackNeutral', ...MUSIC_LAYER_IDS].includes(visual.id))
+            .filter(visual => !['blackNeutral', ...MUSIC_LAYER_IDS, ...WMP9_LAYER_IDS].includes(visual.id))
             .map(visual => ({ ...visual, description: 'Existing live visual source.', icon: Sparkles }))
     }
 ]
@@ -120,6 +127,7 @@ const getLayerColor = (visualId) => {
     if (NOW_PLAYING_LAYER_IDS.includes(visualId)) return '#ff2d75'
     if (EQUALIZER_LAYER_IDS.includes(visualId)) return '#00f5ff'
     if (BASS_LAYER_IDS.includes(visualId)) return '#ff8a00'
+    if (WMP9_LAYER_IDS.includes(visualId)) return '#7dd3fc'
     if (visualId === 'poseSkeleton') return '#00ff88'
     return '#8b5cf6'
 }
