@@ -1,37 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useAudioStore } from '../store/audioStore'
-import FluidNeonVisual from '../visuals/FluidNeonVisual'
-import ParticleFieldVisual from '../visuals/ParticleFieldVisual'
-import TunnelGridVisual from '../visuals/TunnelGridVisual'
-import KaleidoscopeVisual from '../visuals/KaleidoscopeVisual'
-import CeilingDomeVisual from '../visuals/CeilingDomeVisual'
-import PoseSkeletonVisual from '../visuals/PoseSkeletonVisual'
-import BlackNeutralVisual from '../visuals/BlackNeutralVisual'
-import NowPlayingCardVisual from '../visuals/NowPlayingCardVisual'
-import MusicEqualizerVisual from '../visuals/MusicEqualizerVisual'
-import BassPulseVisual from '../visuals/BassPulseVisual'
+import { VISUAL_COMPONENTS } from '../visuals/visualComponentRegistry'
 import { DEFAULT_VISUAL_ID } from '../visuals/visualRegistry'
 import MappingCompositor, { DEFAULT_SURFACE } from '../mapping/MappingCompositor'
 import { useNowPlaying } from '../hooks/useNowPlaying'
 import { useNowPlayingStore } from '../metadata/nowPlayingStore'
 import NowPlayingOverlay from './NowPlayingOverlay'
-
-// BS-005: maps a visual id from visualRegistry to its component. All 4
-// planned visuals (Fluid Neon, Particle Field, Tunnel Grid, Kaleidoscope)
-// plus Ceiling Dome are now present here; a future visual would still just
-// be another entry plus a registry entry in visualRegistry.js.
-const VISUAL_COMPONENTS = {
-    blackNeutral: BlackNeutralVisual,
-    fluidNeon: FluidNeonVisual,
-    particleField: ParticleFieldVisual,
-    tunnelGrid: TunnelGridVisual,
-    kaleidoscope: KaleidoscopeVisual,
-    ceilingDome: CeilingDomeVisual,
-    poseSkeleton: PoseSkeletonVisual,
-    nowPlayingCard: NowPlayingCardVisual,
-    musicEqualizer: MusicEqualizerVisual,
-    bassPulse: BassPulseVisual
-}
 
 /**
  * ProjectorApp — fullscreen renderer mounted on `?role=projector`.

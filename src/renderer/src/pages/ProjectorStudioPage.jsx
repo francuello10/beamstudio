@@ -2,12 +2,15 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Activity, Camera, CircleDot, Crosshair, EyeOff, Layers, MonitorUp, Music, Plus, Radio, RotateCw, Save, Sparkles, Trash2 } from 'lucide-react'
 import { DEFAULT_SURFACE, createInsetSurface } from '../mapping/MappingCompositor'
 import { DEFAULT_VISUAL_ID, VISUALS } from '../visuals/visualRegistry'
+import { VISUAL_COMPONENTS as STUDIO_PREVIEW_VISUAL_COMPONENTS } from '../visuals/visualComponentRegistry'
 import { useAudioStore } from '../store/audioStore'
 import { useNowPlaying } from '../hooks/useNowPlaying'
-import { useNowPlayingStore } from '../metadata/nowPlayingStore'
 
-const MAX_STUDIO_ZONES = 5
-const MUSIC_LAYER_IDS = ['nowPlayingCard', 'musicEqualizer', 'bassPulse']
+const MAX_STUDIO_ZONES = 12
+const NOW_PLAYING_LAYER_IDS = ['nowPlayingCard', 'nowPlayingCover', 'nowPlayingTitle', 'nowPlayingArtist', 'nowPlayingAlbum', 'nowPlayingProgress', 'nowPlayingTime']
+const EQUALIZER_LAYER_IDS = ['musicEqualizer', 'musicEqualizerSmooth', 'musicEqualizerExaggerated', 'musicEqualizerWave', 'musicEqualizerRadial']
+const BASS_LAYER_IDS = ['bassPulse', 'bassPulseSmooth', 'bassPulseExaggerated']
+const MUSIC_LAYER_IDS = [...NOW_PLAYING_LAYER_IDS, ...EQUALIZER_LAYER_IDS, ...BASS_LAYER_IDS]
 const MUSIC_SPLIT_PRESET = [
     {
         name: 'Now Playing',
@@ -40,11 +43,33 @@ const CONTENT_GROUPS = [
         ]
     },
     {
-        title: 'Music layers',
+        title: 'Now Playing parts',
         items: [
-            { id: 'nowPlayingCard', label: 'Now Playing Card', description: 'Track card mapped into this zone.', icon: Music },
-            { id: 'musicEqualizer', label: 'Frequency Equalizer', description: '16-band spectral bars from the shared audio engine.', icon: Activity },
-            { id: 'bassPulse', label: 'Bass Pulse', description: 'Kick/bass rings for edges, ceiling, or side panels.', icon: Radio }
+            { id: 'nowPlayingCard', label: 'Full Card', description: 'Cover, title, artist, and progress together.', icon: Music },
+            { id: 'nowPlayingCover', label: 'Album Cover', description: 'Only the album artwork.', icon: Music },
+            { id: 'nowPlayingTitle', label: 'Track Title', description: 'Only the song name.', icon: Music },
+            { id: 'nowPlayingArtist', label: 'Artist Name', description: 'Only the artist.', icon: Music },
+            { id: 'nowPlayingAlbum', label: 'Album Name', description: 'Only the album.', icon: Music },
+            { id: 'nowPlayingProgress', label: 'Progress Bar', description: 'Only real song progress when available.', icon: Music },
+            { id: 'nowPlayingTime', label: 'Song Time', description: 'Elapsed and total time.', icon: Music }
+        ]
+    },
+    {
+        title: 'Equalizer models',
+        items: [
+            { id: 'musicEqualizer', label: 'EQ Standard', description: 'Real spectral bars.', icon: Activity },
+            { id: 'musicEqualizerSmooth', label: 'EQ Smooth', description: 'Softer real spectral response.', icon: Activity },
+            { id: 'musicEqualizerExaggerated', label: 'EQ Exaggerated', description: 'Amplified real spectral response.', icon: Activity },
+            { id: 'musicEqualizerWave', label: 'EQ Wave', description: 'Waveform model from real spectrum.', icon: Activity },
+            { id: 'musicEqualizerRadial', label: 'EQ Radial', description: 'Radial spectrum model.', icon: Activity }
+        ]
+    },
+    {
+        title: 'Bass pulse models',
+        items: [
+            { id: 'bassPulse', label: 'Bass Standard', description: 'Real kick/bass rings.', icon: Radio },
+            { id: 'bassPulseSmooth', label: 'Bass Smooth', description: 'Softer real bass pulse.', icon: Radio },
+            { id: 'bassPulseExaggerated', label: 'Bass Exaggerated', description: 'Amplified real bass pulse.', icon: Radio }
         ]
     },
     {
@@ -79,9 +104,9 @@ const getSurfaceBounds = (surface) => {
 
 const getLayerColor = (visualId) => {
     if (visualId === 'blackNeutral') return '#050505'
-    if (visualId === 'nowPlayingCard') return '#ff2d75'
-    if (visualId === 'musicEqualizer') return '#00f5ff'
-    if (visualId === 'bassPulse') return '#ff8a00'
+    if (NOW_PLAYING_LAYER_IDS.includes(visualId)) return '#ff2d75'
+    if (EQUALIZER_LAYER_IDS.includes(visualId)) return '#00f5ff'
+    if (BASS_LAYER_IDS.includes(visualId)) return '#ff8a00'
     if (visualId === 'poseSkeleton') return '#00ff88'
     return '#8b5cf6'
 }
@@ -105,7 +130,6 @@ const ProjectorStudioPage = () => {
     const cameraRequestIdRef = useRef(0)
     const mountedRef = useRef(true)
     const audioFrame = useAudioStore(state => state.audioFrame)
-    const nowPlaying = useNowPlayingStore(state => state.nowPlaying)
     const [surfaces, setSurfaces] = useState([DEFAULT_SURFACE])
     const [selectedSurfaceId, setSelectedSurfaceId] = useState(DEFAULT_SURFACE.id)
     const [projectorStatus, setProjectorStatus] = useState({ connected: false, displayId: null })
@@ -174,7 +198,6 @@ const ProjectorStudioPage = () => {
 
     const selectedSurface = surfaces.find(surface => surface.id === selectedSurfaceId) || surfaces[0] || DEFAULT_SURFACE
     const selectedVisualId = selectedSurface.visualId || DEFAULT_VISUAL_ID
-    const spectral = Array.isArray(audioFrame?.spectral) ? audioFrame.spectral : []
     const bass = clamp01(audioFrame?.levels?.bass)
     const volume = clamp01(audioFrame?.levels?.volume)
     const activeZones = surfaces.filter(surface => (surface.visualId || DEFAULT_VISUAL_ID) !== 'blackNeutral').length
@@ -469,60 +492,19 @@ const ProjectorStudioPage = () => {
             )
         }
 
+        const PreviewVisual = STUDIO_PREVIEW_VISUAL_COMPONENTS[visualId]
+
         return (
             <div key={surface.id} style={layerStyle}>
                 <div style={contentStyle}>
-                    {visualId === 'nowPlayingCard' && (
-                        <div style={{ height: '100%', minHeight: 88, display: 'grid', placeItems: 'center', padding: '10%', textAlign: 'center' }}>
-                            <div style={{ width: 'min(72%, 190px)', aspectRatio: '1', borderRadius: 20, display: 'grid', placeItems: 'center', background: `linear-gradient(135deg, ${color}, #00f5ff)`, color: '#fff', fontSize: 44, fontWeight: 900, boxShadow: `0 0 42px ${color}88` }}>♪</div>
-                            <strong style={{ display: 'block', marginTop: 12, fontSize: 'clamp(13px, 2vw, 24px)', color: '#fff' }}>{nowPlaying.title || 'No active track'}</strong>
-                            <span style={{ display: 'block', marginTop: 4, fontSize: 'clamp(10px, 1.2vw, 14px)', color: 'rgba(255,255,255,0.7)' }}>{nowPlaying.artist || 'Now Playing card'}</span>
-                        </div>
-                    )}
-
-                    {visualId === 'musicEqualizer' && (
-                        <div style={{ height: '100%', display: 'flex', alignItems: 'end', justifyContent: 'center', gap: '3%', padding: '10% 8% 14%' }}>
-                            {new Array(16).fill(0).map((_, barIndex) => (
-                                <span
-                                    key={barIndex}
-                                    style={{
-                                        width: '4%',
-                                        minWidth: 4,
-                                        height: `${14 + clamp01(spectral[barIndex]) * 82}%`,
-                                        borderRadius: '999px 999px 5px 5px',
-                                        background: 'linear-gradient(180deg, #00f5ff, #8b5cf6 58%, #ff2d75)',
-                                        boxShadow: '0 0 18px rgba(0,245,255,0.42)'
-                                    }}
-                                />
-                            ))}
-                        </div>
-                    )}
-
-                    {visualId === 'bassPulse' && (
-                        <div style={{ position: 'relative', width: '100%', height: '100%', display: 'grid', placeItems: 'center' }}>
-                            {[0.28, 0.48, 0.68].map((size, ringIndex) => (
-                                <span
-                                    key={ringIndex}
-                                    style={{
-                                        position: 'absolute',
-                                        width: `${(size + bass * 0.22) * 100}%`,
-                                        aspectRatio: '1',
-                                        borderRadius: '50%',
-                                        border: `${2 + bass * 8}px solid ${ringIndex === 0 ? '#ff2d75' : ringIndex === 1 ? '#8b5cf6' : '#00f5ff'}`,
-                                        opacity: 0.34 + bass * 0.48,
-                                        boxShadow: `0 0 ${20 + bass * 70}px ${color}99`
-                                    }}
-                                />
-                            ))}
-                        </div>
-                    )}
-
-                    {!MUSIC_LAYER_IDS.includes(visualId) && (
+                    {PreviewVisual ? (
+                        <PreviewVisual active />
+                    ) : (
                         <div style={{ height: '100%', display: 'grid', placeItems: 'center', color: '#fff', textAlign: 'center', padding: '10%' }}>
                             <div>
                                 <Sparkles size={38} color={color} />
                                 <strong style={{ display: 'block', marginTop: 10, fontSize: 'clamp(12px, 1.6vw, 18px)' }}>{getVisualLabel(visualId)}</strong>
-                                <span style={{ color: 'rgba(255,255,255,0.62)', fontSize: 11 }}>Live visual source</span>
+                                <span style={{ color: 'rgba(255,255,255,0.62)', fontSize: 11 }}>Preview unavailable</span>
                             </div>
                         </div>
                     )}
