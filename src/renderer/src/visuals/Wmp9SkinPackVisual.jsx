@@ -127,124 +127,326 @@ const drawArtworkThumb = (ctx, image, x, y, size, theme) => {
 }
 
 const drawXpPlayerFrame = (ctx, width, height, theme, title, live, progressPhase, track, artworkImage) => {
-    const x = width * 0.055
-    const y = height * 0.055
-    const w = width * 0.89
-    const h = height * 0.87
-    const titleH = h * 0.115
-    const controlsH = h * 0.19
-    const viewportY = y + titleH + h * 0.025
-    const viewportH = h - titleH - controlsH - h * 0.055
+    const x = width * 0.012
+    const y = height * 0.016
+    const w = width * 0.976
+    const h = height * 0.952
+    const titleH = 29
+    const menuH = 25
+    const modeH = 36
+    const bottomH = 90
+    const statusH = 20
+    const leftW = w * 0.14
+    const rightW = w * 0.23
+    const bodyX = x + 8
+    const bodyY = y + titleH + menuH + modeH
+    const bodyW = w - 16
+    const bodyH = h - titleH - menuH - modeH - bottomH - statusH - 8
+    const visualX = bodyX + leftW + 10
+    const visualY = bodyY + 8
+    const visualW = bodyW - leftW - rightW - 20
+    const visualH = bodyH - 14
+    const rightX = visualX + visualW + 8
+    const bottomY = y + h - bottomH - statusH
+    const progress = clamp01(progressPhase)
 
     ctx.save()
     ctx.globalCompositeOperation = 'source-over'
 
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.22)'
+    ctx.fillStyle = '#0046d5'
     ctx.fillRect(0, 0, width, height)
 
-    ctx.shadowColor = theme.a
-    ctx.shadowBlur = 34
-    const shell = ctx.createLinearGradient(x, y, x, y + h)
-    shell.addColorStop(0, '#f4f8ff')
-    shell.addColorStop(0.08, '#1f72d8')
-    shell.addColorStop(0.18, '#0b3f98')
-    shell.addColorStop(0.72, '#d7e3f5')
-    shell.addColorStop(1, '#6f89ac')
-    ctx.fillStyle = shell
-    roundedRectPath(ctx, x, y, w, h, 28)
-    ctx.rect(x + 28, viewportY, w - 56, viewportH)
-    ctx.fill('evenodd')
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.55)'
+    ctx.shadowBlur = 14
+    ctx.shadowOffsetY = 4
+    ctx.fillStyle = '#ece9d8'
+    ctx.fillRect(x, y, w, h)
     ctx.shadowBlur = 0
+    ctx.shadowOffsetY = 0
 
-    const titleBar = ctx.createLinearGradient(x, y, x, y + titleH)
-    titleBar.addColorStop(0, '#59a8ff')
-    titleBar.addColorStop(0.42, '#1769d1')
-    titleBar.addColorStop(1, '#0845a8')
+    ctx.strokeStyle = '#003caa'
+    ctx.lineWidth = 4
+    ctx.strokeRect(x + 2, y + 2, w - 4, h - 4)
+    ctx.strokeStyle = '#6db6ff'
+    ctx.lineWidth = 1
+    ctx.strokeRect(x + 5, y + 5, w - 10, h - 10)
+
+    const titleBar = ctx.createLinearGradient(x, y + 5, x, y + titleH)
+    titleBar.addColorStop(0, '#4bb5ff')
+    titleBar.addColorStop(0.46, '#1270ea')
+    titleBar.addColorStop(1, '#0053d6')
     ctx.fillStyle = titleBar
-    drawRoundedRect(ctx, x + 8, y + 8, w - 16, titleH, 20)
+    ctx.fillRect(x + 6, y + 6, w - 12, titleH - 4)
+
+    const logoX = x + 20
+    const logoY = y + 20
+    const logo = ctx.createRadialGradient(logoX, logoY, 2, logoX, logoY, 9)
+    logo.addColorStop(0, '#ffffff')
+    logo.addColorStop(0.45, '#42d6ff')
+    logo.addColorStop(1, '#0060c8')
+    ctx.fillStyle = logo
+    ctx.beginPath()
+    ctx.arc(logoX, logoY, 9, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = '#ff9f00'
+    ctx.beginPath()
+    ctx.moveTo(logoX - 3, logoY - 5)
+    ctx.lineTo(logoX + 5, logoY)
+    ctx.lineTo(logoX - 3, logoY + 5)
+    ctx.closePath()
+    ctx.fill()
 
     ctx.fillStyle = '#ffffff'
-    ctx.font = '900 22px Inter, sans-serif'
+    ctx.font = '900 17px Tahoma, Verdana, sans-serif'
     ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
-    ctx.fillText(fitText(ctx, `Windows Media Player - ${track.title}`, w * 0.62), x + 30, y + titleH * 0.58)
+    ctx.fillText(fitText(ctx, `Windows Media Player - ${track.title}`, w * 0.58), x + 36, y + titleH * 0.78)
 
-    ;['–', '□', '×'].forEach((glyph, index) => {
-        const bx = x + w - 112 + index * 33
-        const by = y + 24
-        ctx.fillStyle = index === 2 ? '#e94b35' : '#e8f2ff'
-        drawRoundedRect(ctx, bx, by, 25, 22, 6)
-        ctx.fillStyle = index === 2 ? '#fff' : '#104a9e'
-        ctx.font = '900 15px Inter, sans-serif'
-        ctx.textAlign = 'center'
-        ctx.fillText(glyph, bx + 12.5, by + 12)
-    })
-
-    ctx.fillStyle = 'rgba(7, 17, 31, 0.18)'
-    drawRoundedRect(ctx, x + 28, viewportY, w - 56, viewportH, 18)
-    ctx.strokeStyle = 'rgba(255,255,255,0.72)'
-    ctx.lineWidth = 3
-    ctx.strokeRect(x + 36, viewportY + 8, w - 72, viewportH - 16)
-
-    const controlsY = y + h - controlsH - 18
-    const controls = ctx.createLinearGradient(x, controlsY, x, y + h)
-    controls.addColorStop(0, '#f8fbff')
-    controls.addColorStop(0.5, '#c8d7eb')
-    controls.addColorStop(1, '#6f89ac')
-    ctx.fillStyle = controls
-    drawRoundedRect(ctx, x + 22, controlsY, w - 44, controlsH, 22)
-
-    const artSize = controlsH * 0.58
-    const artX = x + 44
-    const artY = controlsY + controlsH * 0.2
-    drawArtworkThumb(ctx, artworkImage, artX, artY, artSize, theme)
-
-    const textX = artX + artSize + 18
-    const textMax = w - 330
-    ctx.fillStyle = '#1d3557'
-    ctx.font = '900 20px Inter, sans-serif'
-    ctx.textAlign = 'left'
-    ctx.textBaseline = 'alphabetic'
-    ctx.fillText(fitText(ctx, track.title, textMax), textX, controlsY + 34)
-    ctx.fillStyle = 'rgba(29, 53, 87, 0.76)'
-    ctx.font = '700 15px Inter, sans-serif'
-    ctx.fillText(fitText(ctx, `${track.artist} • ${track.album}`, textMax), textX, controlsY + 58)
-
-    const barX = textX
-    const barY = controlsY + controlsH - 44
-    const barW = w - 360
-    ctx.fillStyle = '#8da8c9'
-    drawRoundedRect(ctx, barX, barY, barW, 12, 6)
-    ctx.fillStyle = track.hasProgress ? theme.a : '#5d718b'
-    drawRoundedRect(ctx, barX, barY, barW * progressPhase, 12, 6)
-
-    ctx.fillStyle = 'rgba(29, 53, 87, 0.8)'
-    ctx.font = '800 13px Inter, sans-serif'
-    ctx.textAlign = 'left'
-    ctx.fillText(track.timeText, barX, barY + 30)
-
-    const buttonY = controlsY + controlsH * 0.48
-    ;['⏮', track.isPaused ? '▶' : 'Ⅱ', '⏭'].forEach((glyph, index) => {
-        const cx = x + w - 160 + index * 43
-        const r = index === 1 ? 18 : 14
-        const g = ctx.createRadialGradient(cx, buttonY, 2, cx, buttonY, r)
-        g.addColorStop(0, '#ffffff')
-        g.addColorStop(1, index === 1 ? theme.a : '#6d89ad')
-        ctx.fillStyle = g
-        ctx.beginPath()
-        ctx.arc(cx, buttonY, r, 0, Math.PI * 2)
-        ctx.fill()
-        ctx.fillStyle = '#0b2d66'
-        ctx.font = `900 ${index === 1 ? 17 : 13}px Inter, sans-serif`
+    ;['—', '□', '×'].forEach((glyph, index) => {
+        const bx = x + w - 108 + index * 32
+        const by = y + 10
+        const button = ctx.createLinearGradient(bx, by, bx, by + 22)
+        button.addColorStop(0, index === 2 ? '#ffb18c' : '#e7f5ff')
+        button.addColorStop(1, index === 2 ? '#d73720' : '#2f84f4')
+        ctx.fillStyle = button
+        drawRoundedRect(ctx, bx, by, 25, 22, 4)
+        ctx.strokeStyle = '#ffffff'
+        ctx.lineWidth = 1
+        ctx.strokeRect(bx + 1, by + 1, 23, 20)
+        ctx.fillStyle = '#ffffff'
+        ctx.font = '900 14px Tahoma, sans-serif'
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
-        ctx.fillText(glyph, cx, buttonY + 1)
+        ctx.fillText(glyph, bx + 12.5, by + 11)
     })
 
-    ctx.fillStyle = track.isPaused ? 'rgba(255, 206, 84, 0.9)' : live ? 'rgba(27, 215, 120, 0.92)' : 'rgba(125, 147, 175, 0.9)'
-    ctx.font = '900 14px Inter, sans-serif'
+    const menuY = y + titleH + 5
+    ctx.fillStyle = '#f7f4e8'
+    ctx.fillRect(x + 6, menuY, w - 12, menuH)
+    ctx.strokeStyle = '#c6c2ad'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(x + 7, menuY + menuH)
+    ctx.lineTo(x + w - 7, menuY + menuH)
+    ctx.stroke()
+
+    ctx.fillStyle = '#111111'
+    ctx.font = '13px Tahoma, Verdana, sans-serif'
+    let menuX = x + 18
+    ;['File', 'View', 'Play', 'Tools', 'Help'].forEach((label) => {
+        ctx.fillText(label, menuX, menuY + 16)
+        menuX += ctx.measureText(label).width + 24
+    })
+
+    const tabsY = menuY + menuH
+    const tabs = ctx.createLinearGradient(x, tabsY, x, tabsY + modeH)
+    tabs.addColorStop(0, '#f9fcff')
+    tabs.addColorStop(0.42, '#c5dcf8')
+    tabs.addColorStop(1, '#6d8bc3')
+    ctx.fillStyle = tabs
+    ctx.fillRect(x + 6, tabsY, w - 12, modeH)
+    ctx.strokeStyle = '#5b75a7'
+    ctx.strokeRect(x + 6, tabsY, w - 12, modeH)
+
+    const tabLabels = ['Now Playing', 'Library', 'Rip', 'Burn', 'Sync', 'Guide']
+    let tabX = x + leftW + 8
+    tabLabels.forEach((label, index) => {
+        const tabW = index === 0 ? 112 : 78
+        const active = index === 0
+        const tabGradient = ctx.createLinearGradient(tabX, tabsY + 4, tabX, tabsY + modeH - 3)
+        tabGradient.addColorStop(0, active ? '#ffffff' : '#e8f2ff')
+        tabGradient.addColorStop(1, active ? '#4f92e6' : '#87a7d5')
+        ctx.fillStyle = tabGradient
+        drawRoundedRect(ctx, tabX, tabsY + 5, tabW, modeH - 8, 8)
+        ctx.fillStyle = active ? '#ffffff' : '#14315e'
+        ctx.font = '800 14px Tahoma, Verdana, sans-serif'
+        ctx.textAlign = 'center'
+        ctx.fillText(label, tabX + tabW / 2, tabsY + 25)
+        tabX += tabW + 6
+    })
+
+    ctx.fillStyle = '#1c3471'
+    ctx.fillRect(bodyX, bodyY, bodyW, bodyH)
+
+    const side = ctx.createLinearGradient(bodyX, bodyY, bodyX + leftW, bodyY + bodyH)
+    side.addColorStop(0, '#eaf5ff')
+    side.addColorStop(0.52, '#bfd4f0')
+    side.addColorStop(1, '#7389c5')
+    ctx.fillStyle = side
+    drawRoundedRect(ctx, bodyX + 4, bodyY + 6, leftW - 8, bodyH - 10, 10)
+
+    const navItems = ['Now\nPlaying', 'Media\nGuide', 'Copy from\nCD', 'Media\nLibrary', 'Radio\nTuner', 'Copy to CD\nor Device']
+    navItems.forEach((label, index) => {
+        const itemY = bodyY + 18 + index * 49
+        if (index === 0) {
+            ctx.fillStyle = 'rgba(255,255,255,0.55)'
+            ctx.fillRect(bodyX + 8, itemY - 9, leftW - 20, 42)
+            ctx.fillStyle = '#0f2c63'
+            ctx.beginPath()
+            ctx.moveTo(bodyX + leftW - 18, itemY + 12)
+            ctx.lineTo(bodyX + leftW - 10, itemY + 17)
+            ctx.lineTo(bodyX + leftW - 18, itemY + 22)
+            ctx.fill()
+        }
+        ctx.fillStyle = '#061942'
+        ctx.font = '900 13px Tahoma, Verdana, sans-serif'
+        ctx.textAlign = 'left'
+        label.split('\n').forEach((line, lineIndex) => ctx.fillText(line, bodyX + 17, itemY + lineIndex * 14))
+    })
+    ctx.fillStyle = '#f1f4ff'
+    ctx.font = '900 20px Tahoma, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.fillText('⌄', bodyX + leftW * 0.5, bodyY + bodyH - 18)
+
+    ctx.fillStyle = '#02040c'
+    ctx.fillRect(visualX - 4, visualY - 4, visualW + 8, visualH + 8)
+    ctx.strokeStyle = '#0b0b0b'
+    ctx.lineWidth = 5
+    ctx.strokeRect(visualX - 4, visualY - 4, visualW + 8, visualH + 8)
+    ctx.strokeStyle = 'rgba(255,255,255,0.34)'
+    ctx.lineWidth = 1
+    ctx.strokeRect(visualX, visualY, visualW, visualH)
+
+    const rightPanel = ctx.createLinearGradient(rightX, visualY - 4, rightX, visualY + visualH + 4)
+    rightPanel.addColorStop(0, '#6177bf')
+    rightPanel.addColorStop(0.38, '#3f5488')
+    rightPanel.addColorStop(1, '#1b3f72')
+    ctx.fillStyle = rightPanel
+    ctx.fillRect(rightX, visualY - 4, rightW - 8, visualH + 8)
+
+    const selectY = visualY - 38
+    const select = ctx.createLinearGradient(rightX, selectY, rightX, selectY + 27)
+    select.addColorStop(0, '#f6fbff')
+    select.addColorStop(1, '#b8cceb')
+    ctx.fillStyle = select
+    drawRoundedRect(ctx, rightX, selectY, rightW - 8, 27, 5)
+    ctx.strokeStyle = '#5d76ad'
+    ctx.strokeRect(rightX + 1, selectY + 1, rightW - 10, 25)
+    ctx.fillStyle = '#001f59'
+    ctx.font = '800 13px Tahoma, sans-serif'
+    ctx.textAlign = 'left'
+    ctx.fillText('▸  Now Playing', rightX + 12, selectY + 18)
     ctx.textAlign = 'right'
-    ctx.fillText(track.statusLabel, x + w - 44, controlsY + 34)
+    ctx.fillText('⌄', rightX + rightW - 20, selectY + 18)
+
+    drawArtworkThumb(ctx, artworkImage, rightX + rightW * 0.23, visualY + 28, rightW * 0.48, theme)
+    ctx.fillStyle = '#ffffff'
+    ctx.font = '900 14px Tahoma, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.fillText(fitText(ctx, track.title, rightW * 0.74), rightX + rightW * 0.47, visualY + rightW * 0.55 + 52)
+    ctx.fillStyle = '#d8e7ff'
+    ctx.font = '700 12px Tahoma, sans-serif'
+    ctx.fillText(fitText(ctx, track.artist, rightW * 0.7), rightX + rightW * 0.47, visualY + rightW * 0.55 + 70)
+
+    const listY = visualY + rightW * 0.55 + 94
+    ctx.fillStyle = 'rgba(0,0,0,0.22)'
+    ctx.fillRect(rightX + 10, listY - 16, rightW - 28, visualY + visualH - listY + 12)
+    ctx.font = '11px Tahoma, sans-serif'
+    ctx.textAlign = 'left'
+    const rows = [track.title, 'Legacy visual layer', title.replace('WMP9 ', ''), track.album, track.statusLabel]
+    rows.forEach((row, index) => {
+        const rowY = listY + index * 19
+        ctx.fillStyle = index === 0 ? '#ffffff' : '#c6d8ff'
+        ctx.fillText(`${index + 1}`, rightX + 16, rowY)
+        ctx.fillText(fitText(ctx, row, rightW - 74), rightX + 38, rowY)
+        ctx.textAlign = 'right'
+        ctx.fillText(index === 0 ? track.timeText.split(' / ')[1] : '--:--', rightX + rightW - 20, rowY)
+        ctx.textAlign = 'left'
+    })
+
+    const statusY = bottomY - statusH
+    ctx.fillStyle = '#11182c'
+    ctx.fillRect(visualX - 4, statusY, visualW + rightW + 4, statusH)
+    ctx.fillStyle = '#d7e4ff'
+    ctx.font = '11px Tahoma, sans-serif'
+    ctx.textAlign = 'left'
+    ctx.fillText(`${track.statusLabel.toLowerCase()} • ${track.timeText}`, visualX + 10, statusY + 14)
+
+    const bottom = ctx.createLinearGradient(x + 6, bottomY, x + 6, bottomY + bottomH)
+    bottom.addColorStop(0, '#ffffff')
+    bottom.addColorStop(0.18, '#c8daf5')
+    bottom.addColorStop(0.58, '#edf6ff')
+    bottom.addColorStop(1, '#7c96cc')
+    ctx.fillStyle = bottom
+    ctx.fillRect(x + 6, bottomY, w - 12, bottomH)
+    ctx.strokeStyle = '#6a82b7'
+    ctx.strokeRect(x + 6, bottomY, w - 12, bottomH)
+
+    const progressX = x + 62
+    const progressY = bottomY + 13
+    const progressW = w - 124
+    const progressTrack = ctx.createLinearGradient(progressX, progressY, progressX, progressY + 10)
+    progressTrack.addColorStop(0, '#d1d8e8')
+    progressTrack.addColorStop(1, '#ffffff')
+    ctx.fillStyle = progressTrack
+    drawRoundedRect(ctx, progressX, progressY, progressW, 10, 5)
+    ctx.fillStyle = track.hasProgress ? '#62d21f' : '#a8b7d8'
+    drawRoundedRect(ctx, progressX, progressY, progressW * progress, 10, 5)
+    ctx.strokeStyle = '#8ea4cf'
+    ctx.strokeRect(progressX, progressY, progressW, 10)
+    ctx.fillStyle = '#f6fbff'
+    drawRoundedRect(ctx, progressX + progressW * progress - 4, progressY - 3, 8, 16, 4)
+
+    const mainButtonX = x + 78
+    const mainButtonY = bottomY + 42
+    const mainButton = ctx.createRadialGradient(mainButtonX + 21, mainButtonY + 21, 3, mainButtonX + 21, mainButtonY + 21, 23)
+    mainButton.addColorStop(0, '#ffffff')
+    mainButton.addColorStop(0.55, '#96d4ff')
+    mainButton.addColorStop(1, '#3674c9')
+    ctx.fillStyle = mainButton
+    ctx.beginPath()
+    ctx.arc(mainButtonX + 21, mainButtonY + 21, 22, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.strokeStyle = '#5e7caf'
+    ctx.stroke()
+    ctx.fillStyle = '#ffffff'
+    ctx.font = '900 25px Tahoma, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(track.isPaused ? '▶' : 'Ⅱ', mainButtonX + 22, mainButtonY + 22)
+
+    const smallButtons = ['■', '⏮', '⏭', '◄']
+    smallButtons.forEach((glyph, index) => {
+        const cx = mainButtonX + 72 + index * 38
+        const cy = mainButtonY + 21
+        const g = ctx.createLinearGradient(cx - 13, cy - 13, cx + 13, cy + 13)
+        g.addColorStop(0, '#ffffff')
+        g.addColorStop(1, '#8cb3df')
+        ctx.fillStyle = g
+        ctx.beginPath()
+        ctx.arc(cx, cy, 13, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.strokeStyle = '#6d8fc0'
+        ctx.stroke()
+        ctx.fillStyle = '#315a8e'
+        ctx.font = '900 12px Tahoma, sans-serif'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(glyph, cx, cy + 1)
+    })
+
+    const infoX = mainButtonX + 245
+    ctx.fillStyle = '#24436f'
+    ctx.font = '900 13px Tahoma, sans-serif'
+    ctx.textAlign = 'left'
+    ctx.fillText(fitText(ctx, track.title, w * 0.32), infoX, bottomY + 62)
+    ctx.fillStyle = '#3f5e88'
+    ctx.font = '700 12px Tahoma, sans-serif'
+    ctx.fillText(fitText(ctx, `${track.artist}  •  ${track.timeText}`, w * 0.38), infoX, bottomY + 78)
+
+    const volumeX = x + w - 170
+    ctx.strokeStyle = '#77a0c9'
+    ctx.lineWidth = 4
+    ctx.beginPath()
+    ctx.moveTo(volumeX, bottomY + 61)
+    ctx.lineTo(volumeX + 74, bottomY + 61)
+    ctx.stroke()
+    ctx.fillStyle = '#55d11b'
+    drawRoundedRect(ctx, volumeX + 42, bottomY + 54, 8, 15, 4)
+    ctx.fillStyle = '#245f9a'
+    ctx.font = '900 15px Tahoma, sans-serif'
+    ctx.textAlign = 'right'
+    ctx.fillText(track.timeText.split(' / ')[0], x + w - 22, bottomY + 63)
 
     ctx.restore()
 }
