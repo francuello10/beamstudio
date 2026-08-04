@@ -27,7 +27,19 @@ export const VISUALS = [
     { id: 'musicEqualizerRadial', label: 'Music EQ Radial' },
     { id: 'bassPulse', label: 'Bass Pulse Standard' },
     { id: 'bassPulseSmooth', label: 'Bass Pulse Smooth' },
-    { id: 'bassPulseExaggerated', label: 'Bass Pulse Exaggerated' }
+    { id: 'bassPulseExaggerated', label: 'Bass Pulse Exaggerated' },
+    { id: 'wmp9XpBars', label: 'WMP9 XP Bars' },
+    { id: 'wmp9ClassicScope', label: 'WMP9 Classic Scope' },
+    { id: 'wmp9SpaceTunnel', label: 'WMP9 Space Tunnel' },
+    { id: 'wmp9Aquarium', label: 'WMP9 Aquarium' },
+    { id: 'wmp9DaVinci', label: 'WMP9 da Vinci' },
+    { id: 'wmp9Goo', label: 'WMP9 Goo' },
+    { id: 'wmp9XpPlayer', label: 'WMP9 XP Player' },
+    { id: 'wmp9ClassicPlayer', label: 'WMP9 Classic Player' },
+    { id: 'wmp9SpacePlayer', label: 'WMP9 Space Player' },
+    { id: 'wmp9AquariumPlayer', label: 'WMP9 Aquarium Player' },
+    { id: 'wmp9DaVinciPlayer', label: 'WMP9 da Vinci Player' },
+    { id: 'wmp9GooPlayer', label: 'WMP9 Goo Player' }
 ]
 
 // Particle Field is the safest default for projector output: it does not
