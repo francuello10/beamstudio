@@ -1,9 +1,28 @@
 import React, { forwardRef, useEffect, useRef } from 'react'
 import { useAudioStore } from '../store/audioStore'
+import { useNowPlayingStore } from '../metadata/nowPlayingStore'
 import { mergeRefs } from './refUtils'
 
 const clamp01 = (value) => Math.max(0, Math.min(1, Number(value) || 0))
 const lerp = (a, b, t) => a + (b - a) * t
+const safeText = (value, fallback) => String(value || fallback)
+
+const formatSeconds = (value) => {
+    if (!Number.isFinite(value)) return '0:00'
+    const total = Math.max(0, Math.floor(value))
+    const minutes = Math.floor(total / 60)
+    const seconds = String(total % 60).padStart(2, '0')
+    return `${minutes}:${seconds}`
+}
+
+const fitText = (ctx, text, maxWidth) => {
+    if (ctx.measureText(text).width <= maxWidth) return text
+    let next = text
+    while (next.length > 3 && ctx.measureText(`${next}…`).width > maxWidth) {
+        next = next.slice(0, -1)
+    }
+    return `${next}…`
+}
 
 const THEMES = {
     xpBars: {
@@ -72,8 +91,42 @@ const drawRoundedRect = (ctx, x, y, width, height, radius) => {
     ctx.fill()
 }
 
+const drawImageCover = (ctx, image, x, y, width, height) => {
+    const imageRatio = image.naturalWidth / image.naturalHeight
+    const targetRatio = width / height
+    const sourceWidth = imageRatio > targetRatio ? image.naturalHeight * targetRatio : image.naturalWidth
+    const sourceHeight = imageRatio > targetRatio ? image.naturalHeight : image.naturalWidth / targetRatio
+    const sourceX = (image.naturalWidth - sourceWidth) / 2
+    const sourceY = (image.naturalHeight - sourceHeight) / 2
 
-const drawXpPlayerFrame = (ctx, width, height, theme, title, live, progressPhase) => {
+    ctx.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, x, y, width, height)
+}
+
+const drawArtworkThumb = (ctx, image, x, y, size, theme) => {
+    const artGradient = ctx.createLinearGradient(x, y, x + size, y + size)
+    artGradient.addColorStop(0, theme.bg[1])
+    artGradient.addColorStop(0.52, '#123f8f')
+    artGradient.addColorStop(1, theme.a)
+    ctx.fillStyle = artGradient
+    drawRoundedRect(ctx, x, y, size, size, 10)
+
+    if (image) {
+        ctx.save()
+        roundedRectPath(ctx, x, y, size, size, 10)
+        ctx.clip()
+        drawImageCover(ctx, image, x, y, size, size)
+        ctx.restore()
+        return
+    }
+
+    ctx.fillStyle = 'rgba(255,255,255,0.92)'
+    ctx.font = `900 ${Math.max(28, size * 0.42)}px Inter, sans-serif`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('♪', x + size / 2, y + size / 2)
+}
+
+const drawXpPlayerFrame = (ctx, width, height, theme, title, live, progressPhase, track, artworkImage) => {
     const x = width * 0.055
     const y = height * 0.055
     const w = width * 0.89
@@ -114,7 +167,7 @@ const drawXpPlayerFrame = (ctx, width, height, theme, title, live, progressPhase
     ctx.font = '900 22px Inter, sans-serif'
     ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
-    ctx.fillText('Windows Media Player', x + 30, y + titleH * 0.58)
+    ctx.fillText(fitText(ctx, `Windows Media Player - ${track.title}`, w * 0.62), x + 30, y + titleH * 0.58)
 
     ;['–', '□', '×'].forEach((glyph, index) => {
         const bx = x + w - 112 + index * 33
@@ -141,21 +194,37 @@ const drawXpPlayerFrame = (ctx, width, height, theme, title, live, progressPhase
     ctx.fillStyle = controls
     drawRoundedRect(ctx, x + 22, controlsY, w - 44, controlsH, 22)
 
-    ctx.fillStyle = '#1d3557'
-    ctx.font = '800 18px Inter, sans-serif'
-    ctx.textAlign = 'left'
-    ctx.fillText(title, x + 44, controlsY + 34)
+    const artSize = controlsH * 0.58
+    const artX = x + 44
+    const artY = controlsY + controlsH * 0.2
+    drawArtworkThumb(ctx, artworkImage, artX, artY, artSize, theme)
 
-    const barX = x + 44
-    const barY = controlsY + controlsH - 46
-    const barW = w - 230
+    const textX = artX + artSize + 18
+    const textMax = w - 330
+    ctx.fillStyle = '#1d3557'
+    ctx.font = '900 20px Inter, sans-serif'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'alphabetic'
+    ctx.fillText(fitText(ctx, track.title, textMax), textX, controlsY + 34)
+    ctx.fillStyle = 'rgba(29, 53, 87, 0.76)'
+    ctx.font = '700 15px Inter, sans-serif'
+    ctx.fillText(fitText(ctx, `${track.artist} • ${track.album}`, textMax), textX, controlsY + 58)
+
+    const barX = textX
+    const barY = controlsY + controlsH - 44
+    const barW = w - 360
     ctx.fillStyle = '#8da8c9'
     drawRoundedRect(ctx, barX, barY, barW, 12, 6)
-    ctx.fillStyle = live ? theme.a : '#5d718b'
+    ctx.fillStyle = track.hasProgress ? theme.a : '#5d718b'
     drawRoundedRect(ctx, barX, barY, barW * progressPhase, 12, 6)
 
+    ctx.fillStyle = 'rgba(29, 53, 87, 0.8)'
+    ctx.font = '800 13px Inter, sans-serif'
+    ctx.textAlign = 'left'
+    ctx.fillText(track.timeText, barX, barY + 30)
+
     const buttonY = controlsY + controlsH * 0.48
-    ;['⏮', live ? '▶' : 'Ⅱ', '⏭'].forEach((glyph, index) => {
+    ;['⏮', track.isPaused ? '▶' : 'Ⅱ', '⏭'].forEach((glyph, index) => {
         const cx = x + w - 160 + index * 43
         const r = index === 1 ? 18 : 14
         const g = ctx.createRadialGradient(cx, buttonY, 2, cx, buttonY, r)
@@ -172,10 +241,10 @@ const drawXpPlayerFrame = (ctx, width, height, theme, title, live, progressPhase
         ctx.fillText(glyph, cx, buttonY + 1)
     })
 
-    ctx.fillStyle = live ? 'rgba(27, 215, 120, 0.92)' : 'rgba(255, 206, 84, 0.9)'
+    ctx.fillStyle = track.isPaused ? 'rgba(255, 206, 84, 0.9)' : live ? 'rgba(27, 215, 120, 0.92)' : 'rgba(125, 147, 175, 0.9)'
     ctx.font = '900 14px Inter, sans-serif'
     ctx.textAlign = 'right'
-    ctx.fillText(live ? 'PLAYING' : 'AMBIENT', x + w - 44, controlsY + 34)
+    ctx.fillText(track.statusLabel, x + w - 44, controlsY + 34)
 
     ctx.restore()
 }
@@ -208,12 +277,39 @@ const drawSkinChrome = (ctx, width, height, theme, title) => {
 
 const Wmp9SkinPackVisual = forwardRef(({ active = true, variant = 'xpBars', playerFrame = false }, forwardedRef) => {
     const canvasRef = useRef(null)
+    const artworkRef = useRef({ src: null, image: null, loaded: false, failed: false })
 
     useEffect(() => {
         let frameId = 0
         let smoothed = new Array(48).fill(0)
         let phase = 0
         const theme = THEMES[variant] || THEMES.xpBars
+
+        const getLoadedArtwork = (src) => {
+            const artwork = artworkRef.current
+
+            if (!src) {
+                if (artwork.src) artworkRef.current = { src: null, image: null, loaded: false, failed: false }
+                return null
+            }
+
+            if (artwork.src === src) return artwork.loaded && !artwork.failed ? artwork.image : null
+
+            const image = new Image()
+            const nextArtwork = { src, image, loaded: false, failed: false }
+            artworkRef.current = nextArtwork
+
+            if (/^https?:\/\//i.test(src)) image.crossOrigin = 'anonymous'
+            image.onload = () => {
+                if (artworkRef.current.src === src) artworkRef.current = { ...nextArtwork, loaded: true }
+            }
+            image.onerror = () => {
+                if (artworkRef.current.src === src) artworkRef.current = { src, image: null, loaded: false, failed: true }
+            }
+            image.src = src
+
+            return null
+        }
 
         const render = (now = 0) => {
             const canvas = canvasRef.current
@@ -226,6 +322,21 @@ const Wmp9SkinPackVisual = forwardRef(({ active = true, variant = 'xpBars', play
             const width = canvas.width
             const height = canvas.height
             const { audioFrame } = useAudioStore.getState()
+            const visualTitle = `WMP9 ${variant.replace(/([A-Z])/g, ' $1').toUpperCase()}`
+            const { nowPlaying } = useNowPlayingStore.getState()
+            const noPlayer = !nowPlaying || nowPlaying.state === 'no-player'
+            const progress = nowPlaying?.progress
+            const progressPct = progress?.durationSec ? Math.max(0, Math.min(1, progress.positionSec / progress.durationSec)) : null
+            const track = {
+                title: safeText(nowPlaying?.title, noPlayer ? visualTitle : 'Untitled track'),
+                artist: safeText(nowPlaying?.artist, noPlayer ? 'Start music to fill this XP player' : 'Unknown artist'),
+                album: safeText(nowPlaying?.album, noPlayer ? 'Waiting for system media' : 'Unknown album'),
+                hasProgress: progressPct !== null,
+                timeText: progress ? `${formatSeconds(progress.positionSec)} / ${formatSeconds(progress.durationSec)}` : '0:00 / 0:00',
+                isPaused: String(nowPlaying?.playbackStatus || '').toLowerCase() === 'paused',
+                statusLabel: noPlayer ? 'NO PLAYER' : String(nowPlaying?.playbackStatus || '').toLowerCase() === 'paused' ? 'PAUSED' : 'PLAYING'
+            }
+            const artworkImage = getLoadedArtwork(nowPlaying?.artwork)
             const spectral = Array.isArray(audioFrame?.spectral) ? audioFrame.spectral : []
             const bass = clamp01(audioFrame?.levels?.bass)
             const mid = clamp01(audioFrame?.levels?.mid)
@@ -334,11 +445,10 @@ const Wmp9SkinPackVisual = forwardRef(({ active = true, variant = 'xpBars', play
 
             ctx.globalCompositeOperation = 'source-over'
             ctx.globalAlpha = 1
-            const title = `WMP9 ${variant.replace(/([A-Z])/g, ' $1').toUpperCase()}`
             if (playerFrame) {
-                drawXpPlayerFrame(ctx, width, height, theme, title, live, (phase * 0.18) % 1)
+                drawXpPlayerFrame(ctx, width, height, theme, visualTitle, live, track.hasProgress ? progressPct : (phase * 0.18) % 1, track, artworkImage)
             } else {
-                drawSkinChrome(ctx, width, height, theme, title)
+                drawSkinChrome(ctx, width, height, theme, visualTitle)
             }
 
             if (active) frameId = requestAnimationFrame(render)
